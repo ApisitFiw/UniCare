@@ -1,116 +1,198 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import {
-  getIssueReports,
-  getStatusLabel,
-  type IssueReport,
-} from "@/lib/issueReports";
+import { supabase } from "@/lib/supabaseClient";
+
+type Report = {
+  issue_id: number;
+  title: string;
+  description: string;
+  severity: "Low" | "Medium" | "High" | "Critical";
+  status: "Pending" | "In_Progress" | "Resolved" | "Closed";
+  date_created: string;
+  issue_categories: {
+    category_name: string;
+  } | null;
+  issue_areas: {
+    area_name: string;
+  } | null;
+};
+
+const statusLabel: Record<Report["status"], string> = {
+  Pending: "รอเจ้าหน้าที่รับเรื่อง",
+  In_Progress: "กำลังดำเนินการ",
+  Resolved: "แก้ไขแล้ว",
+  Closed: "ปิดเรื่อง",
+};
+
+const severityLabel: Record<Report["severity"], string> = {
+  Low: "เบา",
+  Medium: "ปานกลาง",
+  High: "มาก",
+  Critical: "เร่งด่วน",
+};
 
 export default function ReportDetailPage() {
-  const searchParams = useSearchParams();
-  const id = searchParams.get("id");
-
-  const [report, setReport] = useState<IssueReport | null>(null);
-  const [loaded, setLoaded] = useState(false);
+  const [report, setReport] = useState<Report | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const found = getIssueReports().find((item) => item.id === id);
-    setReport(found ?? null);
-    setLoaded(true);
-  }, [id]);
+    async function loadReport() {
+      const rawId = new URLSearchParams(
+        window.location.search
+      ).get("id");
 
-  if (!loaded) {
-    return <main className="p-8">กำลังโหลด...</main>;
-  }
+      const issueId = Number(rawId);
 
-  if (!report) {
-    return (
-      <main className="min-h-screen bg-[#f4f8f6] p-8">
-        <div className="mx-auto max-w-2xl rounded-2xl bg-white p-8 text-center">
-          <h1 className="text-xl font-bold">ไม่พบรายงาน</h1>
-          <p className="mt-2 text-sm text-slate-500">
-            กรุณาตรวจสอบลิงก์หรือส่งเรื่องแจ้งปัญหาใหม่
-          </p>
-          <Link
-            href="/report"
-            className="mt-5 inline-block rounded-xl bg-[#087765] px-5 py-2 text-white"
-          >
-            ไปหน้าแจ้งปัญหา
-          </Link>
-        </div>
-      </main>
-    );
-  }
+      if (
+        !rawId ||
+        !Number.isSafeInteger(issueId) ||
+        issueId <= 0
+      ) {
+        setError("หมายเลขรายงานไม่ถูกต้อง");
+        setLoading(false);
+        return;
+      }
+
+      const { data: authData, error: authError } =
+        await supabase.auth.getUser();
+
+      if (authError || !authData.user) {
+        setError("กรุณาเข้าสู่ระบบก่อนดูรายงาน");
+        setLoading(false);
+        return;
+      }
+
+      const { data, error: queryError } = await supabase
+        .from("issue_reports")
+        .select(`
+          issue_id,
+          title,
+          description,
+          severity,
+          status,
+          date_created,
+          issue_categories (category_name),
+          issue_areas (area_name)
+        `)
+        .eq("issue_id", issueId)
+        .maybeSingle();
+
+      if (queryError) {
+        setError(
+          `โหลดรายงานไม่สำเร็จ: ${queryError.message}`
+        );
+      } else if (!data) {
+        setError(
+          "ไม่พบรายงาน หรือบัญชีนี้ไม่มีสิทธิ์ดูรายงาน"
+        );
+      } else {
+        setReport(data as unknown as Report);
+      }
+
+      setLoading(false);
+    }
+
+    loadReport();
+  }, []);
 
   return (
-    <main className="min-h-screen bg-[#f4f8f6] px-4 py-8 text-slate-800">
+    <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-800">
       <div className="mx-auto max-w-2xl">
         <Link
           href="/user/dashboard"
-          className="text-sm font-medium text-emerald-800 hover:underline"
+          className="text-sm text-emerald-800 hover:underline"
         >
           ← กลับหน้าหลัก
         </Link>
 
-        <div className="mt-5 rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
-          <div className="mb-6 rounded-xl bg-emerald-50 p-5 text-center">
-            <div className="text-3xl">✅</div>
-            <h1 className="mt-2 text-xl font-bold text-[#155a49]">
-              รายละเอียดเรื่องแจ้งปัญหา
-            </h1>
-            <p className="mt-1 text-sm text-slate-600">
-              หมายเลขรายงาน: {report.id}
+        <section className="mt-5 rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm">
+          <h1 className="text-2xl font-bold text-emerald-900">
+            รายละเอียดเรื่องแจ้งปัญหา
+          </h1>
+
+          {loading && (
+            <p className="mt-5 text-slate-500">
+              กำลังโหลด...
             </p>
-          </div>
+          )}
 
-          <div className="space-y-4 text-sm">
-            <Info label="หัวข้อ" value={report.title} />
-            <Info label="ผู้แจ้ง" value={report.reporterName} />
-            <Info label="ประเภท" value={report.category} />
-            <Info label="สถานที่" value={report.location} />
-            <Info label="ระดับความรุนแรง" value={report.severity} />
-            <Info
-              label="วันที่แจ้ง"
-              value={new Date(report.createdAt).toLocaleString("th-TH")}
-            />
-            <Info
-              label="สถานะ"
-              value={getStatusLabel(report.status)}
-            />
-
-            {report.rejectReason && (
-              <Info
-                label="เหตุผลที่ไม่รับเรื่อง"
-                value={report.rejectReason}
-              />
-            )}
-
-            <div>
-              <p className="font-semibold text-slate-600">รายละเอียด</p>
-              <p className="mt-1 whitespace-pre-wrap rounded-xl bg-slate-50 p-4">
-                {report.description}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-7">
-            <Link
-              href="/report"
-              className="inline-block rounded-xl bg-[#087765] px-5 py-3 text-white hover:bg-[#056052]"
+          {!loading && error && (
+            <p
+              role="alert"
+              className="mt-5 rounded-xl bg-red-50 p-4 text-red-700"
             >
-              แจ้งปัญหาอีกครั้ง
-            </Link>
-          </div>
-        </div>
+              {error}
+            </p>
+          )}
+
+          {!loading && report && (
+            <div className="mt-6 space-y-4 text-sm">
+              <div className="rounded-xl bg-emerald-50 p-4 text-emerald-900">
+                หมายเลขรายงาน #{report.issue_id} ·{" "}
+                {statusLabel[report.status] ?? report.status}
+              </div>
+
+              <Field
+                label="หัวข้อ"
+                value={report.title}
+              />
+
+              <Field
+                label="ประเภท"
+                value={
+                  report.issue_categories?.category_name ??
+                  "ไม่ระบุ"
+                }
+              />
+
+              <Field
+                label="สถานที่"
+                value={
+                  report.issue_areas?.area_name ??
+                  "ไม่ระบุ"
+                }
+              />
+
+              <Field
+                label="ความรุนแรง"
+                value={
+                  severityLabel[report.severity] ??
+                  report.severity
+                }
+              />
+
+              <Field
+                label="วันที่แจ้ง"
+                value={new Date(
+                  report.date_created
+                ).toLocaleString("th-TH")}
+              />
+
+              <div>
+                <strong>รายละเอียด</strong>
+                <p className="mt-2 whitespace-pre-wrap rounded-xl bg-slate-50 p-4">
+                  {report.description}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <Link
+            href="/report"
+            className="mt-7 inline-block rounded-xl bg-emerald-700 px-5 py-3 text-sm text-white hover:bg-emerald-800"
+          >
+            แจ้งปัญหาใหม่
+          </Link>
+        </section>
       </div>
     </main>
   );
 }
 
-function Info({
+function Field({
   label,
   value,
 }: {
@@ -118,8 +200,8 @@ function Info({
   value: string;
 }) {
   return (
-    <div className="grid gap-1 border-b border-slate-100 pb-3 sm:grid-cols-[160px_1fr]">
-      <span className="font-semibold text-slate-600">{label}</span>
+    <div className="grid gap-1 border-b border-slate-100 pb-3 sm:grid-cols-[140px_1fr]">
+      <strong>{label}</strong>
       <span>{value}</span>
     </div>
   );
