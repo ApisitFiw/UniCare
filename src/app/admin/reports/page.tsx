@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import CaseClarificationDrawer from "@/components/CaseClarificationDrawer";
 
 type Status =
   | "Pending"
@@ -40,6 +41,7 @@ export default function AdminReportsPage() {
   const [selected, setSelected] = useState<Report | null>(
     null
   );
+  const [activeChatIssue, setActiveChatIssue] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<number | null>(
     null
@@ -260,6 +262,14 @@ export default function AdminReportsPage() {
                     ดูรายละเอียด
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={() => setActiveChatIssue(report)}
+                    className="rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 px-3.5 py-2 text-xs font-semibold hover:bg-emerald-100 flex items-center gap-1 transition"
+                  >
+                    💬 สนทนาซักถาม
+                  </button>
+
                   {report.status === "Pending" && (
                     <button
                       type="button"
@@ -384,10 +394,33 @@ export default function AdminReportsPage() {
                   {selected.description}
                 </p>
               </div>
+
+              <div className="pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveChatIssue(selected);
+                    setSelected(null);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 bg-[#1b5e4a] hover:bg-[#154c3c] text-white py-2.5 px-4 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                >
+                  💬 สนทนาซักถามเพิ่มเติมกับผู้แจ้ง (Realtime)
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* ================= CLARIFICATION CHAT DRAWER ================= */}
+      <CaseClarificationDrawer
+        isOpen={Boolean(activeChatIssue)}
+        reportId={activeChatIssue ? activeChatIssue.issue_id.toString() : null}
+        reportTitle={activeChatIssue ? activeChatIssue.title : undefined}
+        onClose={() => setActiveChatIssue(null)}
+        currentUserRole="admin"
+        currentUserName="ผู้ดูแลระบบ (Admin)"
+      />
     </main>
   );
 }

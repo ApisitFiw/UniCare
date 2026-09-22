@@ -1,6 +1,6 @@
 export type DemoRole = "user" | "admin";
 
-type DemoSession = {
+export type DemoSession = {
   name: string;
   role: DemoRole;
 };
