@@ -52,30 +52,14 @@ export default function AdminDashboardPage() {
             <span className="text-sm text-slate-600">
               👤 {session.name} · Admin
             </span>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="rounded-lg border border-emerald-200 px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-50"
-            >
-              ออกจากระบบ
-            </button>
+            
           </div>
         </div>
       </header>
 
       {/* เฉพาะเนื้อหา Dashboard */}
       <main className="mx-auto max-w-6xl space-y-6 px-5 py-8">
-        <div>
-          <p className="text-sm font-medium text-emerald-700">
-            Admin Dashboard
-          </p>
-          <h1 className="mt-1 text-2xl font-bold text-emerald-950">
-            สวัสดี {session.name}
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            ภาพรวมการจัดการปัญหาเสียงรบกวนและสิ่งแวดล้อม
-          </p>
-        </div>
+        
 
         <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           กำลังใช้บัญชีทดลอง ข้อมูลรายงานและสถิติจริงจะแสดงหลังตั้งค่า Supabase
