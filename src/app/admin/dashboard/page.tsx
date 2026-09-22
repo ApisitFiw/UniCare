@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import NotificationDropdown from "@/components/NotificationDropdown";
+import CaseClarificationDrawer from "@/components/CaseClarificationDrawer";
 
 interface ActionReport {
   issue_id: number;
@@ -33,6 +34,7 @@ export default function AdminDashboardPage() {
 
   const [reports, setReports] = useState<ActionReport[]>([]);
   const [categoryStats, setCategoryStats] = useState<CategoryStat[]>([]);
+  const [activeChatIssue, setActiveChatIssue] = useState<ActionReport | null>(null);
 
   const categoryIconMap: Record<string, string> = {
     เสียงรบกวน: "🔊",
@@ -631,25 +633,36 @@ export default function AdminDashboardPage() {
                           </span>
                         </td>
                         <td className="py-4 px-3 text-center">
-                          {row.status === "Pending" ? (
+                          <div className="inline-flex items-center justify-center gap-1.5">
                             <button
                               type="button"
-                              onClick={() => handleAssignCase(row.issue_id)}
-                              className="px-3 py-1.5 bg-[#1b4332] hover:bg-[#143326] text-white font-semibold rounded-lg text-xs transition shadow-xs cursor-pointer"
+                              onClick={() => setActiveChatIssue(row)}
+                              title="เปิดระบบสนทนาซักถามข้อมูลเพิ่มเติม (Case Comments & Clarification)"
+                              className="px-2 py-1.5 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-700 font-semibold rounded-lg text-xs border border-slate-200 transition cursor-pointer flex items-center gap-1 shadow-xs"
                             >
-                              รับเรื่อง / มอบหมาย
+                              <span>💬</span>
+                              <span className="hidden sm:inline text-[11px]">ซักถาม</span>
                             </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                router.push(`/admin/reports/${row.issue_id}`)
-                              }
-                              className="px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-lg text-xs border border-slate-200 transition cursor-pointer"
-                            >
-                              ดูรายละเอียด
-                            </button>
-                          )}
+                            {row.status === "Pending" ? (
+                              <button
+                                type="button"
+                                onClick={() => handleAssignCase(row.issue_id)}
+                                className="px-3 py-1.5 bg-[#1b4332] hover:bg-[#143326] text-white font-semibold rounded-lg text-xs transition shadow-xs cursor-pointer"
+                              >
+                                รับเรื่อง / มอบหมาย
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  router.push(`/admin/issues`)
+                                }
+                                className="px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-lg text-xs border border-slate-200 transition cursor-pointer"
+                              >
+                                ติดตามสถานะ
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -731,6 +744,17 @@ export default function AdminDashboardPage() {
           </div>
         </main>
       </div>
+
+      {/* ================= CLARIFICATION CHAT DRAWER ================= */}
+      <CaseClarificationDrawer
+        isOpen={Boolean(activeChatIssue)}
+        reportId={activeChatIssue ? activeChatIssue.issue_id.toString() : null}
+        reportTitle={activeChatIssue ? activeChatIssue.title : undefined}
+        onClose={() => setActiveChatIssue(null)}
+        currentUserRole="admin"
+        currentUserName="นายนัฐกรณ์ ไพรพฤกษ์ (Admin)"
+      />
     </div>
   );
 }
+

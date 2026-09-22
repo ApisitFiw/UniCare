@@ -24,3 +24,12 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.sidebar-gradient {
+  background: linear-gradient(180deg, #2b8273 0%, #1c5e52 40%, #15453b 70%, #0f3028 100%);
+}
+
+.hero-gradient {
+  background: linear-gradient(135deg, #0e4435 0%, #145946 50%, #1b6852 100%);
+}
+
