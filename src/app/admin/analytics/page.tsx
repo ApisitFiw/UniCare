@@ -16,6 +16,7 @@ import {
 } from "chart.js";
 import { Line, Doughnut } from "react-chartjs-2";
 import { supabase } from "@/lib/supabaseClient";
+import AdminSidebar from "@/components/AdminSidebar";
 
 // ลงทะเบียนโมดูล Chart.js
 ChartJS.register(
