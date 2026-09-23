@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Sidebar from '@/components/Sidebar'
+import Sidebar from '@/components/AdminSidebar'
 import Header from '@/components/Header'
 import CaseClarificationDrawer from '@/components/CaseClarificationDrawer'
 import { supabase } from '@/lib/supabaseClient'
@@ -228,7 +228,7 @@ export default function StatusTrackingPage() {
 
   return (
     <div className="min-h-screen flex bg-[#f4f7f5] text-slate-800 antialiased">
-      <Sidebar />
+    
 
       <div className="flex-1 flex flex-col min-w-0">
         <Header
