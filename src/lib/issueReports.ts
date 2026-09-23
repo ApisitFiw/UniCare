@@ -1,215 +1,180 @@
-import { supabase } from "@/lib/supabaseClient";
+export type ReportAnswer = {
+  label: string;
+  values: string[];
+};
 
-export type IssueStatus =
-  | "Pending"
-  | "In_Progress"
-  | "Resolved"
-  | "Closed";
-
-export type IssueSeverity =
-  | "Low"
-  | "Medium"
-  | "High"
-  | "Critical";
+export type Urgency = "ปกติ" | "เร่งด่วน" | "เร่งด่วนมาก";
 
 export type IssueReport = {
-  issue_id: number;
+  id: string;
+  code: string;
+  reporter: string;
   title: string;
-  description: string;
-  severity: IssueSeverity;
-  status: IssueStatus;
-  date_created: string;
-  category_id: number | null;
-  area_id: number | null;
-  category_name: string;
-  area_name: string;
+  category: string;
+  answers: ReportAnswer[];
+
+  location: string;
+  locationDetail: string;
+
+  // รายงานใหม่เก็บเป็น YYYY-MM-DD
+  occurredAt: string;
+  additional: string;
+
+  frequency: string;
+  impacts: string[];
+  impactOther: string;
+
+  // ช่องใหม่เป็น optional เพื่อให้อ่านรายงานเก่าได้
+  ongoing?: string;
+  commonPeriods?: string[];
+  urgency?: Urgency;
+  urgencyReason?: string;
+
+  // ระดับผลกระทบของรายงานเก่า
+  level?: string;
+
+  files: File[];
+  status: "รอรับเรื่อง";
+  createdAt: string;
 };
 
-export type NewIssueReport = {
-  title: string;
-  description: string;
-  severity: IssueSeverity;
-  category_id: number;
-  area_id: number;
-};
+const DB_NAME = "unicare-demo-reports";
+const DB_VERSION = 1;
+const STORE_NAME = "reports";
 
-type IssueReportRow = {
-  issue_id: number;
-  title: string;
-  description: string;
-  severity: IssueSeverity;
-  status: IssueStatus;
-  date_created: string;
-  category_id: number | null;
-  area_id: number | null;
-  issue_categories: {
-    category_name: string;
-  } | null;
-  issue_areas: {
-    area_name: string;
-  } | null;
-};
+function openDatabase(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (
+      typeof window === "undefined" ||
+      typeof window.indexedDB === "undefined"
+    ) {
+      reject(new Error("เบราว์เซอร์นี้ไม่รองรับการเก็บข้อมูลทดลอง"));
+      return;
+    }
 
-function formatReport(row: IssueReportRow): IssueReport {
-  return {
-    issue_id: row.issue_id,
-    title: row.title,
-    description: row.description,
-    severity: row.severity,
-    status: row.status,
-    date_created: row.date_created,
-    category_id: row.category_id,
-    area_id: row.area_id,
-    category_name:
-      row.issue_categories?.category_name ?? "ไม่ระบุประเภท",
-    area_name:
-      row.issue_areas?.area_name ?? "ไม่ระบุสถานที่",
-  };
+    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
+    let blocked = false;
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "id" });
+      }
+    };
+
+    request.onsuccess = () => {
+      const db = request.result;
+
+      if (blocked) {
+        db.close();
+        return;
+      }
+
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
+
+    request.onerror = () => {
+      reject(request.error ?? new Error("เปิดที่เก็บข้อมูลไม่ได้"));
+    };
+
+    request.onblocked = () => {
+      blocked = true;
+      reject(
+        new Error("กรุณาปิดแท็บ UniCare อื่น แล้วลองทำรายการอีกครั้ง"),
+      );
+    };
+  });
 }
 
-/**
- * ดึงรายงานทั้งหมดสำหรับหน้า Admin
- * ต้องกำหนด RLS ให้บัญชี Admin อ่านข้อมูลได้
- */
-export async function getIssueReports(): Promise<IssueReport[]> {
-  const { data, error } = await supabase
-    .from("issue_reports")
-    .select(`
-      issue_id,
-      title,
-      description,
-      severity,
-      status,
-      date_created,
-      category_id,
-      area_id,
-      issue_categories ( category_name ),
-      issue_areas ( area_name )
-    `)
-    .order("issue_id", { ascending: false });
-
-  if (error) {
-    throw new Error(`ดึงรายการแจ้งปัญหาไม่สำเร็จ: ${error.message}`);
-  }
-
-  return (data ?? []).map((row) =>
-    formatReport(row as unknown as IssueReportRow)
-  );
-}
-
-/**
- * ดึงรายงาน 1 รายการจากเลข issue_id
- */
-export async function getIssueReportById(
-  issueId: number
-): Promise<IssueReport | null> {
-  const { data, error } = await supabase
-    .from("issue_reports")
-    .select(`
-      issue_id,
-      title,
-      description,
-      severity,
-      status,
-      date_created,
-      category_id,
-      area_id,
-      issue_categories ( category_name ),
-      issue_areas ( area_name )
-    `)
-    .eq("issue_id", issueId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`ดึงรายละเอียดไม่สำเร็จ: ${error.message}`);
-  }
-
-  return data
-    ? formatReport(data as unknown as IssueReportRow)
-    : null;
-}
-
-/**
- * ให้ User ส่งเรื่องใหม่
- */
-export async function addIssueReport(
-  input: NewIssueReport
-): Promise<IssueReport> {
-  const { data: authData, error: authError } =
-    await supabase.auth.getUser();
-
-  if (authError || !authData.user) {
-    throw new Error("กรุณาเข้าสู่ระบบก่อนแจ้งปัญหา");
-  }
-
-  const { data, error } = await supabase
-    .from("issue_reports")
-    .insert({
-      title: input.title.trim(),
-      description: input.description.trim(),
-      severity: input.severity,
-      status: "Pending",
-      category_id: input.category_id,
-      area_id: input.area_id,
-    })
-    .select(`
-      issue_id,
-      title,
-      description,
-      severity,
-      status,
-      date_created,
-      category_id,
-      area_id,
-      issue_categories ( category_name ),
-      issue_areas ( area_name )
-    `)
-    .single();
-
-  if (error) {
-    throw new Error(`ส่งเรื่องไม่สำเร็จ: ${error.message}`);
-  }
-
-  return formatReport(data as unknown as IssueReportRow);
-}
-
-/**
- * ให้ Admin เปลี่ยนสถานะ
- */
-export async function updateIssueStatus(
-  issueId: number,
-  status: IssueStatus
+export async function saveIssueReport(
+  report: IssueReport,
 ): Promise<void> {
-  const { error } = await supabase
-    .from("issue_reports")
-    .update({ status })
-    .eq("issue_id", issueId);
+  if (!report.id.trim()) {
+    throw new Error("ไม่พบรหัสประจำรายงาน");
+  }
 
-  if (error) {
-    throw new Error(`เปลี่ยนสถานะไม่สำเร็จ: ${error.message}`);
+  const db = await openDatabase();
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      let writeError: DOMException | null = null;
+
+      transaction.oncomplete = () => resolve();
+
+      transaction.onabort = () => {
+        const error = writeError ?? transaction.error;
+
+        if (error?.name === "ConstraintError") {
+          reject(new Error("รหัสรายงานนี้ถูกบันทึกแล้ว"));
+          return;
+        }
+
+        if (error?.name === "QuotaExceededError") {
+          reject(
+            new Error("พื้นที่เก็บข้อมูลไม่เพียงพอ กรุณาลดขนาดไฟล์แนบ"),
+          );
+          return;
+        }
+
+        reject(error ?? new Error("บันทึกรายงานไม่สำเร็จ"));
+      };
+
+      const request = transaction.objectStore(STORE_NAME).add(report);
+
+      request.onerror = () => {
+        writeError = request.error;
+      };
+    });
+  } finally {
+    db.close();
   }
 }
 
-export function getStatusLabel(status: IssueStatus): string {
-  const labels: Record<IssueStatus, string> = {
-    Pending: "รอเจ้าหน้าที่รับเรื่อง",
-    In_Progress: "กำลังดำเนินการ",
-    Resolved: "แก้ไขแล้ว",
-    Closed: "ปิดเรื่อง",
-  };
+export async function getIssueReport(
+  id: string,
+): Promise<IssueReport | undefined> {
+  if (!id.trim()) return undefined;
 
-  return labels[status];
+  const db = await openDatabase();
+
+  try {
+    return await new Promise<IssueReport | undefined>(
+      (resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, "readonly");
+        let report: IssueReport | undefined;
+        let readError: DOMException | null = null;
+
+        transaction.oncomplete = () => resolve(report);
+
+        transaction.onabort = () => {
+          reject(
+            readError ??
+              transaction.error ??
+              new Error("อ่านรายงานไม่สำเร็จ"),
+          );
+        };
+
+        const request = transaction.objectStore(STORE_NAME).get(id);
+
+        request.onsuccess = () => {
+          report = request.result as IssueReport | undefined;
+        };
+
+        request.onerror = () => {
+          readError = request.error;
+        };
+      },
+    );
+  } finally {
+    db.close();
+  }
 }
 
-export function getSeverityLabel(
-  severity: IssueSeverity
-): string {
-  const labels: Record<IssueSeverity, string> = {
-    Low: "เบา",
-    Medium: "ปานกลาง",
-    High: "มาก",
-    Critical: "เร่งด่วน",
-  };
-
-  return labels[severity];
-}
+// รองรับชื่อที่หน้าเดิมอาจยังใช้อยู่
+export type DemoReport = IssueReport;
+export type issueReport = IssueReport;
+export const saveDemoReport = saveIssueReport;
+export const getDemoReport = getIssueReport;
