@@ -1,333 +1,417 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
-import CaseClarificationDrawer from "@/components/CaseClarificationDrawer";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  ClipboardList,
+  Eye,
+  FileText,
+  FolderOpen,
+  Loader2,
+  MapPin,
+  RotateCw,
+  UserRound,
+  X,
+  XCircle,
+} from "lucide-react";
+import AdminSidebar from "@/components/AdminSidebar";
+import Header from "@/components/Header";
 
-type Status =
-  | "Pending"
-  | "In_Progress"
-  | "Resolved"
-  | "Closed";
+type Status = "Pending" | "In_Progress" | "Resolved" | "Closed";
+type Severity = "Low" | "Medium" | "High" | "Critical";
 
 type Report = {
   issue_id: number;
   title: string;
   description: string;
-  severity: "Low" | "Medium" | "High" | "Critical";
+  severity: Severity;
   status: Status;
   date_created: string;
-  issue_categories: {
-    category_name: string;
-  } | null;
-  issue_areas: {
-    area_name: string;
-  } | null;
+  reporter_name?: string | null;
+  evidence_count?: number;
+  issue_categories: { category_name: string } | null;
+  issue_areas: { area_name: string } | null;
 };
 
 const statusLabel: Record<Status, string> = {
   Pending: "รอรับเรื่อง",
-  In_Progress: "กำลังดำเนินการ",
+  In_Progress: "รับเรื่องแล้ว",
   Resolved: "แก้ไขแล้ว",
   Closed: "ปิดเรื่อง",
 };
 
-export default function AdminReportsPage() {
+const severityStyle: Record<
+  Severity,
+  { label: string; className: string }
+> = {
+  Low: {
+    label: "ต่ำ",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  },
+  Medium: {
+    label: "เร่งด่วน",
+    className: "border-amber-200 bg-amber-50 text-amber-700",
+  },
+  High: {
+    label: "เร่งด่วนมาก",
+    className: "border-orange-200 bg-orange-50 text-orange-700",
+  },
+};
+
+// Demo Mode: หน้า User และ Admin ต้องใช้ key เดียวกัน
+const DEMO_REPORTS_KEY = "unicare_demo_issue_reports";
+
+const demoReports: Report[] = [
+  {
+    issue_id: 908,
+    title: "เสียงรบกวน",
+    description: "มีการเปิดเพลงเสียงดังบริเวณหอพักในช่วงกลางคืน",
+    severity: "High",
+    status: "Pending",
+    date_created: "2026-09-08T20:30:00.000Z",
+    reporter_name: "อชิรญาณ์ ดุลยาภรณ์",
+    evidence_count: 2,
+    issue_categories: { category_name: "เสียงรบกวน" },
+    issue_areas: { area_name: "อาคารเรียนรวม" },
+  },
+  {
+    issue_id: 907,
+    title: "ขยะ / ของเสีย",
+    description: "พบขยะตกค้างบริเวณโรงอาหารและมีกลิ่นรบกวน",
+    severity: "Medium",
+    status: "Pending",
+    date_created: "2026-09-07T10:15:00.000Z",
+    reporter_name: "นักศึกษามหาวิทยาลัย",
+    evidence_count: 1,
+    issue_categories: { category_name: "ขยะ / ของเสีย" },
+    issue_areas: { area_name: "โรงอาหาร" },
+  },
+];
+
+function readDemoReports(): Report[] {
+  const saved = window.localStorage.getItem(DEMO_REPORTS_KEY);
+
+  if (!saved) {
+    window.localStorage.setItem(DEMO_REPORTS_KEY, JSON.stringify(demoReports));
+    return demoReports;
+  }
+
+  try {
+    const parsed = JSON.parse(saved) as Report[];
+    return Array.isArray(parsed) ? parsed : demoReports;
+  } catch {
+    window.localStorage.setItem(DEMO_REPORTS_KEY, JSON.stringify(demoReports));
+    return demoReports;
+  }
+}
+
+function saveDemoReports(reports: Report[]) {
+  window.localStorage.setItem(DEMO_REPORTS_KEY, JSON.stringify(reports));
+  window.dispatchEvent(new Event("unicare-demo-reports-updated"));
+}
+
+export default function AdminIssuesPage() {
   const [reports, setReports] = useState<Report[]>([]);
-  const [filter, setFilter] = useState<Status | "All">(
-    "All"
-  );
-  const [selected, setSelected] = useState<Report | null>(
-    null
-  );
-  const [activeChatIssue, setActiveChatIssue] = useState<Report | null>(null);
+  const [filter, setFilter] = useState<Status | "All">("Pending");
+  const [selected, setSelected] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
-  const [savingId, setSavingId] = useState<number | null>(
-    null
-  );
+  const [savingId, setSavingId] = useState<number | null>(null);
   const [error, setError] = useState("");
 
-  async function loadReports() {
-    setLoading(true);
+  const loadReports = useCallback((showLoading = true) => {
+    if (showLoading) setLoading(true);
     setError("");
-
-    const { data, error: queryError } = await supabase
-      .from("issue_reports")
-      .select(`
-        issue_id,
-        title,
-        description,
-        severity,
-        status,
-        date_created,
-        issue_categories (category_name),
-        issue_areas (area_name)
-      `)
-      .order("issue_id", { ascending: false });
-
-    if (queryError) {
-      setError(
-        `โหลดรายการไม่สำเร็จ: ${queryError.message}`
-      );
-    } else {
-      setReports((data ?? []) as unknown as Report[]);
-    }
-
+    const nextReports = readDemoReports().sort(
+      (a, b) =>
+        new Date(b.date_created).getTime() - new Date(a.date_created).getTime(),
+    );
+    setReports(nextReports);
     setLoading(false);
-  }
+  }, []);
 
   useEffect(() => {
     loadReports();
-  }, []);
 
-  async function updateStatus(
-    report: Report,
-    nextStatus: Status
-  ) {
+    const refreshReports = () => loadReports(false);
+    window.addEventListener("storage", refreshReports);
+    window.addEventListener("unicare-demo-reports-updated", refreshReports);
+
+    return () => {
+      window.removeEventListener("storage", refreshReports);
+      window.removeEventListener("unicare-demo-reports-updated", refreshReports);
+    };
+  }, [loadReports]);
+
+  function updateStatus(report: Report, nextStatus: Status) {
     const confirmed = window.confirm(
-      `เปลี่ยนสถานะเรื่อง #${report.issue_id} เป็น "${statusLabel[nextStatus]}" หรือไม่?`
+      `เปลี่ยนสถานะเรื่อง #${report.issue_id} เป็น “${statusLabel[nextStatus]}” หรือไม่?`,
     );
-
     if (!confirmed) return;
 
     setSavingId(report.issue_id);
     setError("");
 
-    const { error: updateError } = await supabase
-      .from("issue_reports")
-      .update({ status: nextStatus })
-      .eq("issue_id", report.issue_id);
-
-    if (updateError) {
-      setError(
-        `เปลี่ยนสถานะไม่สำเร็จ: ${updateError.message}`
-      );
-    } else {
-      setReports((current) =>
-        current.map((item) =>
-          item.issue_id === report.issue_id
-            ? { ...item, status: nextStatus }
-            : item
-        )
-      );
-
-      setSelected((current) =>
-        current?.issue_id === report.issue_id
-          ? { ...current, status: nextStatus }
-          : current
-      );
-    }
+    const nextReports = reports.map((item) =>
+      item.issue_id === report.issue_id
+        ? { ...item, status: nextStatus }
+        : item,
+    );
+    setReports(nextReports);
+    saveDemoReports(nextReports);
+    setSelected((current) =>
+      current?.issue_id === report.issue_id
+        ? { ...current, status: nextStatus }
+        : current,
+    );
 
     setSavingId(null);
   }
+
+  const counts = useMemo(
+    () => ({
+      all: reports.length,
+      pending: reports.filter((item) => item.status === "Pending").length,
+      accepted: reports.filter((item) => item.status === "In_Progress").length,
+      finished: reports.filter(
+        (item) => item.status === "Resolved" || item.status === "Closed",
+      ).length,
+    }),
+    [reports],
+  );
 
   const visibleReports = useMemo(
     () =>
       filter === "All"
         ? reports
-        : reports.filter(
-            (report) => report.status === filter
-          ),
-    [reports, filter]
+        : reports.filter((report) => report.status === filter),
+    [filter, reports],
   );
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-800">
-      <div className="mx-auto max-w-6xl">
-        <Link
-          href="/admin/dashboard"
-          className="text-sm text-emerald-800 hover:underline"
-        >
-          ← กลับหน้า Admin
-        </Link>
+    <div className="min-h-screen bg-[#f4f7f5] text-slate-800 md:flex">
 
-        <div className="mt-5 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-emerald-900">
-              จัดการเรื่องร้องเรียน
-            </h1>
+      <div className="min-w-0 flex-1">
+        <Header
+          title="จัดการคำร้องเรียน"
+          subtitle="มหาวิทยาลัยวลัยลักษณ์"
+          role="ADMIN"
+        />
 
-            <p className="mt-1 text-sm text-slate-500">
-              ตรวจสอบและติดตามเรื่องที่ผู้ใช้แจ้งเข้ามา
-            </p>
-          </div>
+        <main className="mx-auto w-full max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
+          <section className="grid gap-4 md:grid-cols-3">
+            <SummaryCard
+              active={filter === "Pending"}
+              icon={<ClipboardList className="h-5 w-5" />}
+              iconClass="bg-sky-50 text-sky-600"
+              label="คำร้องใหม่"
+              description="รอเจ้าหน้าที่ตรวจสอบ"
+              count={counts.pending}
+              onClick={() => setFilter("Pending")}
+            />
+            <SummaryCard
+              active={filter === "In_Progress"}
+              icon={<CheckCircle2 className="h-5 w-5" />}
+              iconClass="bg-emerald-50 text-emerald-600"
+              label="รับเรื่องแล้ว"
+              description="กำลังดำเนินการ"
+              count={counts.accepted}
+              onClick={() => setFilter("In_Progress")}
+            />
+            <SummaryCard
+              active={filter === "Resolved"}
+              icon={<XCircle className="h-5 w-5" />}
+              iconClass="bg-rose-50 text-rose-500"
+              label="เสร็จสิ้น / ปิดเรื่อง"
+              description="ดำเนินการเรียบร้อย"
+              count={counts.finished}
+              onClick={() => setFilter("Resolved")}
+            />
+          </section>
 
-          <select
-            aria-label="กรองตามสถานะ"
-            value={filter}
-            onChange={(event) =>
-              setFilter(
-                event.target.value as Status | "All"
-              )
-            }
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2"
-          >
-            <option value="All">ทุกสถานะ</option>
-            <option value="Pending">รอรับเรื่อง</option>
-            <option value="In_Progress">
-              กำลังดำเนินการ
-            </option>
-            <option value="Resolved">แก้ไขแล้ว</option>
-            <option value="Closed">ปิดเรื่อง</option>
-          </select>
-        </div>
-
-        <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          <Summary
-            label="เรื่องทั้งหมด"
-            count={reports.length}
-          />
-          <Summary
-            label="รอรับเรื่อง"
-            count={
-              reports.filter(
-                (item) => item.status === "Pending"
-              ).length
-            }
-          />
-          <Summary
-            label="กำลังดำเนินการ"
-            count={
-              reports.filter(
-                (item) =>
-                  item.status === "In_Progress"
-              ).length
-            }
-          />
-        </div>
-
-        {error && (
-          <p
-            role="alert"
-            className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-700"
-          >
-            {error}
-          </p>
-        )}
-
-        <div className="mt-6 space-y-4">
-          {loading && (
-            <p className="text-sm text-slate-500">
-              กำลังโหลดรายการ...
-            </p>
-          )}
-
-          {!loading && visibleReports.length === 0 && (
-            <div className="rounded-2xl bg-white p-10 text-center text-slate-500">
-              ไม่มีเรื่องร้องเรียนในสถานะนี้
-            </div>
-          )}
-
-          {!loading &&
-            visibleReports.map((report) => (
-              <article
-                key={report.issue_id}
-                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
-              >
-                <div className="flex flex-wrap justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold text-emerald-700">
-                      #{report.issue_id}
-                    </p>
-                    <h2 className="mt-1 font-bold">
-                      {report.title}
-                    </h2>
-                  </div>
-
-                  <span className="h-fit rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-800">
-                    {statusLabel[report.status] ??
-                      report.status}
-                  </span>
-                </div>
-
-                <p className="mt-3 text-xs text-slate-500">
-                  {report.issue_categories
-                    ?.category_name ?? "ไม่ระบุประเภท"}
-                  {" · "}
-                  {report.issue_areas?.area_name ??
-                    "ไม่ระบุสถานที่"}
-                  {" · "}
-                  {new Date(
-                    report.date_created
-                  ).toLocaleString("th-TH")}
+          <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+            <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-5 lg:flex-row lg:items-center lg:justify-between sm:px-6">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">
+                  รายการเรื่องร้องเรียนและประวัติสถานะ (Issue Reports)
+                </h2>
+                <p className="mt-1 text-xs text-slate-400">
+                  คลิกดูรายละเอียดของคำร้อง หรือกดปุ่มอัปเดตสถานะ
                 </p>
+              </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelected(report)}
-                    className="rounded-lg border border-slate-200 px-4 py-2 text-xs hover:bg-slate-50"
-                  >
-                    ดูรายละเอียด
-                  </button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <select
+                  aria-label="กรองตามสถานะ"
+                  value={filter}
+                  onChange={(event) =>
+                    setFilter(event.target.value as Status | "All")
+                  }
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs outline-none focus:border-emerald-500"
+                >
+                  <option value="All">ทุกสถานะ ({counts.all})</option>
+                  <option value="Pending">รอรับเรื่อง</option>
+                  <option value="In_Progress">รับเรื่องแล้ว</option>
+                  <option value="Resolved">แก้ไขแล้ว</option>
+                </select>
 
-                  <button
-                    type="button"
-                    onClick={() => setActiveChatIssue(report)}
-                    className="rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-800 px-3.5 py-2 text-xs font-semibold hover:bg-emerald-100 flex items-center gap-1 transition"
-                  >
-                    💬 สนทนาซักถาม
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => loadReports()}
+                  className="rounded-xl border border-slate-200 p-2.5 text-slate-500 transition hover:bg-slate-50"
+                  title="โหลดข้อมูลใหม่"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
 
-                  {report.status === "Pending" && (
-                    <button
-                      type="button"
-                      disabled={
-                        savingId === report.issue_id
-                      }
-                      onClick={() =>
-                        updateStatus(
-                          report,
-                          "In_Progress"
-                        )
-                      }
-                      className="rounded-lg bg-emerald-700 px-4 py-2 text-xs text-white disabled:opacity-50"
-                    >
-                      รับเรื่อง
-                    </button>
-                  )}
+            {error && (
+              <p className="m-5 rounded-xl bg-rose-50 p-4 text-sm text-rose-700">
+                {error}
+              </p>
+            )}
 
-                  {report.status ===
-                    "In_Progress" && (
-                    <button
-                      type="button"
-                      disabled={
-                        savingId === report.issue_id
-                      }
-                      onClick={() =>
-                        updateStatus(
-                          report,
-                          "Resolved"
-                        )
-                      }
-                      className="rounded-lg bg-blue-700 px-4 py-2 text-xs text-white disabled:opacity-50"
-                    >
-                      แก้ไขแล้ว
-                    </button>
-                  )}
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                กำลังโหลดรายการ...
+              </div>
+            ) : visibleReports.length === 0 ? (
+              <div className="py-16 text-center text-sm text-slate-400">
+                ไม่มีเรื่องร้องเรียนในสถานะนี้
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[860px] border-collapse text-left">
+                  <thead className="bg-slate-50 text-xs font-bold text-slate-500">
+                    <tr>
+                      <th className="px-5 py-4">รหัสเคส / วันที่</th>
+                      <th className="px-5 py-4">หมวดหมู่</th>
+                      <th className="px-5 py-4">ระดับความเร่งด่วน</th>
+                      <th className="px-5 py-4">ดูรายละเอียด</th>
+                      <th className="px-5 py-4">จัดการสถานะ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {visibleReports.map((report) => {
+                      const busy = savingId === report.issue_id;
+                      const severity =
+                        severityStyle[report.severity] ?? severityStyle.Low;
 
-                  {report.status === "Resolved" && (
-                    <button
-                      type="button"
-                      disabled={
-                        savingId === report.issue_id
-                      }
-                      onClick={() =>
-                        updateStatus(
-                          report,
-                          "Closed"
-                        )
-                      }
-                      className="rounded-lg bg-slate-700 px-4 py-2 text-xs text-white disabled:opacity-50"
-                    >
-                      ปิดเรื่อง
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))}
-        </div>
+                      return (
+                        <tr key={report.issue_id} className="align-middle transition hover:bg-slate-50/70">
+                          <td className="px-5 py-5">
+                            <p className="text-xs font-extrabold text-emerald-800">
+                              #ISS-{new Date(report.date_created).getFullYear()}-
+                              {String(report.issue_id).padStart(3, "0")}
+                            </p>
+                            <p className="mt-1 text-[11px] leading-4 text-slate-400">
+                              {new Date(report.date_created).toLocaleDateString("th-TH", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                              <br />
+                              {new Date(report.date_created).toLocaleTimeString("th-TH", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                          </td>
+
+                          <td className="px-5 py-5">
+                            <p className="text-xs font-semibold text-slate-700">
+                              {report.issue_categories?.category_name || report.title}
+                            </p>
+                            <p className="mt-1 flex items-center gap-1 text-[11px] text-slate-500">
+                              <MapPin className="h-3.5 w-3.5 text-rose-500" />
+                              {report.issue_areas?.area_name || "ไม่ระบุสถานที่"}
+                            </p>
+                          </td>
+
+                          <td className="px-5 py-5">
+                            <span
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-bold ${severity.className}`}
+                            >
+                              <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                              {severity.label}
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-5">
+                            <button
+                              type="button"
+                              onClick={() => setSelected(report)}
+                              className="flex items-center gap-1 rounded-full border border-slate-200 px-3 py-2 text-[11px] font-medium text-slate-600 transition hover:bg-slate-50"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                              ดูรายละเอียด
+                            </button>
+                          </td>
+
+                          <td className="px-5 py-5">
+                            <div className="flex flex-wrap gap-2">
+                              {report.status === "Pending" && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => updateStatus(report, "Closed")}
+                                    className="flex items-center gap-1 rounded-full bg-rose-500 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-rose-600 disabled:opacity-50"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                    ปฏิเสธ
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => updateStatus(report, "In_Progress")}
+                                    className="flex items-center gap-1 rounded-full bg-emerald-700 px-3 py-2 text-[11px] font-bold text-white transition hover:bg-emerald-800 disabled:opacity-50"
+                                  >
+                                    {busy ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <Check className="h-3.5 w-3.5" />
+                                    )}
+                                    รับเรื่อง
+                                  </button>
+                                </>
+                              )}
+
+                              {report.status === "In_Progress" && (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => updateStatus(report, "Resolved")}
+                                  className="rounded-full bg-blue-600 px-3 py-2 text-[11px] font-bold text-white disabled:opacity-50"
+                                >
+                                  แก้ไขแล้ว
+                                </button>
+                              )}
+
+                              {report.status === "Resolved" && (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => updateStatus(report, "Closed")}
+                                  className="rounded-full bg-slate-700 px-3 py-2 text-[11px] font-bold text-white disabled:opacity-50"
+                                >
+                                  ปิดเรื่อง
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </main>
       </div>
 
       {selected && (
@@ -338,108 +422,195 @@ export default function AdminReportsPage() {
           <div
             role="dialog"
             aria-modal="true"
-            aria-label="รายละเอียดเรื่องร้องเรียน"
-            className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6"
-            onClick={(event) =>
-              event.stopPropagation()
-            }
+            aria-label="รายละเอียดคำร้อง"
+            className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex justify-between gap-4">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5">
               <div>
-                <p className="text-xs text-emerald-700">
-                  #{selected.issue_id}
+                <p className="text-xs font-medium text-slate-400">
+                  รายละเอียดคำร้อง
                 </p>
-                <h2 className="mt-1 text-xl font-bold">
-                  {selected.title}
+                <h2 className="mt-1 text-xl font-extrabold text-emerald-700">
+                  #ISS-{new Date(selected.date_created).getFullYear()}-
+                  {String(selected.issue_id).padStart(3, "0")}
                 </h2>
               </div>
-
               <button
                 type="button"
                 aria-label="ปิด"
                 onClick={() => setSelected(null)}
-                className="text-xl text-slate-500"
+                className="rounded-full bg-slate-100 p-2 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"
               >
-                ×
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="mt-5 space-y-3 text-sm">
-              <p>
-                <strong>ประเภท:</strong>{" "}
-                {selected.issue_categories
-                  ?.category_name ?? "ไม่ระบุ"}
-              </p>
+            <div className="space-y-5 p-6">
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                    <FileText className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="text-[11px] text-slate-400">ประเภทปัญหา</p>
+                    <p className="mt-0.5 text-sm font-bold text-slate-800">
+                      {selected.issue_categories?.category_name || selected.title}
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-              <p>
-                <strong>สถานที่:</strong>{" "}
-                {selected.issue_areas?.area_name ??
-                  "ไม่ระบุ"}
-              </p>
-
-              <p>
-                <strong>ความรุนแรง:</strong>{" "}
-                {selected.severity}
-              </p>
-
-              <p>
-                <strong>สถานะ:</strong>{" "}
-                {statusLabel[selected.status] ??
-                  selected.status}
-              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <InfoCard
+                  icon={<UserRound className="h-4 w-4" />}
+                  label="ผู้แจ้ง"
+                  value={selected.reporter_name || "ผู้ใช้งานระบบ"}
+                />
+                <InfoCard
+                  icon={<MapPin className="h-4 w-4" />}
+                  label="สถานที่"
+                  value={selected.issue_areas?.area_name || "ไม่ระบุสถานที่"}
+                />
+                <InfoCard
+                  icon={<CalendarDays className="h-4 w-4" />}
+                  label="วันที่แจ้ง"
+                  value={new Date(selected.date_created).toLocaleDateString("th-TH", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                />
+                <InfoCard
+                  icon={<XCircle className="h-4 w-4" />}
+                  label="ระดับความรุนแรง"
+                  value={`● ${severityStyle[selected.severity]?.label || selected.severity}`}
+                  valueClass={severityStyle[selected.severity]?.className.split(" ").find((item) => item.startsWith("text-"))}
+                />
+              </div>
 
               <div>
-                <strong>รายละเอียด:</strong>
-                <p className="mt-2 whitespace-pre-wrap rounded-xl bg-slate-50 p-4">
+                <h3 className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                  <FileText className="h-4 w-4 text-emerald-600" />
+                  รายละเอียดปัญหาจากผู้ใช้งาน
+                </h3>
+                <p className="mt-2 whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
                   {selected.description}
                 </p>
               </div>
 
-              <div className="pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveChatIssue(selected);
-                    setSelected(null);
-                  }}
-                  className="w-full flex items-center justify-center gap-2 bg-[#1b5e4a] hover:bg-[#154c3c] text-white py-2.5 px-4 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
-                >
-                  💬 สนทนาซักถามเพิ่มเติมกับผู้แจ้ง (Realtime)
-                </button>
+              <div>
+                <h3 className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                  <FolderOpen className="h-4 w-4 text-emerald-600" />
+                  หลักฐานประกอบ
+                </h3>
+                <div className="mt-2 flex flex-col gap-3 rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+                      <FolderOpen className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-bold text-slate-700">
+                        หลักฐานแนบ {selected.evidence_count ?? 0} ไฟล์
+                      </p>
+                      <p className="mt-1 text-[10px] text-slate-400">
+                        รูปภาพและไฟล์เสียงประกอบคำร้อง
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      window.alert(
+                        (selected.evidence_count ?? 0) > 0
+                          ? `โหมดทดลอง: มีหลักฐาน ${selected.evidence_count} ไฟล์`
+                          : "คำร้องนี้ยังไม่มีไฟล์หลักฐาน",
+                      )
+                    }
+                    className="flex items-center justify-center gap-1.5 rounded-full bg-emerald-700 px-4 py-2 text-[11px] font-bold text-white transition hover:bg-emerald-800"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    ดูหลักฐานทั้งหมด
+                  </button>
+                </div>
               </div>
+            </div>
+
+            <div className="flex justify-end border-t border-slate-100 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="rounded-lg bg-emerald-700 px-8 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-800"
+              >
+                ปิด
+              </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* ================= CLARIFICATION CHAT DRAWER ================= */}
-      <CaseClarificationDrawer
-        isOpen={Boolean(activeChatIssue)}
-        reportId={activeChatIssue ? activeChatIssue.issue_id.toString() : null}
-        reportTitle={activeChatIssue ? activeChatIssue.title : undefined}
-        onClose={() => setActiveChatIssue(null)}
-        currentUserRole="admin"
-        currentUserName="ผู้ดูแลระบบ (Admin)"
-      />
-    </main>
+    </div>
   );
 }
 
-function Summary({
+function SummaryCard({
+  active,
+  icon,
+  iconClass,
   label,
+  description,
   count,
+  onClick,
 }: {
+  active: boolean;
+  icon: ReactNode;
+  iconClass: string;
   label: string;
+  description: string;
   count: number;
+  onClick: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
-      <p className="text-sm text-slate-500">
-        {label}
-      </p>
-      <p className="mt-2 text-3xl font-bold text-emerald-900">
-        {count}
-      </p>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-4 rounded-2xl border bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+        active ? "border-emerald-500 ring-1 ring-emerald-100" : "border-slate-200"
+      }`}
+    >
+      <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${iconClass}`}>
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-slate-700">{label}</span>
+        <span className="block text-[11px] text-slate-400">{description}</span>
+      </span>
+      <span className="text-2xl font-bold text-slate-800">{count}</span>
+    </button>
+  );
+}
+
+function InfoCard({
+  icon,
+  label,
+  value,
+  valueClass = "text-slate-700",
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-4">
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+          {icon}
+        </span>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold text-slate-400">{label}</p>
+          <p className={`mt-1 truncate text-xs font-bold ${valueClass}`}>{value}</p>
+        </div>
+      </div>
     </div>
   );
 }

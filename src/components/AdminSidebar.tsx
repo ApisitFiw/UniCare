@@ -28,7 +28,7 @@ const adminNavItems = [
     icon: ClipboardList,
   },
   {
-    label: "จัดการหมวดหมู่และพื้นที่เสี่ยง",
+    label: "หมวดหมู่และพื้นที่เสี่ยง",
     href: "/admin/categories",
     icon: FolderKanban,
   },
