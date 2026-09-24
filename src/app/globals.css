@@ -1057,15 +1057,81 @@ tbody tr:last-child td {
 }
 
 .legend-dot.very-high {
-  background: #ef476f;
+  background: #ef4444;
 }
 
 .legend-dot.high {
-  background: #ee9b28;
+  background: #f59e0b;
 }
 
+.legend-dot.normal,
 .legend-dot.medium {
-  background: #e6b52f;
+  background: #10b981;
+}
+
+.risk-badge.normal {
+  background: #d1fae5;
+  color: #047857;
+}
+
+/* Custom Leaflet Map Pins */
+.custom-risk-pin {
+  background: transparent !important;
+  border: none !important;
+}
+
+.risk-pin-wrapper {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.risk-pin {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 12px;
+  border: 2px solid #ffffff;
+  cursor: pointer;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.28);
+  transition: transform 0.2s ease;
+}
+
+.risk-pin:hover {
+  transform: scale(1.2);
+}
+
+.marker-pulse {
+  position: absolute;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px solid #ef4444;
+  animation: riskPulse 1.6s infinite ease-out;
+  pointer-events: none;
+}
+
+@keyframes riskPulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.9;
+  }
+  80% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
 }
 
 /* =========================
@@ -1079,7 +1145,17 @@ tbody tr:last-child td {
 }
 
 .leaflet-popup-content-wrapper {
-  border-radius: 8px;
+  border-radius: 14px;
+}
+
+.risk-custom-popup .leaflet-popup-content-wrapper {
+  border-radius: 14px;
+  padding: 2px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.18), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+.risk-custom-popup .leaflet-popup-content {
+  margin: 10px 12px;
 }
 
 /* =========================

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import UserSidebar from "@/components/UserSidebar";
 
 export default function UserLayout({
@@ -8,7 +8,9 @@ export default function UserLayout({
 }) {
   return (
     <div className="min-h-screen bg-[#f4f7f5] md:flex">
-      <UserSidebar />
+      <Suspense fallback={<div className="w-64" />}>
+        <UserSidebar />
+      </Suspense>
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );

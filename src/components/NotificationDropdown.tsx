@@ -1,58 +1,84 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
+import { usePathname } from "next/navigation";
+import {
+  type NotificationItem,
+  type UserIdentifier,
+  getUserNotifications,
+  markAllNotificationsAsRead,
+  markNotificationAsRead,
+} from "@/lib/notifications";
+import { getDemoSession } from "@/lib/demoAuth";
 
-interface NotificationItem {
-  id: number;
-  title: string;
-  description: string;
-  time: string;
-  type: "status" | "news" | "urgent";
-  isRead: boolean;
-  link?: string;
+interface NotificationDropdownProps {
+  role?: "ADMIN" | "USER";
+  userName?: string;
+  userEmail?: string;
 }
 
-export default function NotificationDropdown() {
+export default function NotificationDropdown({
+  role,
+  userName,
+  userEmail,
+}: NotificationDropdownProps) {
+  const pathname = usePathname();
+  const isAdminRoute = pathname?.startsWith("/admin");
   const [isOpen, setIsOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // รายการแจ้งเตือน (สามารถดึงสดจาก Supabase ได้)
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: 1,
-      title: "เรื่องร้องเรียนได้รับการอัปเดต",
-      description:
-        'เจ้าหน้าที่เข้าตรวจสอบเหตุ "เสียงเปิดเพลงยามวิกาล หอพัก 3" แล้ว',
-      time: "10 นาทีที่แล้ว",
-      type: "status",
-      isRead: false,
-      link: "/my-reports",
-    },
-    {
-      id: 2,
-      title: "ประกาศมาตรการสิ่งแวดล้อมใหม่",
-      description: "มาตรการลดเสียงรบกวนช่วงสอบปลายภาคการศึกษา",
-      time: "2 ชั่วโมงที่แล้ว",
-      type: "news",
-      isRead: false,
-      link: "/news",
-    },
-    {
-      id: 3,
-      title: "ปิดงานเรียบร้อย",
-      description:
-        'เคส "ขยะตกค้างบริเวณโรงอาหารกลาง" ดำเนินการเก็บเรียบร้อยแล้ว',
-      time: "เมื่อวานนี้",
-      type: "status",
-      isRead: true,
-      link: "/my-reports",
-    },
-  ]);
+  const getCurrentUser = useCallback((): UserIdentifier => {
+    const session = getDemoSession();
+    const effectiveRole =
+      session?.role === "admin" || role === "ADMIN" || isAdminRoute
+        ? "admin"
+        : "user";
+    const effectiveName =
+      session?.name ||
+      userName ||
+      (effectiveRole === "admin" ? "นัฐกรณ์" : "กิตติภูมิ");
+    const effectiveEmail =
+      session?.email ||
+      userEmail ||
+      (effectiveRole === "admin"
+        ? "Natthakon030948@gmail.com"
+        : "kittipoom@example.com");
 
-  // นับจำนวนรายการที่ยังไม่อ่าน
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+    return {
+      role: effectiveRole,
+      name: effectiveName,
+      email: effectiveEmail,
+    };
+  }, [role, userName, userEmail, isAdminRoute]);
+
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+
+  useEffect(() => {
+    setMounted(true);
+    const update = () => {
+      const user = getCurrentUser();
+      setNotifications(getUserNotifications(user));
+    };
+
+    update();
+
+    window.addEventListener("storage", update);
+    window.addEventListener("unicare-notifications-updated", update);
+    window.addEventListener("unicare-profile-updated", update);
+    window.addEventListener("focus", update);
+
+    return () => {
+      window.removeEventListener("storage", update);
+      window.removeEventListener("unicare-notifications-updated", update);
+      window.removeEventListener("unicare-profile-updated", update);
+      window.removeEventListener("focus", update);
+    };
+  }, [getCurrentUser]);
+
+  // นับจำนวนรายการที่ยังไม่อ่าน สำหรับผู้ใช้คนนี้
+  const unreadCount = mounted ? notifications.filter((n) => !n.isRead).length : 0;
 
   // ปิด Dropdown เมื่อคลิกพื้นที่อื่นข้างนอก
   useEffect(() => {
@@ -68,17 +94,22 @@ export default function NotificationDropdown() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ทำเครื่องหมายว่าอ่านทั้งหมดแล้ว
-  const markAllAsRead = () => {
+  const handleMarkAllAsRead = () => {
+    const user = getCurrentUser();
+    markAllNotificationsAsRead(user);
     setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
   };
 
-  // ทำเครื่องหมายอ่านทีละรายการ
-  const markAsRead = (id: number) => {
+  const handleMarkAsRead = (id: number) => {
+    const user = getCurrentUser();
+    markNotificationAsRead(id, user);
     setNotifications((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, isRead: true } : item)),
+      prev.map((item) => (item.id === id ? { ...item, isRead: true } : item))
     );
   };
+
+  const currentUser = getCurrentUser();
+  const isAdmin = currentUser.role === "admin";
 
   return (
     <div className="relative inline-block text-left" ref={dropdownRef}>
@@ -93,7 +124,10 @@ export default function NotificationDropdown() {
 
         {/* จุดตัวเลขสีเขียวแสดงยอดแจ้งเตือนที่ยังไม่ได้อ่าน */}
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-emerald-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-white shadow-xs">
+          <span
+            suppressHydrationWarning
+            className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-emerald-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-white shadow-xs pointer-events-none"
+          >
             {unreadCount}
           </span>
         )}
@@ -117,7 +151,7 @@ export default function NotificationDropdown() {
             {unreadCount > 0 && (
               <button
                 type="button"
-                onClick={markAllAsRead}
+                onClick={handleMarkAllAsRead}
                 className="text-[11px] text-emerald-700 hover:text-emerald-800 font-medium hover:underline cursor-pointer"
               >
                 อ่านทั้งหมดแล้ว
@@ -128,59 +162,76 @@ export default function NotificationDropdown() {
           {/* รายการแจ้งเตือน */}
           <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
             {notifications.length > 0 ? (
-              notifications.map((item) => (
-                <Link
-                  key={item.id}
-                  href={item.link || "#"}
-                  onClick={() => {
-                    markAsRead(item.id);
-                    setIsOpen(false);
-                  }}
-                  className={`flex items-start gap-3 p-3.5 hover:bg-slate-50 transition block ${
-                    !item.isRead ? "bg-emerald-50/30" : ""
-                  }`}
-                >
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm mt-0.5 ${
-                      item.type === "status"
-                        ? "bg-amber-100 text-amber-800"
-                        : item.type === "news"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : "bg-rose-100 text-rose-800"
+              notifications.map((item) => {
+                let targetLink = item.link || "#";
+                if (isAdmin && targetLink === "/my-reports") {
+                  targetLink = "/admin/reports";
+                } else if (!isAdmin && targetLink.startsWith("/admin")) {
+                  targetLink = "/my-reports";
+                }
+
+                return (
+                  <Link
+                    key={item.id}
+                    href={targetLink}
+                    onClick={() => {
+                      handleMarkAsRead(item.id);
+                      setIsOpen(false);
+                    }}
+                    className={`flex items-start gap-3 p-3.5 hover:bg-slate-50 transition block ${
+                      !item.isRead ? "bg-emerald-50/40" : ""
                     }`}
                   >
-                    {item.type === "status"
-                      ? "📋"
-                      : item.type === "news"
-                        ? "📢"
-                        : "⚠️"}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <p
-                        className={`text-xs truncate ${!item.isRead ? "font-bold text-slate-900" : "font-medium text-slate-700"}`}
-                      >
-                        {item.title}
-                      </p>
-                      <span className="text-[10px] text-slate-400 shrink-0">
-                        {item.time}
-                      </span>
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm mt-0.5 ${
+                        item.type === "status"
+                          ? "bg-amber-100 text-amber-800"
+                          : item.type === "news"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : "bg-rose-100 text-rose-800"
+                      }`}
+                    >
+                      {item.type === "status"
+                        ? "📋"
+                        : item.type === "news"
+                          ? "📢"
+                          : "⚠️"}
                     </div>
-                    <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
-                      {item.description}
-                    </p>
-                  </div>
 
-                  {/* จุดสีเขียวสำหรับรายการที่ยังไม่ได้อ่าน */}
-                  {!item.isRead && (
-                    <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0 mt-2"></span>
-                  )}
-                </Link>
-              ))
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <p
+                          className={`text-xs truncate ${
+                            !item.isRead
+                              ? "font-bold text-slate-900"
+                              : "font-medium text-slate-700"
+                          }`}
+                        >
+                          {item.title}
+                        </p>
+                        <span className="text-[10px] text-slate-400 shrink-0">
+                          {item.time}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5 leading-snug">
+                        {item.description}
+                      </p>
+                    </div>
+
+                    {/* จุดสีสำหรับรายการที่ยังไม่ได้อ่าน */}
+                    {!item.isRead && (
+                      <span
+                        className={`w-2 h-2 rounded-full shrink-0 mt-2 ${
+                          item.type === "urgent" ? "bg-rose-500" : "bg-emerald-600"
+                        }`}
+                      ></span>
+                    )}
+                  </Link>
+                );
+              })
             ) : (
               <div className="p-6 text-center text-xs text-slate-400">
-                ไม่มีการแจ้งเตือนใหม่
+                ไม่มีการแจ้งเตือนใหม่สำหรับคุณ
               </div>
             )}
           </div>
@@ -188,11 +239,13 @@ export default function NotificationDropdown() {
           {/* ส่วนท้าย Dropdown */}
           <div className="p-2.5 bg-slate-50 border-t border-slate-100 text-center">
             <Link
-              href="/my-reports"
+              href={isAdmin ? "/admin/reports" : "/my-reports"}
               onClick={() => setIsOpen(false)}
               className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 transition"
             >
-              ดูประวัติการแจ้งปัญหาทั้งหมด →
+              {isAdmin
+                ? "ดูรายการคำร้องเรียนทั้งหมด →"
+                : "ดูประวัติการแจ้งปัญหาทั้งหมด →"}
             </Link>
           </div>
         </div>

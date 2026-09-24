@@ -8,6 +8,8 @@ import {
   signOutDemo,
   type DemoSession,
 } from "@/lib/demoAuth";
+import { getAllCurrentIssues, getDisabledCategoryNames } from "@/lib/issuesData";
+import AccountBar from "@/components/AccountBar";
 
 const categories = [
   "เสียงรบกวน",
@@ -15,7 +17,7 @@ const categories = [
   "น้ำ / น้ำเสีย",
   "อากาศ / มลพิษ",
   "แสงสว่าง",
-  "ต้นไม้ / พื้นที่เขียว",
+  "ต้นไม้ / พื้นที่สีเขียว",
   "อื่น ๆ",
 ];
 
@@ -35,17 +37,75 @@ const news = [
 export default function UserDashboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<DemoSession | null>(null);
+  const [disabledCategories, setDisabledCategories] = useState<string[]>([]);
+  const [stats, setStats] = useState({ total: 0, inProgress: 0, resolved: 0 });
 
   useEffect(() => {
-    const currentSession = getDemoSession();
+    const updateSession = () => {
+      const currentSession = getDemoSession();
+      if (!currentSession || currentSession.role !== "user") {
+        router.replace("/login");
+        return;
+      }
+      setSession(currentSession);
+    };
 
-    if (!currentSession || currentSession.role !== "user") {
-      router.replace("/login");
-      return;
-    }
+    updateSession();
 
-    setSession(currentSession);
+    window.addEventListener("unicare-profile-updated", updateSession);
+    window.addEventListener("storage", updateSession);
+
+    return () => {
+      window.removeEventListener("unicare-profile-updated", updateSession);
+      window.removeEventListener("storage", updateSession);
+    };
   }, [router]);
+
+  useEffect(() => {
+    const syncData = () => {
+      setDisabledCategories(getDisabledCategoryNames());
+
+      const currentSession = getDemoSession();
+      if (!currentSession) return;
+
+      const issues = getAllCurrentIssues();
+      const currentName = (currentSession.name || "").trim().toLowerCase();
+      const currentEmail = (currentSession.email || "").trim().toLowerCase();
+
+      const myIssues = issues.filter((i) => {
+        const rName = (i.reporterName || "").trim().toLowerCase();
+        const rEmail = (i.reporterEmail || "").trim().toLowerCase();
+        if (currentEmail && rEmail && currentEmail === rEmail) return true;
+        if (currentEmail === "user@unicare.local" && (rEmail === "kittipoom@example.com" || rName.includes("กิตติภูมิ"))) return true;
+        if (currentName && rName && currentName === rName) return true;
+        return false;
+      });
+
+      const total = myIssues.length;
+      const inProgress = myIssues.filter(
+        (i) => i.status === "in_progress" || i.status === "pending",
+      ).length;
+      const resolved = myIssues.filter((i) => i.status === "resolved").length;
+
+      setStats({ total, inProgress, resolved });
+    };
+
+    syncData();
+
+    window.addEventListener("storage", syncData);
+    window.addEventListener("unicare-demo-reports-updated", syncData);
+    window.addEventListener("unicare-category-metadata-updated", syncData);
+    window.addEventListener("unicare-profile-updated", syncData);
+    window.addEventListener("focus", syncData);
+
+    return () => {
+      window.removeEventListener("storage", syncData);
+      window.removeEventListener("unicare-demo-reports-updated", syncData);
+      window.removeEventListener("unicare-category-metadata-updated", syncData);
+      window.removeEventListener("unicare-profile-updated", syncData);
+      window.removeEventListener("focus", syncData);
+    };
+  }, []);
 
   function handleLogout() {
     if (!window.confirm("คุณต้องการออกจากระบบหรือไม่?")) return;
@@ -65,19 +125,16 @@ export default function UserDashboardPage() {
   return (
     <div className="min-h-screen bg-[#f3f8f5] text-slate-800">
       {/* แถบด้านบน */}
-      <header className="border-b border-emerald-100 bg-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-5 py-4">
-          <Link href="/" className="text-xl font-extrabold text-emerald-900">
-            🌱 UniCare
-          </Link>
+      <header className="bg-white border-b border-slate-200/80 px-6 lg:px-8 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-xs">
+        <Link href="/user/dashboard" className="flex items-center gap-2 text-base font-extrabold text-emerald-900">
+          <span className="text-xl">🌱</span>
+          <span>UniCare</span>
+          <span className="hidden sm:inline-block text-xs font-normal text-slate-400 ml-1">
+            · มหาวิทยาลัยวลัยลักษณ์
+          </span>
+        </Link>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-sm text-slate-600">
-              👤 {session.name} · User
-            </span>
-            
-          </div>
-        </div>
+        <AccountBar role="USER" userName={session.name} />
       </header>
 
       {/* เฉพาะเนื้อหา Dashboard */}
@@ -92,51 +149,77 @@ export default function UserDashboardPage() {
             แจ้งปัญหาและติดตามการดำเนินงานได้จากระบบ UniCare
           </p>
           <Link
-            href="/report"
-            className="mt-5 inline-block rounded-lg bg-white px-5 py-3 text-sm font-bold text-emerald-900 hover:bg-emerald-50"
+            href="/user/report"
+            className="mt-5 inline-block rounded-lg bg-white px-5 py-3 text-sm font-bold text-emerald-900 hover:bg-emerald-50 transition"
           >
             📢 แจ้งปัญหาใหม่
           </Link>
         </section>
 
-        <p className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-          กำลังใช้บัญชีทดลอง การแจ้งปัญหาและตัวเลขสถิติจะใช้งานจริงได้หลังตั้งค่า Supabase
-        </p>
-
         <section className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">📋 รายงานของฉัน</p>
-            <p className="mt-2 text-3xl font-bold text-emerald-950">0</p>
-            <p className="mt-1 text-xs text-slate-400">ยังไม่มีข้อมูลรายงาน</p>
+          <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm transition hover:shadow-md">
+            <p className="text-sm font-semibold text-slate-600">📋 รายงานของฉัน</p>
+            <p className="mt-2 text-3xl font-extrabold text-emerald-950">{stats.total}</p>
+            <p className="mt-1 text-xs text-slate-400">
+              {stats.total > 0 ? "เรื่องร้องเรียนทั้งหมดที่คุณแจ้งไว้" : "ยังไม่มีข้อมูลรายงาน"}
+            </p>
           </div>
 
-          <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">⏳ กำลังดำเนินการ</p>
-            <p className="mt-2 text-3xl font-bold text-emerald-950">0</p>
-            <p className="mt-1 text-xs text-slate-400">ยังไม่มีข้อมูลรายงาน</p>
+          <div className="rounded-xl border border-amber-100 bg-white p-5 shadow-sm transition hover:shadow-md">
+            <p className="text-sm font-semibold text-slate-600">⏳ กำลังดำเนินการ / รอรับเรื่อง</p>
+            <p className="mt-2 text-3xl font-extrabold text-amber-600">{stats.inProgress}</p>
+            <p className="mt-1 text-xs text-slate-400">
+              {stats.inProgress > 0 ? "เจ้าหน้าที่กำลังเร่งดำเนินการแก้ไข" : "ไม่มีเคสค้าง"}
+            </p>
           </div>
 
-          <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">✅ ดำเนินการแล้ว</p>
-            <p className="mt-2 text-3xl font-bold text-emerald-950">0</p>
-            <p className="mt-1 text-xs text-slate-400">ยังไม่มีข้อมูลรายงาน</p>
+          <div className="rounded-xl border border-blue-100 bg-white p-5 shadow-sm transition hover:shadow-md">
+            <p className="text-sm font-semibold text-slate-600">✅ ดำเนินการแล้ว</p>
+            <p className="mt-2 text-3xl font-extrabold text-emerald-600">{stats.resolved}</p>
+            <p className="mt-1 text-xs text-slate-400">
+              {stats.resolved > 0 ? "แก้ไขและดำเนินการสำเร็จแล้ว" : "ยังไม่มีเคสที่เสร็จสิ้น"}
+            </p>
           </div>
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-emerald-950">
-            ประเภทปัญหาที่แจ้งได้
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-emerald-950">
+              ประเภทปัญหาที่แจ้งได้
+            </h2>
+            {disabledCategories.length > 0 && (
+              <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+                ⚠️ มี {disabledCategories.length} หมวดหมู่ปิดรับแจ้งชั่วคราว
+              </span>
+            )}
+          </div>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {categories.map((category) => (
-              <Link
-                key={category}
-                href={`/report?category=${encodeURIComponent(category)}`}
-                className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center text-sm hover:border-emerald-400 hover:bg-emerald-50"
-              >
-                🏷️ {category}
-              </Link>
-            ))}
+            {categories.map((category) => {
+              const isDisabled = disabledCategories.includes(category);
+              if (isDisabled) {
+                return (
+                  <div
+                    key={category}
+                    title="หมวดหมู่นี้ปิดรับแจ้งชั่วคราว"
+                    className="cursor-not-allowed rounded-xl border border-dashed border-slate-300 bg-slate-100 p-4 text-center text-sm text-slate-400 select-none opacity-80"
+                  >
+                    <span className="line-through">🏷️ {category}</span>
+                    <span className="mt-1 block text-xs font-semibold text-rose-500">
+                      (ปิดรับแจ้งชั่วคราว)
+                    </span>
+                  </div>
+                );
+              }
+              return (
+                <Link
+                  key={category}
+                  href={`/user/report?category=${encodeURIComponent(category)}`}
+                  className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center text-sm font-medium hover:border-emerald-400 hover:bg-emerald-50 transition"
+                >
+                  🏷️ {category}
+                </Link>
+              );
+            })}
           </div>
         </section>
 

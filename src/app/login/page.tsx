@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useState,
   type FormEvent,
   type ReactNode,
@@ -11,6 +12,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  Headphones,
   History,
   Leaf,
   LockKeyhole,
@@ -21,7 +23,14 @@ import {
   Sprout,
   User,
 } from "lucide-react";
-import { signInDemo, type DemoRole } from "@/lib/demoAuth";
+import {
+  ADMIN_ACCOUNTS,
+  USER_ACCOUNTS,
+  getActiveUserAccounts,
+  signInDemoExtended,
+  type DemoRole,
+  type UserAccountConfig,
+} from "@/lib/demoAuth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -33,6 +42,11 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [userList, setUserList] = useState<UserAccountConfig[]>(USER_ACCOUNTS);
+
+  useEffect(() => {
+    setUserList(getActiveUserAccounts());
+  }, []);
 
   function changeRole(value: DemoRole) {
     setRole(value);
@@ -48,17 +62,19 @@ export default function LoginPage() {
     setError("");
     setIsSubmitting(true);
 
-    const session = signInDemo(
+    const result = signInDemoExtended(
       email.trim().toLowerCase(),
       password,
       role,
     );
 
-    if (!session) {
-      setError("อีเมล รหัสผ่าน หรือประเภทบัญชีไม่ถูกต้อง");
+    if (!result.success || !result.session) {
+      setError(result.error || "อีเมล รหัสผ่าน หรือประเภทบัญชีไม่ถูกต้อง");
       setIsSubmitting(false);
       return;
     }
+
+    const session = result.session;
 
     if (rememberMe) {
       window.localStorage.setItem(
@@ -222,7 +238,11 @@ export default function LoginPage() {
                     type="email"
                     required
                     autoComplete="email"
-                    placeholder="กรอก Email"
+                    placeholder={
+                      role === "admin"
+                        ? "เช่น Natthakon030948@gmail.com"
+                        : "เช่น kittipoom@example.com หรือ user@unicare.local"
+                    }
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     className="min-w-0 flex-1 bg-transparent py-3 text-sm text-slate-700 outline-none placeholder:text-slate-300"
@@ -243,7 +263,7 @@ export default function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     required
                     autoComplete="current-password"
-                    placeholder="กรอกรหัสผ่าน"
+                    placeholder="กรอกรหัสผ่าน (12345)"
                     value={password}
                     onChange={(event) =>
                       setPassword(event.target.value)
@@ -319,19 +339,117 @@ export default function LoginPage() {
             </form>
 
             {/* บัญชีทดลอง */}
-            <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50/70 px-4 py-2.5 text-[11px] leading-5 text-amber-800">
-              <p className="font-bold">บัญชีสำหรับทดลอง</p>
+            <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50/70 p-3.5 text-[11px] leading-5 text-amber-800">
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-slate-800">บัญชีสำหรับทดลอง</p>
+                <span className="rounded bg-amber-200/60 px-1.5 py-0.5 text-[10px] font-semibold text-amber-900">
+                  Demo
+                </span>
+              </div>
 
               {role === "user" ? (
-                <>
-                  <p>Email: user@unicare.local</p>
-                  <p>รหัสผ่าน: User1234!</p>
-                </>
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-semibold text-slate-700">
+                      รหัสผ่าน User: <strong className="text-emerald-700">12345</strong>
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      (คลิกชื่อเพื่อกรอก)
+                    </span>
+                  </div>
+
+                  <div className="grid max-h-44 grid-cols-1 gap-1.5 overflow-y-auto pr-0.5 sm:grid-cols-2">
+                    {userList.map((acc) => {
+                      const isSelected =
+                        email.toLowerCase() === acc.email.toLowerCase();
+                      const isSuspended = acc.status === "suspended";
+                      const isDeleted = acc.status === "deleted";
+                      return (
+                        <button
+                          key={acc.id}
+                          type="button"
+                          onClick={() => {
+                            setEmail(acc.email);
+                            setPassword("12345");
+                          }}
+                          className={`flex items-center justify-between rounded-lg border px-2 py-1.5 text-left text-[10px] transition ${
+                            isSelected
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-bold"
+                              : isDeleted
+                              ? "border-slate-300 bg-slate-100/90 text-slate-500 hover:bg-slate-200/80"
+                              : isSuspended
+                              ? "border-rose-200 bg-rose-50/80 text-slate-700 hover:bg-rose-100/70"
+                              : "border-amber-200/70 bg-white/80 text-slate-700 hover:bg-amber-100/70"
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1">
+                              <span className={`truncate ${isDeleted ? "line-through text-slate-400" : ""}`}>{acc.name}</span>
+                              {isDeleted ? (
+                                <span className="rounded bg-slate-200 px-1 py-0.5 text-[8px] font-semibold text-slate-600">
+                                  ลบแล้ว
+                                </span>
+                              ) : isSuspended ? (
+                                <span className="rounded bg-rose-200 px-1 py-0.5 text-[8px] font-semibold text-rose-700">
+                                  ระงับ
+                                </span>
+                              ) : null}
+                            </div>
+                            <span className="block truncate text-[9px] text-slate-400">
+                              {acc.email}
+                            </span>
+                          </div>
+                          <span className="ml-1 shrink-0 text-[9px] text-slate-400">
+                            เลือก
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               ) : (
-                <>
-                  <p>Email: admin@unicare.local</p>
-                  <p>รหัสผ่าน: Admin1234!</p>
-                </>
+                <div className="mt-2 space-y-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-semibold text-slate-700">
+                      รหัสผ่าน Admin: <strong className="text-emerald-700">12345</strong>
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      (คลิกชื่อเพื่อกรอก)
+                    </span>
+                  </div>
+
+                  <div className="grid max-h-44 grid-cols-1 gap-1.5 overflow-y-auto pr-0.5 sm:grid-cols-2">
+                    {ADMIN_ACCOUNTS.map((acc) => {
+                      const isSelected =
+                        email.toLowerCase() === acc.email.toLowerCase();
+                      return (
+                        <button
+                          key={acc.id}
+                          type="button"
+                          onClick={() => {
+                            setEmail(acc.email);
+                            setPassword("12345");
+                          }}
+                          className={`flex items-center justify-between rounded-lg border px-2 py-1.5 text-left text-[10px] transition ${
+                            isSelected
+                              ? "border-emerald-500 bg-emerald-50 text-emerald-800 font-bold"
+                              : "border-amber-200/70 bg-white/80 text-slate-700 hover:bg-amber-100/70"
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="block truncate">{acc.name}</span>
+                            <span className="block truncate text-[9px] text-slate-400">
+                              {acc.email}
+                            </span>
+                          </div>
+                          <span className="ml-1 shrink-0 text-[9px] text-slate-400">
+                            เลือก
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
             </div>
 
@@ -345,6 +463,22 @@ export default function LoginPage() {
                 ลงทะเบียนผู้ใช้งานใหม่
               </Link>
             </p>
+
+            {/* ปุ่มติดต่อ Admin */}
+            <div className="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-center">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  // ยังไม่ต้องให้กดเเล้วเข้าได้ ให้ยังกดเเล้วไม่ไปไหน
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-slate-200/90 bg-slate-50/80 hover:bg-slate-100 text-slate-600 hover:text-slate-800 text-[11px] font-medium transition cursor-pointer shadow-2xs"
+                title="ติดต่อผู้ดูแลระบบ"
+              >
+                <Headphones className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span>ติดต่อ Admin</span>
+              </button>
+            </div>
           </div>
         </section>
       </div>

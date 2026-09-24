@@ -9,7 +9,6 @@ import {
   ClipboardList,
   FolderKanban,
   Star,
-  MapPin,
   LogOut,
   User,
   X,
@@ -20,7 +19,6 @@ const adminNavItems = [
   { label: "หน้าหลัก", href: "/admin/dashboard", icon: Home },
   { label: "จัดการบัญชีผู้ใช้", href: "/admin/users", icon: User },
   { label: "จัดการคำร้อง", href: "/admin/reports", icon: ClipboardList },
-  { label: "แผนที่จุดเสี่ยง", href: "/admin/map", icon: MapPin },
   { label: "สถิติและรายงาน", href: "/admin/analytics", icon: BarChart3 },
   { label: "ผลการประเมิน (CSAT)", href: "/admin/feedback", icon: Star },
   {

@@ -1,114 +1,140 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   getDemoSession,
-  signOutDemo,
   type DemoSession,
 } from "@/lib/demoAuth";
+import Header from "@/components/Header";
+import {
+  getAllCurrentIssues,
+  type IssueItem,
+} from "@/lib/issuesData";
+import {
+  Search,
+  MapPin,
+  ArrowRight,
+  Clock,
+  CheckCircle2,
+  RotateCw,
+  AlertTriangle,
+  FolderOpen,
+} from "lucide-react";
 
-const demoReports = [
-  {
-    id: "REC-108",
-    icon: "📢",
-    title: "เสียงรบกวนห้องเรียน/หอพัก",
-    description: "เสียงดังรบกวนการเรียนช่วงกลางคืน",
-    location: "หอพักนักศึกษาชาย 3 (ชั้น 4)",
-    priority: "High",
-    time: "10 นาทีที่แล้ว",
-    status: "Pending",
-  },
-  {
-    id: "REC-107",
-    icon: "🗑️",
-    title: "ขยะล้นถังในพื้นที่ส่วนกลาง",
-    description: "ขยะล้นถังจุดทิ้งขยะบริเวณหน้าอาคาร",
-    location: "ศูนย์อาหารกลาง (โซนเก่า)",
-    priority: "Medium",
-    time: "35 นาทีที่แล้ว",
-    status: "In_Progress",
-  },
-  {
-    id: "REC-106",
-    icon: "💡",
-    title: "ไฟฟ้าขัดข้องในห้องสอน",
-    description: "หลอดไฟดับ ห้องเรียนรวมชั้น 5",
-    location: "อาคารเรียนรวม 5",
-    priority: "Medium",
-    time: "1 ชั่วโมงที่แล้ว",
-    status: "In_Progress",
-  },
-];
-
-const stats = [
-  {
-    label: "เรื่องร้องเรียนทั้งหมด",
-    value: "128",
-    note: "+12 เรื่องใหม่ในอาทิตย์นี้",
-    icon: "📢",
-    valueColor: "text-slate-900",
-    noteColor: "text-emerald-600",
-    iconColor: "border-emerald-100 bg-emerald-50",
-  },
-  {
-    label: "รอรับเรื่อง / ตรวจสอบ",
-    value: "8",
-    note: "• ต้องการการมอบหมาย",
-    icon: "⌛",
-    valueColor: "text-rose-500",
-    noteColor: "text-rose-500",
-    iconColor: "border-rose-100 bg-rose-50",
-  },
-  {
-    label: "กำลังดำเนินการ",
-    value: "24",
-    note: "ดำเนินการตาม SLA",
-    icon: "🛠️",
-    valueColor: "text-amber-600",
-    noteColor: "text-amber-600",
-    iconColor: "border-amber-100 bg-amber-50",
-  },
-  {
-    label: "แก้ไขเสร็จสิ้น (Resolved)",
-    value: "96",
-    note: "ความสำเร็จ 75.0%",
-    icon: "✅",
-    valueColor: "text-emerald-700",
-    noteColor: "text-emerald-600",
-    iconColor: "border-emerald-100 bg-emerald-50",
-  },
-];
+function getCategoryIcon(category: string): string {
+  if (category.includes("เสียง")) return "🔊";
+  if (category.includes("ขยะ")) return "🗑️";
+  if (category.includes("น้ำ")) return "🚰";
+  if (category.includes("อากาศ") || category.includes("กลิ่น") || category.includes("ควัน")) return "💨";
+  if (category.includes("แสง") || category.includes("ไฟ")) return "💡";
+  if (category.includes("ต้นไม้") || category.includes("กิ่งไม้") || category.includes("เขียว")) return "🌳";
+  if (category.includes("ปลอดภัย") || category.includes("จราจร")) return "🛡️";
+  return "📢";
+}
 
 export default function AdminDashboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<DemoSession | null>(null);
+  const [issues, setIssues] = useState<IssueItem[]>([]);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pending" | "in_progress" | "resolved">("all");
 
   useEffect(() => {
-    const currentSession = getDemoSession();
+    const updateSession = () => {
+      const currentSession = getDemoSession();
+      if (!currentSession || currentSession.role !== "admin") {
+        router.replace("/login");
+        return;
+      }
+      setSession(currentSession);
+    };
 
-    if (!currentSession || currentSession.role !== "admin") {
-      router.replace("/login");
-      return;
-    }
+    updateSession();
 
-    setSession(currentSession);
+    window.addEventListener("unicare-profile-updated", updateSession);
+    window.addEventListener("storage", updateSession);
+
+    return () => {
+      window.removeEventListener("unicare-profile-updated", updateSession);
+      window.removeEventListener("storage", updateSession);
+    };
   }, [router]);
 
-  function handleLogout() {
-    if (!window.confirm("คุณต้องการออกจากระบบหรือไม่?")) return;
+  useEffect(() => {
+    const loadIssues = () => {
+      setIssues(getAllCurrentIssues());
+    };
 
-    signOutDemo();
-    router.replace("/login");
-  }
+    loadIssues();
 
-  const filteredReports = demoReports.filter((report) =>
-    `${report.id} ${report.title} ${report.location}`
-      .toLowerCase()
-      .includes(search.trim().toLowerCase())
-  );
+    window.addEventListener("storage", loadIssues);
+    window.addEventListener("unicare-demo-reports-updated", loadIssues);
+    window.addEventListener("focus", loadIssues);
+
+    return () => {
+      window.removeEventListener("storage", loadIssues);
+      window.removeEventListener("unicare-demo-reports-updated", loadIssues);
+      window.removeEventListener("focus", loadIssues);
+    };
+  }, []);
+
+  const totalCount = issues.length;
+  const pendingCount = issues.filter((i) => i.status === "pending").length;
+  const inProgressCount = issues.filter((i) => i.status === "in_progress").length;
+  const resolvedCount = issues.filter((i) => i.status === "resolved").length;
+  const resolvedRate = totalCount > 0 ? ((resolvedCount / totalCount) * 100).toFixed(1) : "0.0";
+
+  const stats = [
+    {
+      label: "เรื่องร้องเรียนทั้งหมด",
+      value: totalCount.toString(),
+      note: "อัปเดตเรียลไทม์จากระบบติดตามสถานะ",
+      icon: "📢",
+      valueColor: "text-slate-900",
+      noteColor: "text-emerald-700",
+      iconColor: "border-emerald-100 bg-emerald-50",
+    },
+    {
+      label: "รอดำเนินการ / รอรับเรื่อง",
+      value: pendingCount.toString(),
+      note: pendingCount > 0 ? "• ต้องการการตรวจสอบและมอบหมาย" : "ไม่มีเคสค้าง",
+      icon: "⌛",
+      valueColor: "text-rose-600",
+      noteColor: "text-rose-600",
+      iconColor: "border-rose-100 bg-rose-50",
+    },
+    {
+      label: "กำลังดำเนินการ (In Progress)",
+      value: inProgressCount.toString(),
+      note: "อยู่ระหว่างการปฏิบัติงานของเจ้าหน้าที่",
+      icon: "🛠️",
+      valueColor: "text-amber-600",
+      noteColor: "text-amber-600",
+      iconColor: "border-amber-100 bg-amber-50",
+    },
+    {
+      label: "แก้ไขเสร็จสิ้น (Resolved)",
+      value: resolvedCount.toString(),
+      note: `คิดเป็นความสำเร็จ ${resolvedRate}%`,
+      icon: "✅",
+      valueColor: "text-emerald-700",
+      noteColor: "text-emerald-700",
+      iconColor: "border-emerald-100 bg-emerald-50",
+    },
+  ];
+
+  const filteredIssues = useMemo(() => {
+    return issues.filter((issue) => {
+      const matchSearch =
+        `${issue.id} ${issue.category} ${issue.area} ${issue.description} ${issue.adminName}`
+          .toLowerCase()
+          .includes(search.trim().toLowerCase());
+      const matchStatus = statusFilter === "all" || issue.status === statusFilter;
+      return matchSearch && matchStatus;
+    });
+  }, [issues, search, statusFilter]);
 
   if (!session) {
     return (
@@ -121,34 +147,12 @@ export default function AdminDashboardPage() {
   return (
     <div className="min-h-screen bg-[#f3f7f5] text-slate-800">
       {/* แถบด้านบน */}
-      <header className="border-b border-slate-100 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-5 py-4 lg:px-8">
-          <div>
-            <h1 className="text-sm font-bold text-slate-900 sm:text-base">
-              ศูนย์ควบคุมและบริหารจัดการระบบ (Admin Dashboard)
-            </h1>
-            <p className="mt-1 text-xs text-slate-400">
-              UniCare · มหาวิทยาลัยวลัยลักษณ์
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 rounded-full border border-slate-100 bg-slate-50 px-3 py-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100">
-                👤
-              </span>
-              <span className="text-xs font-semibold">
-                {session.name}
-              </span>
-              <span className="rounded-full bg-emerald-800 px-2 py-0.5 text-[10px] font-bold text-white">
-                ADMIN
-              </span>
-            </div>
-
-            
-          </div>
-        </div>
-      </header>
+      <Header
+        title="ศูนย์ควบคุมและบริหารจัดการระบบ (Admin Dashboard)"
+        subtitle="UniCare · มหาวิทยาลัยวลัยลักษณ์"
+        role="ADMIN"
+        userName={session.name}
+      />
 
       <main className="mx-auto max-w-7xl space-y-6 px-5 py-6 lg:px-8 lg:py-8">
         {/* แถบต้อนรับ */}
@@ -160,34 +164,34 @@ export default function AdminDashboardPage() {
               </span>
 
               <h2 className="mt-3 text-xl font-bold leading-relaxed sm:text-2xl">
-                สวัสดีคุณ{session.name}, มีเคสใหม่รอตรวจสอบ 8 รายการ
+                สวัสดีคุณ{session.name}, มีเคสรอดำเนินการ {pendingCount} รายการ
               </h2>
 
               <p className="mt-2 text-sm leading-relaxed text-emerald-100/80">
-                ตรวจสอบเหตุการณ์เดือดร้อน มอบหมายงานเจ้าหน้าที่
-                และติดตามระยะเวลาแก้ไขได้ตาม SLA
+                ข้อมูลอิงจากระบบติดตามและจัดการสถานะ (ทั้งหมด {totalCount} เรื่อง · กำลังดำเนินการ {inProgressCount} เรื่อง · แก้ไขสำเร็จ {resolvedCount} เรื่อง)
               </p>
             </div>
 
             <div className="flex shrink-0 flex-wrap gap-2">
               <Link
-                href="/admin/reports"
-                className="rounded-xl bg-white px-4 py-3 text-xs font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50"
+                href="/admin/issues"
+                className="rounded-xl bg-white px-4 py-3 text-xs font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 flex items-center gap-1.5"
               >
-                📢 ดูรายการเรื่องร้องเรียนทั้งหมด
+                <span>📋 ไปที่ระบบติดตามและจัดการสถานะ</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </Link>
 
               <Link
                 href="/admin/analytics"
                 className="rounded-xl border border-white/20 px-4 py-3 text-xs font-semibold text-white transition hover:bg-white/10"
               >
-                ดูรายงานสรุป
+                📊 ดูสถิติรายงานภาพรวม
               </Link>
             </div>
           </div>
         </section>
 
-        {/* สถิติ */}
+        {/* สถิติ 4 ใบ */}
         <section
           aria-label="สถิติรายงาน"
           className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
@@ -195,7 +199,7 @@ export default function AdminDashboardPage() {
           {stats.map((item) => (
             <article
               key={item.label}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-white bg-white p-5 shadow-sm"
+              className="flex items-center justify-between gap-3 rounded-2xl border border-white bg-white p-5 shadow-sm hover:shadow-md transition"
             >
               <div>
                 <h3 className="text-xs font-medium text-slate-500">
@@ -223,134 +227,195 @@ export default function AdminDashboardPage() {
           ))}
         </section>
 
-        {/* ตารางรายงาน */}
-        <section className="overflow-hidden rounded-2xl bg-white p-5 shadow-sm lg:p-6">
-          <div className="flex flex-col justify-between gap-4 border-b border-slate-100 pb-5 sm:flex-row sm:items-center">
+        {/* ตารางรายงานที่อิงจากข้อมูลจริงในระบบติดตามและจัดการสถานะ */}
+        <section className="overflow-hidden rounded-2xl bg-white p-5 shadow-sm lg:p-6 border border-slate-200/60">
+          <div className="flex flex-col justify-between gap-4 border-b border-slate-100 pb-5 lg:flex-row lg:items-center">
             <div>
-              <h2 className="text-sm font-bold text-slate-900 sm:text-base">
-                รายการแจ้งปัญหาที่รอการตรวจสอบและมอบหมาย
-                <span className="ml-1 text-slate-500">
-                  (Action Required)
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-slate-900 sm:text-base">
+                  รายการเรื่องร้องเรียนในระบบติดตามและจัดการสถานะ
+                </h2>
+                <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
+                  {filteredIssues.length} รายการ
                 </span>
-              </h2>
+              </div>
 
               <p className="mt-1 text-xs text-slate-400">
-                เรื่องที่ต้องได้รับการพิจารณาและมอบหมายเจ้าหน้าที่เพื่อจัดการต่อไป
+                ข้อมูลสถานะจริงจากระบบติดตามและจัดการสถานะ (Status Tracking & Action Log) พร้อมอัปเดตและซิงค์ทันที
               </p>
             </div>
 
-            <div className="w-full sm:w-64 sm:shrink-0">
-              <label htmlFor="report-search" className="sr-only">
-                ค้นหารหัสเคส ปัญหา หรือสถานที่
-              </label>
-              <input
-                id="report-search"
-                type="search"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="ค้นหารหัสเคส, ปัญหา, สถานที่..."
-                className="w-full rounded-full border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-              />
+            {/* ค้นหา & แท็บตัวกรอง */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              {/* Filter Tabs */}
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-medium">
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("all")}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                    statusFilter === "all"
+                      ? "bg-white text-emerald-900 font-bold shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  ทั้งหมด ({totalCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("pending")}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                    statusFilter === "pending"
+                      ? "bg-white text-rose-700 font-bold shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  รอดำเนินการ ({pendingCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("in_progress")}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                    statusFilter === "in_progress"
+                      ? "bg-white text-blue-700 font-bold shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  กำลังดำเนินการ ({inProgressCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter("resolved")}
+                  className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+                    statusFilter === "resolved"
+                      ? "bg-white text-emerald-700 font-bold shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  แก้ไขแล้ว ({resolvedCount})
+                </button>
+              </div>
+
+              {/* Search Box */}
+              <div className="relative w-full sm:w-60">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="ค้นหารหัส, ปัญหา, พื้นที่, ผู้รับผิดชอบ..."
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 py-1.5 text-xs outline-none transition placeholder:text-slate-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-100"
+                />
+              </div>
             </div>
           </div>
 
+          {/* Table */}
           <div className="mt-4 overflow-x-auto">
             <table className="w-full min-w-[950px] text-left text-xs">
-              <thead className="bg-slate-50 text-slate-500">
+              <thead className="bg-[#f8faf9] text-slate-500 font-semibold border-b border-slate-200/80">
                 <tr>
-                  {[
-                    "รหัสเคส",
-                    "หมวดหมู่ / รายละเอียดปัญหา",
-                    "สถานที่เกิดเหตุ",
-                    "ความเร่งด่วน",
-                    "เวลาที่แจ้ง",
-                    "สถานะ",
-                    "การดำเนินการ",
-                  ].map((heading) => (
-                    <th
-                      key={heading}
-                      scope="col"
-                      className="px-3 py-4 font-semibold"
-                    >
-                      {heading}
-                    </th>
-                  ))}
+                  <th className="px-3 py-3.5">รหัสเคส</th>
+                  <th className="px-3 py-3.5">หมวดหมู่ / รายละเอียดปัญหา</th>
+                  <th className="px-3 py-3.5">สถานที่เกิดเหตุ</th>
+                  <th className="px-3 py-3.5">ความเร่งด่วน</th>
+                  <th className="px-3 py-3.5">เวลาที่แจ้ง</th>
+                  <th className="px-3 py-3.5">สถานะปัจจุบัน</th>
+                  <th className="px-3 py-3.5 text-center">จัดการสถานะ</th>
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {filteredReports.map((report) => (
+                {filteredIssues.map((report) => (
                   <tr
                     key={report.id}
                     className="transition hover:bg-emerald-50/40"
                   >
                     <td className="whitespace-nowrap px-3 py-4 font-bold text-emerald-800">
-                      #{report.id}
+                      <Link
+                        href={`/admin/issues?issueId=${encodeURIComponent(report.id)}`}
+                        className="hover:underline flex items-center gap-1 text-[#1b5e4a]"
+                        title="คลิกเพื่อเปิด Modal ไทม์ไลน์และจัดการเคสนี้"
+                      >
+                        #{report.id}
+                      </Link>
                     </td>
 
-                    <td className="px-3 py-4">
-                      <p className="font-semibold text-slate-800">
-                        {report.icon} {report.title}
+                    <td className="px-3 py-4 max-w-xs">
+                      <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+                        <span>{getCategoryIcon(report.category)}</span>
+                        <span>{report.category}</span>
                       </p>
-                      <p className="mt-1 text-[11px] text-slate-400">
+                      <p className="mt-1 text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
                         {report.description}
                       </p>
                     </td>
 
                     <td className="px-3 py-4 text-slate-600">
-                      {report.location}
+                      <div className="flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
+                        <span className="font-medium text-slate-700">{report.area}</span>
+                      </div>
                     </td>
 
                     <td className="px-3 py-4">
                       <span
-                        className={`inline-flex rounded-md px-2 py-1 text-[10px] font-bold ${
-                          report.priority === "High"
-                            ? "bg-rose-50 text-rose-700"
-                            : "bg-amber-50 text-amber-700"
+                        className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
+                          report.urgency === "เร่งด่วนมาก"
+                            ? "bg-rose-50 text-rose-700 border-rose-200"
+                            : report.urgency === "เร่งด่วน"
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
                         }`}
                       >
-                        {report.priority}
+                        {report.urgency || "ปกติ"}
                       </span>
                     </td>
 
-                    <td className="whitespace-nowrap px-3 py-4 text-slate-400">
-                      {report.time}
+                    <td className="whitespace-nowrap px-3 py-4 text-slate-400 text-[11px]">
+                      {report.date}
                     </td>
 
                     <td className="px-3 py-4">
-                      <span
-                        className={`inline-flex rounded-md px-2 py-1 text-[10px] font-bold ${
-                          report.status === "Pending"
-                            ? "bg-rose-50 text-rose-700"
-                            : "bg-amber-50 text-amber-700"
-                        }`}
-                      >
-                        {report.status}
-                      </span>
+                      {report.status === "in_progress" && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
+                          <span>กำลังดำเนินการ</span>
+                        </span>
+                      )}
+                      {report.status === "pending" && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                          <span>รอดำเนินการ</span>
+                        </span>
+                      )}
+                      {report.status === "resolved" && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                          <span>แก้ไขสำเร็จ</span>
+                        </span>
+                      )}
                     </td>
 
-                    <td className="whitespace-nowrap px-3 py-4">
+                    <td className="whitespace-nowrap px-3 py-4 text-center">
                       <Link
-                        href="/admin/reports"
-                        className={`inline-flex rounded-lg border px-3 py-2 text-[11px] font-bold transition ${
-                          report.status === "Pending"
-                            ? "border-emerald-800 bg-emerald-800 text-white hover:bg-emerald-900"
-                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                        }`}
+                        href={`/admin/issues?issueId=${encodeURIComponent(report.id)}`}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1b5e4a] text-white hover:bg-[#144737] text-[11px] font-semibold transition shadow-xs cursor-pointer"
+                        title="เปิดแก้ไขและบันทึกไทม์ไลน์ในระบบติดตามสถานะ"
                       >
-                        ไปจัดการรายงาน
+                        <span>จัดการสถานะ</span>
+                        <ArrowRight className="w-3 h-3" />
                       </Link>
                     </td>
                   </tr>
                 ))}
 
-                {filteredReports.length === 0 && (
+                {filteredIssues.length === 0 && (
                   <tr>
                     <td
                       colSpan={7}
                       className="px-4 py-12 text-center text-slate-400"
                     >
-                      ไม่พบรายการที่ตรงกับการค้นหา
+                      ไม่พบเรื่องร้องเรียนที่ตรงกับเงื่อนไขการค้นหา
                     </td>
                   </tr>
                 )}
@@ -358,9 +423,18 @@ export default function AdminDashboardPage() {
             </table>
           </div>
 
-          <p className="mt-4 text-[11px] text-slate-400">
-            ข้อมูลตัวอย่างสำหรับแสดงหน้าตา Dashboard
-          </p>
+          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-400 border-t border-slate-100 pt-3">
+            <p>
+              ✅ ข้อมูลจริงเชื่อมโยงแบบเรียลไทม์กับระบบติดตามและจัดการสถานะ (Status Tracking & Action Log)
+            </p>
+            <Link
+              href="/admin/issues"
+              className="text-emerald-700 font-semibold hover:underline flex items-center gap-1"
+            >
+              <span>ไปที่หน้าระบบติดตามและจัดการสถานะแบบเต็ม</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
         </section>
       </main>
     </div>
