@@ -393,11 +393,11 @@ export default function CaseClarificationDrawer({
                           <span className="font-bold flex items-center gap-1">
                             {normalizedRole === 'admin' ? (
                               <span className="px-2 py-0.5 text-[10px] font-bold bg-[#1b5e4a] text-white rounded-md shadow-2xs">
-                                คุณ (Admin)
+                                {currentUserName || 'คุณ (Admin)'}
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-600 text-white rounded-md shadow-2xs">
-                                คุณ (ผู้แจ้ง)
+                                {currentUserName || 'คุณ (ผู้แจ้ง)'}
                               </span>
                             )}
                           </span>
@@ -409,12 +409,12 @@ export default function CaseClarificationDrawer({
                             {isSenderAdmin ? (
                               <span className="px-2 py-0.5 text-[10px] font-bold bg-[#1b5e4a] text-white rounded-md shadow-2xs flex items-center gap-1">
                                 <Shield className="w-2.5 h-2.5 text-emerald-300" />
-                                เจ้าหน้าที่ / Admin
+                                {msg.sender_name || 'เจ้าหน้าที่ / Admin'}
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-md border border-emerald-200 flex items-center gap-1">
                                 <User className="w-2.5 h-2.5 text-emerald-700" />
-                                ผู้แจ้งเรื่อง (User)
+                                {msg.sender_name || 'ผู้แจ้งเรื่อง (User)'}
                               </span>
                             )}
                           </span>

@@ -1,537 +1,342 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import {
+  DEFAULT_CATEGORY_METADATA,
+  getDefaultCategoryCounts,
+  getCategoryCounts,
+  getCategoryIcon,
+  type CategoryMetadata,
+} from "@/lib/issuesData";
 
-type Category = {
-    id: number;
-    name: string;
-    description: string;
-    count: number;
-    status: string;
+type CategoryWithCount = CategoryMetadata & {
+  count: number;
 };
 
-const initialCategories: Category[] = [
-    {
-        id: 1,
-        name: "ขยะ / ของเสีย",
-        description: "ขยะทั่วไป ขยะอันตราย ขยะรีไซเคิล",
-        count: 48,
-        status: "เปิดใช้งาน",
-    },
-    {
-        id: 2,
-        name: "น้ำ / น้ำเสีย",
-        description: "น้ำรั่ว น้ำท่วม น้ำเสีย ระบบระบายน้ำ",
-        count: 32,
-        status: "เปิดใช้งาน",
-    },
-    {
-        id: 3,
-        name: "อาคาร / บำรุงรักษา",
-        description: "อาคารชำรุด ห้องน้ำ ไฟฟ้า แสงสว่าง",
-        count: 27,
-        status: "เปิดใช้งาน",
-    },
-    {
-        id: 4,
-        name: "ต้นไม้ / พื้นที่เขียว",
-        description: "ต้นไม้ชำรุด ภูมิทัศน์ พื้นที่สีเขียว",
-        count: 18,
-        status: "เปิดใช้งาน",
-    },
-    {
-        id: 5,
-        name: "เสียงรบกวน",
-        description: "เสียงดัง กิจกรรมรบกวน พื้นที่เรียน",
-        count: 16,
-        status: "เปิดใช้งาน",
-    },
-    {
-        id: 6,
-        name: "ความปลอดภัย",
-        description: "อุบัติเหตุ ความเสี่ยง อาชญากรรม",
-        count: 11,
-        status: "เปิดใช้งาน",
-    },
-    {
-        id: 7,
-        name: "อื่น ๆ",
-        description: "อื่น ๆ ที่ไม่เข้าหมวดหมู่",
-        count: 6,
-        status: "เปิดใช้งาน",
-    },
-];
-
-/* =========================
-   CATEGORY ICON
-========================= */
-
-function getCategoryIcon(name: string) {
-    if (name.includes("ขยะ")) return "🗑️";
-    if (name.includes("น้ำ")) return "💧";
-    if (name.includes("อาคาร")) return "🏢";
-    if (name.includes("ต้นไม้")) return "🌳";
-    if (name.includes("เสียง")) return "🔊";
-    if (name.includes("ความปลอดภัย")) return "🛡️";
-
-    return "📋";
-}
-
 export default function CategoryManager() {
-    const [categories, setCategories] =
-        useState<Category[]>(initialCategories);
+  const [categoryMeta, setCategoryMeta] = useState<CategoryMetadata[]>(DEFAULT_CATEGORY_METADATA);
+  const [counts, setCounts] = useState<Record<string, number>>(getDefaultCategoryCounts);
 
-    const [search, setSearch] = useState("");
+  const [search, setSearch] = useState("");
 
-    const [showModal, setShowModal] =
-        useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<CategoryWithCount | null>(null);
 
-    const [editingCategory, setEditingCategory] =
-        useState<Category | null>(null);
+  const [description, setDescription] = useState("");
+  const [status, setStatus] = useState("เปิดใช้งาน");
 
-    const [name, setName] = useState("");
-    const [description, setDescription] = useState("");
-    const [status, setStatus] =
-        useState("เปิดใช้งาน");
-
-    /* =========================
-       SEARCH
-    ========================= */
-
-    const filteredCategories =
-        categories.filter((category) =>
-            category.name
-                .toLowerCase()
-                .includes(search.toLowerCase())
-        );
-
-    /* =========================
-       ADD
-    ========================= */
-
-    function addCategory() {
-        setEditingCategory(null);
-
-        setName("");
-        setDescription("");
-        setStatus("เปิดใช้งาน");
-
-        setShowModal(true);
-    }
-
-    /* =========================
-       EDIT
-    ========================= */
-
-    function editCategory(category: Category) {
-        setEditingCategory(category);
-
-        setName(category.name);
-        setDescription(category.description);
-        setStatus(category.status);
-
-        setShowModal(true);
-    }
-
-    /* =========================
-       SAVE
-    ========================= */
-
-    function saveCategory() {
-        if (!name.trim()) {
-            alert("กรุณากรอกชื่อหมวดหมู่");
-            return;
+  // Sync category metadata & counts from localStorage after hydration
+  useEffect(() => {
+    const syncMeta = () => {
+      try {
+        const saved = window.localStorage.getItem("unicare_category_metadata");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setCategoryMeta(parsed);
+          }
         }
+      } catch {
+        // ignore
+      }
+    };
 
-        /* EDIT */
+    syncMeta();
 
-        if (editingCategory) {
-            setCategories((current) =>
-                current.map((category) =>
-                    category.id === editingCategory.id
-                        ? {
-                            ...category,
-                            name: name.trim(),
-                            description: description.trim(),
-                            status,
-                        }
-                        : category
-                )
-            );
+    const updateCounts = () => {
+      setCounts(getCategoryCounts());
+    };
 
-            alert("แก้ไขหมวดหมู่สำเร็จ");
-        }
+    updateCounts();
 
-        /* ADD */
+    window.addEventListener("storage", syncMeta);
+    window.addEventListener("unicare-category-metadata-updated", syncMeta);
+    window.addEventListener("storage", updateCounts);
+    window.addEventListener("unicare-demo-reports-updated", updateCounts);
+    window.addEventListener("focus", updateCounts);
 
-        else {
-            const newCategory: Category = {
-                id:
-                    Math.max(
-                        0,
-                        ...categories.map(
-                            (category) => category.id
-                        )
-                    ) + 1,
+    return () => {
+      window.removeEventListener("storage", syncMeta);
+      window.removeEventListener("unicare-category-metadata-updated", syncMeta);
+      window.removeEventListener("storage", updateCounts);
+      window.removeEventListener("unicare-demo-reports-updated", updateCounts);
+      window.removeEventListener("focus", updateCounts);
+    };
+  }, []);
 
-                name: name.trim(),
+  // Merge metadata with dynamic counts
+  const categoriesWithCounts: CategoryWithCount[] = useMemo(() => {
+    return categoryMeta.map((cat) => ({
+      ...cat,
+      count: counts[cat.name] ?? 0,
+    }));
+  }, [categoryMeta, counts]);
 
-                description:
-                    description.trim(),
+  // Sort descending by problem count (highest count at top, lowest/0 at bottom)
+  const sortedCategories = useMemo(() => {
+    return [...categoriesWithCounts].sort((a, b) => {
+      if (b.count !== a.count) {
+        return b.count - a.count;
+      }
+      return a.id - b.id;
+    });
+  }, [categoriesWithCounts]);
 
-                count: 0,
+  // Filter based on search query
+  const filteredCategories = useMemo(() => {
+    if (!search.trim()) return sortedCategories;
+    const query = search.toLowerCase();
+    return sortedCategories.filter(
+      (cat) =>
+        cat.name.toLowerCase().includes(query) ||
+        cat.description.toLowerCase().includes(query)
+    );
+  }, [sortedCategories, search]);
 
-                status,
-            };
+  /* =========================
+     EDIT
+  ========================= */
+  function editCategory(category: CategoryWithCount) {
+    setEditingCategory(category);
+    setDescription(category.description);
+    setStatus(category.status);
+    setShowModal(true);
+  }
 
-            setCategories((current) => [
-                ...current,
-                newCategory,
-            ]);
+  /* =========================
+     SAVE
+  ========================= */
+  function saveCategory() {
+    if (!editingCategory) return;
 
-            alert("เพิ่มหมวดหมู่สำเร็จ");
-        }
+    const updated = categoryMeta.map((category) =>
+      category.id === editingCategory.id
+        ? {
+            ...category,
+            description: description.trim(),
+            status,
+          }
+        : category
+    );
 
-        closeModal();
+    setCategoryMeta(updated);
+
+    try {
+      window.localStorage.setItem(
+        "unicare_category_metadata",
+        JSON.stringify(updated)
+      );
+      window.dispatchEvent(new Event("unicare-category-metadata-updated"));
+    } catch {
+      // ignore
     }
 
-    /* =========================
-       DELETE
-    ========================= */
+    closeModal();
+  }
 
-    function deleteCategory(id: number) {
-        const confirmed =
-            window.confirm(
-                "คุณต้องการลบหมวดหมู่นี้หรือไม่?"
-            );
+  /* =========================
+     CLOSE MODAL
+  ========================= */
+  function closeModal() {
+    setShowModal(false);
+    setEditingCategory(null);
+    setDescription("");
+    setStatus("เปิดใช้งาน");
+  }
 
-        if (!confirmed) {
-            return;
-        }
+  return (
+    <>
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title">
+            <div className="card-title-icon">📋</div>
+            <div>
+              <h2>จัดการหมวดหมู่ปัญหา</h2>
+              <p>
+                หมวดหมู่อ้างอิงจากแบบฟอร์มแจ้งปัญหา (จัดเรียงตามจำนวนปัญหาที่ได้รับแจ้งมากที่สุดไปน้อยที่สุด)
+              </p>
+            </div>
+          </div>
+          {/* Note: Add button removed per user request */}
+        </div>
 
-        setCategories((current) =>
-            current.filter(
-                (category) =>
-                    category.id !== id
-            )
-        );
+        {/* SEARCH */}
+        <div className="search">
+          <span className="search-icon">🔍</span>
+          <input
+            type="text"
+            placeholder="ค้นหาหมวดหมู่..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
 
-        alert("ลบหมวดหมู่สำเร็จ");
-    }
-
-    /* =========================
-       CLOSE MODAL
-    ========================= */
-
-    function closeModal() {
-        setShowModal(false);
-
-        setEditingCategory(null);
-
-        setName("");
-        setDescription("");
-        setStatus("เปิดใช้งาน");
-    }
-
-    return (
-        <>
-            <div className="card">
-
-                <div className="card-header">
-
-                    <div className="card-title">
-
-                        <div className="card-title-icon">
-                            📋
+        {/* TABLE */}
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ลำดับ</th>
+                <th>หมวดหมู่</th>
+                <th>จำนวนปัญหา</th>
+                <th>สถานะ</th>
+                <th>จัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredCategories.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ textAlign: "center", padding: "24px", color: "#64748b" }}>
+                    ไม่พบข้อมูลหมวดหมู่ที่ค้นหา
+                  </td>
+                </tr>
+              ) : (
+                filteredCategories.map((category, index) => (
+                  <tr key={category.id}>
+                    <td>{index + 1}</td>
+                    <td>
+                      <div className="category">
+                        <div className="category-icon green">
+                          {getCategoryIcon(category.name)}
                         </div>
-
                         <div>
-
-                            <h2>
-                                จัดการหมวดหมู่ปัญหา
-                            </h2>
-
-                            <p>
-                                เพิ่ม แก้ไข หรือลบหมวดหมู่ของปัญหา
-                            </p>
-
+                          <div className="category-name">{category.name}</div>
+                          <div suppressHydrationWarning className="category-desc">{category.description}</div>
                         </div>
-
-                    </div>
-
-                    <button
-                        className="btn btn-green"
-                        onClick={addCategory}
-                    >
-                        ＋ เพิ่มหมวดหมู่
-                    </button>
-
-                </div>
-
-                {/* SEARCH */}
-
-                <div className="search">
-
-                    <span className="search-icon">
-                        🔍
-                    </span>
-
-                    <input
-                        type="text"
-                        placeholder="ค้นหาหมวดหมู่..."
-                        value={search}
-                        onChange={(event) =>
-                            setSearch(
-                                event.target.value
-                            )
+                      </div>
+                    </td>
+                    <td>
+                      <b
+                        suppressHydrationWarning
+                        style={{ fontSize: "14px", color: category.count > 0 ? "#1b5e4a" : "#64748b" }}
+                      >
+                        {category.count}
+                      </b>
+                    </td>
+                    <td>
+                      <span
+                        suppressHydrationWarning
+                        className="status"
+                        style={
+                          category.status === "ปิดใช้งาน"
+                            ? { background: "#f1f5f9", color: "#64748b" }
+                            : undefined
                         }
-                    />
+                      >
+                        {category.status}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="actions">
+                        <button
+                          type="button"
+                          className="action-btn edit"
+                          title="แก้ไขคำอธิบายและสถานะ"
+                          onClick={() => editCategory(category)}
+                        >
+                          ✏️
+                        </button>
+                        {/* Note: Delete button removed per user request */}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
-                </div>
+        {/* Footer Summary (แสดงครบทั้งหมด ไม่มีปุ่มเปลี่ยนหน้า 1 2) */}
+        {filteredCategories.length > 0 && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-[#f8faf9] text-xs text-slate-500">
+            <div>
+              แสดงทั้งหมด <span className="font-semibold text-slate-800">{filteredCategories.length}</span> หมวดหมู่
+            </div>
+            <div className="text-[11px] text-slate-400">
+              เรียงตามจำนวนปัญหา (มาก &rarr; น้อย)
+            </div>
+          </div>
+        )}
+      </div>
 
-                {/* TABLE */}
-
-                <div className="table-wrap">
-
-                    <table>
-
-                        <thead>
-
-                            <tr>
-                                <th>ลำดับ</th>
-                                <th>หมวดหมู่</th>
-                                <th>จำนวนปัญหา</th>
-                                <th>สถานะ</th>
-                                <th>จัดการ</th>
-                            </tr>
-
-                        </thead>
-
-                        <tbody>
-
-                            {filteredCategories.map(
-                                (category, index) => (
-
-                                    <tr
-                                        key={category.id}
-                                    >
-
-                                        <td>
-                                            {index + 1}
-                                        </td>
-
-                                        <td>
-
-                                            <div className="category">
-
-                                                <div className="category-icon green">
-                                                    {getCategoryIcon(
-                                                        category.name
-                                                    )}
-                                                </div>
-
-                                                <div>
-
-                                                    <div className="category-name">
-                                                        {category.name}
-                                                    </div>
-
-                                                    <div className="category-desc">
-                                                        {category.description}
-                                                    </div>
-
-                                                </div>
-
-                                            </div>
-
-                                        </td>
-
-                                        <td>
-                                            <b>
-                                                {category.count}
-                                            </b>
-                                        </td>
-
-                                        <td>
-
-                                            <span className="status">
-                                                {category.status}
-                                            </span>
-
-                                        </td>
-
-                                        <td>
-
-                                            <div className="actions">
-
-                                                <button
-                                                    className="action-btn edit"
-                                                    onClick={() =>
-                                                        editCategory(
-                                                            category
-                                                        )
-                                                    }
-                                                >
-                                                    ✏️
-                                                </button>
-
-                                                <button
-                                                    className="action-btn delete"
-                                                    onClick={() =>
-                                                        deleteCategory(
-                                                            category.id
-                                                        )
-                                                    }
-                                                >
-                                                    🗑️
-                                                </button>
-
-                                            </div>
-
-                                        </td>
-
-                                    </tr>
-
-                                )
-                            )}
-
-                        </tbody>
-
-                    </table>
-
-                </div>
-
+      {/* =========================
+          MODAL
+      ========================= */}
+      {showModal && editingCategory && (
+        <div
+          className="modal"
+          style={{ display: "flex" }}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closeModal();
+            }
+          }}
+        >
+          <div className="modal-content">
+            <div className="modal-header">
+              <h3>แก้ไขหมวดหมู่ปัญหา</h3>
+              <button type="button" className="modal-close" onClick={closeModal}>
+                ×
+              </button>
             </div>
 
-            {/* =========================
-                MODAL
-            ========================= */}
+            <div className="form-group">
+              <label>ชื่อหมวดหมู่</label>
+              <input
+                value={editingCategory.name}
+                disabled
+                style={{
+                  backgroundColor: "#f8fafc",
+                  color: "#475569",
+                  cursor: "not-allowed",
+                  borderColor: "#e2e8f0",
+                }}
+              />
+              <span style={{ fontSize: "11px", color: "#64748b", marginTop: "4px", display: "block" }}>
+                * ชื่อหมวดหมู่อ้างอิงจากระบบแจ้งปัญหามาตรฐาน
+              </span>
+            </div>
 
-            {showModal && (
+            <div className="form-group">
+              <label>คำอธิบายหมวดหมู่</label>
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="กรอกคำอธิบายหมวดหมู่"
+                rows={3}
+              />
+            </div>
 
-                <div
-                    className="modal"
-                    style={{
-                        display: "flex",
-                    }}
-                    onClick={(event) => {
+            <div className="form-group">
+              <label>สถานะการใช้งาน</label>
+              <select
+                value={status}
+                onChange={(event) => setStatus(event.target.value)}
+              >
+                <option value="เปิดใช้งาน">เปิดใช้งาน</option>
+                <option value="ปิดใช้งาน">ปิดใช้งาน</option>
+              </select>
+            </div>
 
-                        if (
-                            event.target ===
-                            event.currentTarget
-                        ) {
-                            closeModal();
-                        }
-
-                    }}
-                >
-
-                    <div className="modal-content">
-
-                        <div className="modal-header">
-
-                            <h3>
-                                {editingCategory
-                                    ? "แก้ไขหมวดหมู่"
-                                    : "เพิ่มหมวดหมู่"}
-                            </h3>
-
-                            <button
-                                className="modal-close"
-                                onClick={closeModal}
-                            >
-                                ×
-                            </button>
-
-                        </div>
-
-                        <div className="form-group">
-
-                            <label>
-                                ชื่อหมวดหมู่
-                            </label>
-
-                            <input
-                                value={name}
-                                onChange={(event) =>
-                                    setName(
-                                        event.target.value
-                                    )
-                                }
-                                placeholder="กรอกชื่อหมวดหมู่"
-                            />
-
-                        </div>
-
-                        <div className="form-group">
-
-                            <label>
-                                คำอธิบาย
-                            </label>
-
-                            <textarea
-                                value={description}
-                                onChange={(event) =>
-                                    setDescription(
-                                        event.target.value
-                                    )
-                                }
-                                placeholder="กรอกคำอธิบาย"
-                            />
-
-                        </div>
-
-                        <div className="form-group">
-
-                            <label>
-                                สถานะ
-                            </label>
-
-                            <select
-                                value={status}
-                                onChange={(event) =>
-                                    setStatus(
-                                        event.target.value
-                                    )
-                                }
-                            >
-
-                                <option value="เปิดใช้งาน">
-                                    เปิดใช้งาน
-                                </option>
-
-                                <option value="ปิดใช้งาน">
-                                    ปิดใช้งาน
-                                </option>
-
-                            </select>
-
-                        </div>
-
-                        <div className="modal-actions">
-
-                            <button
-                                className="btn-cancel"
-                                onClick={closeModal}
-                            >
-                                ยกเลิก
-                            </button>
-
-                            <button
-                                className="btn-save"
-                                onClick={saveCategory}
-                            >
-                                บันทึก
-                            </button>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-            )}
-
-        </>
-    );
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={closeModal}
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                className="btn-save"
+                onClick={saveCategory}
+              >
+                บันทึกการแก้ไข
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }

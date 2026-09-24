@@ -12,12 +12,14 @@ import {
   Loader2,
   MapPin,
   RotateCw,
+  ShieldCheck,
   UserRound,
   X,
   XCircle,
 } from "lucide-react";
-import AdminSidebar from "@/components/AdminSidebar";
 import Header from "@/components/Header";
+import { addNotification } from "@/lib/notifications";
+import { getCurrentAdminDisplayName, getAdminInitials } from "@/lib/issuesData";
 
 type Status = "Pending" | "In_Progress" | "Resolved" | "Closed";
 type Severity = "Low" | "Medium" | "High" | "Critical";
@@ -30,6 +32,10 @@ type Report = {
   status: Status;
   date_created: string;
   reporter_name?: string | null;
+  reporter_email?: string | null;
+  admin_name?: string | null;
+  adminName?: string | null;
+  adminInitial?: string | null;
   evidence_count?: number;
   issue_categories: { category_name: string } | null;
   issue_areas: { area_name: string } | null;
@@ -58,6 +64,10 @@ const severityStyle: Record<
     label: "เร่งด่วนมาก",
     className: "border-orange-200 bg-orange-50 text-orange-700",
   },
+  Critical: {
+    label: "วิกฤต",
+    className: "border-rose-200 bg-rose-50 text-rose-700",
+  },
 };
 
 // Demo Mode: หน้า User และ Admin ต้องใช้ key เดียวกัน
@@ -71,7 +81,8 @@ const demoReports: Report[] = [
     severity: "High",
     status: "Pending",
     date_created: "2026-09-08T20:30:00.000Z",
-    reporter_name: "อชิรญาณ์ ดุลยาภรณ์",
+    reporter_name: "สมชาย ใจดี",
+    reporter_email: "somchai@example.com",
     evidence_count: 2,
     issue_categories: { category_name: "เสียงรบกวน" },
     issue_areas: { area_name: "อาคารเรียนรวม" },
@@ -83,7 +94,8 @@ const demoReports: Report[] = [
     severity: "Medium",
     status: "Pending",
     date_created: "2026-09-07T10:15:00.000Z",
-    reporter_name: "นักศึกษามหาวิทยาลัย",
+    reporter_name: "นภัสสร แสงทอง",
+    reporter_email: "napatsorn@example.com",
     evidence_count: 1,
     issue_categories: { category_name: "ขยะ / ของเสีย" },
     issue_areas: { area_name: "โรงอาหาร" },
@@ -145,21 +157,116 @@ export default function AdminIssuesPage() {
   }, [loadReports]);
 
   function updateStatus(report: Report, nextStatus: Status) {
-    const confirmed = window.confirm(
-      `เปลี่ยนสถานะเรื่อง #${report.issue_id} เป็น “${statusLabel[nextStatus]}” หรือไม่?`,
-    );
+    const isReject = nextStatus === "Closed";
+    const isAccept = nextStatus === "In_Progress";
+
+    const displayId = String(report.issue_id).startsWith("ISS-")
+      ? String(report.issue_id)
+      : `ISS-2026-${String(report.issue_id).padStart(3, "0")}`;
+    const categoryName = report.issue_categories?.category_name || report.title || "ทั่วไป";
+
+    const confirmMessage = isReject
+      ? `คุณต้องการ "ปฏิเสธ" คำร้องเรียน #${displayId} (${categoryName}) หรือไม่?\n(คำร้องจะออกจากรายการใหม่ และระบบจะแจ้งเตือนไปยังผู้ใช้)`
+      : isAccept
+      ? `คุณต้องการ "รับเรื่อง" คำร้องเรียน #${displayId} (${categoryName}) หรือไม่?\n(ระบบจะส่งการแจ้งเตือนและนำเรื่องเข้าสู่ระบบติดตามสถานะ)`
+      : `เปลี่ยนสถานะเรื่อง #${displayId} เป็น “${statusLabel[nextStatus]}” หรือไม่?`;
+
+    const confirmed = window.confirm(confirmMessage);
     if (!confirmed) return;
 
     setSavingId(report.issue_id);
     setError("");
 
+    const actingAdminName = getCurrentAdminDisplayName();
+    const actingAdminInitials = getAdminInitials(actingAdminName);
+
     const nextReports = reports.map((item) =>
       item.issue_id === report.issue_id
-        ? { ...item, status: nextStatus }
+        ? {
+            ...item,
+            status: nextStatus,
+            admin_name: isAccept ? actingAdminName : item.admin_name,
+            adminName: isAccept ? actingAdminName : item.adminName,
+            adminInitial: isAccept ? actingAdminInitials : item.adminInitial,
+          }
         : item,
     );
     setReports(nextReports);
     saveDemoReports(nextReports);
+
+    // 1. ส่งการแจ้งเตือนในกระดิ่งเมื่อถูกปฏิเสธ
+    if (isReject) {
+      addNotification({
+        title: "ปัญหาถูกปฏิเสธ",
+        description: `คำร้องเรียน #${displayId} (${categoryName}) ได้รับการตรวจสอบและปฏิเสธโดย ${actingAdminName}`,
+        type: "urgent",
+        isRead: false,
+        link: "/my-reports",
+        targetRole: "user",
+        targetEmail: report.reporter_email || undefined,
+        targetName: report.reporter_name || undefined,
+        issueId: String(displayId),
+      });
+    }
+
+    // 2. ส่งการแจ้งเตือนในกระดิ่งเมื่อรับเรื่อง พร้อมสร้างไทม์ไลน์เริ่มต้น
+    if (isAccept) {
+      addNotification({
+        title: "เจ้าหน้าที่รับเรื่องร้องเรียนแล้ว",
+        description: `คำร้องเรียน #${displayId} (${categoryName}) ได้รับการรับเรื่องโดย ${actingAdminName} และส่งต่อไปยังระบบติดตามสถานะ`,
+        type: "status",
+        isRead: false,
+        link: "/my-reports",
+        targetRole: "user",
+        targetEmail: report.reporter_email || undefined,
+        targetName: report.reporter_name || undefined,
+        issueId: String(displayId),
+      });
+
+      try {
+        const savedTimeline = window.localStorage.getItem("unicare_demo_timeline_history");
+        const timelineObj = savedTimeline ? JSON.parse(savedTimeline) : {};
+        const now = new Date();
+        const thaiDate =
+          now.toLocaleDateString("th-TH", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }) + " น.";
+
+        timelineObj[displayId] = [
+          {
+            statusText: "รับเรื่องร้องเรียน (Accepted)",
+            time: thaiDate,
+            note: `เจ้าหน้าที่ ${actingAdminName} เข้าตรวจสอบข้อมูลเบื้องต้นและกดรับเรื่องร้องเรียน พร้อมส่งต่อไปยังระบบติดตามสถานะการแก้ไข`,
+            author: actingAdminName,
+            color: "bg-blue-600",
+          },
+          ...(timelineObj[displayId] || [
+            {
+              statusText: "สร้างเรื่องร้องเรียน (Reported)",
+              time:
+                new Date(report.date_created).toLocaleDateString("th-TH", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }) + " น.",
+              note: report.description || "ผู้ใช้งานแจ้งเรื่องร้องเรียนผ่านระบบ UNICARE",
+              author: report.reporter_name || "ผู้ใช้งานระบบ",
+              color: "bg-amber-500",
+            },
+          ]),
+        ];
+        window.localStorage.setItem("unicare_demo_timeline_history", JSON.stringify(timelineObj));
+      } catch {
+        // ignore
+      }
+    }
+
     setSelected((current) =>
       current?.issue_id === report.issue_id
         ? { ...current, status: nextStatus }
@@ -189,15 +296,16 @@ export default function AdminIssuesPage() {
     [filter, reports],
   );
 
-  return (
-    <div className="min-h-screen bg-[#f4f7f5] text-slate-800 md:flex">
+  const currentAdmin = getCurrentAdminDisplayName().replace(/\(Admin\)/g, '').trim();
 
-      <div className="min-w-0 flex-1">
-        <Header
-          title="จัดการคำร้องเรียน"
-          subtitle="มหาวิทยาลัยวลัยลักษณ์"
-          role="ADMIN"
-        />
+  return (
+    <div className="min-h-screen bg-[#f4f7f5] text-slate-800">
+      <Header
+        title="จัดการคำร้องเรียน"
+        subtitle="มหาวิทยาลัยวลัยลักษณ์"
+        userName={currentAdmin}
+        role="ADMIN"
+      />
 
         <main className="mx-auto w-full max-w-7xl space-y-5 p-4 sm:p-6 lg:p-8">
           <section className="grid gap-4 md:grid-cols-3">
@@ -412,7 +520,6 @@ export default function AdminIssuesPage() {
             )}
           </section>
         </main>
-      </div>
 
       {selected && (
         <div
@@ -466,6 +573,17 @@ export default function AdminIssuesPage() {
                   icon={<UserRound className="h-4 w-4" />}
                   label="ผู้แจ้ง"
                   value={selected.reporter_name || "ผู้ใช้งานระบบ"}
+                />
+                <InfoCard
+                  icon={<ShieldCheck className="h-4 w-4" />}
+                  label="ผู้รับผิดชอบ"
+                  value={
+                    selected.admin_name ||
+                    selected.adminName ||
+                    (selected.status === "Pending"
+                      ? "ยังไม่มีผู้รับผิดชอบ (รอรับเรื่อง)"
+                      : getCurrentAdminDisplayName())
+                  }
                 />
                 <InfoCard
                   icon={<MapPin className="h-4 w-4" />}

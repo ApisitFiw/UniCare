@@ -15,6 +15,9 @@ import {
   type IssueReport,
   type Urgency,
 } from "@/lib/issueReports";
+import { getDisabledCategoryNames } from "@/lib/issuesData";
+import { addNotification } from "@/lib/notifications";
+import Header from "@/components/Header";
 
 type Question = {
   key: string;
@@ -443,11 +446,13 @@ function SelectField({
   label,
   value,
   options,
+  disabledOptions = [],
   onChange,
 }: {
   label: string;
   value: string;
   options: string[];
+  disabledOptions?: string[];
   onChange: (value: string) => void;
 }) {
   return (
@@ -458,11 +463,23 @@ function SelectField({
         onChange={(event) => onChange(event.target.value)}
       >
         <option value="">กรุณาเลือก</option>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
+        {options.map((option) => {
+          const isDisabled = disabledOptions.includes(option);
+          return (
+            <option
+              key={option}
+              value={option}
+              disabled={isDisabled}
+              style={
+                isDisabled
+                  ? { color: "#94a3b8", backgroundColor: "#f8fafc" }
+                  : undefined
+              }
+            >
+              {option} {isDisabled ? "(ปิดรับแจ้งชั่วคราว)" : ""}
+            </option>
+          );
+        })}
       </select>
     </Field>
   );
@@ -657,21 +674,27 @@ function SuccessModal({
 
       <div className="mt-6 flex flex-wrap justify-center gap-3">
         <Link
+          href="/my-reports"
+          className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white shadow-xs hover:bg-emerald-800 transition"
+        >
+          📋 ไปที่รายการของฉัน
+        </Link>
+        <Link
           href={`/user/report/detail?id=${encodeURIComponent(report.id)}`}
-          className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white"
+          className="rounded-xl border border-slate-200 px-5 py-3 text-sm text-slate-700 hover:bg-slate-50 transition"
         >
           ดูรายละเอียดรายงาน
         </Link>
         <button
           type="button"
           onClick={onNewReport}
-          className="rounded-xl border border-emerald-300 px-5 py-3 text-sm text-emerald-800"
+          className="rounded-xl border border-emerald-300 px-5 py-3 text-sm text-emerald-800 hover:bg-emerald-50 transition"
         >
           + แจ้งปัญหาเพิ่มเติม
         </button>
         <Link
           href="/user/dashboard"
-          className="rounded-xl border border-slate-200 px-5 py-3 text-sm"
+          className="rounded-xl border border-slate-200 px-5 py-3 text-sm text-slate-600 hover:bg-slate-50 transition"
         >
           กลับหน้าหลัก
         </Link>
@@ -691,6 +714,7 @@ export default function UserReportPage() {
   const [fileError, setFileError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [savedReport, setSavedReport] = useState<IssueReport | null>(null);
+  const [disabledCategories, setDisabledCategories] = useState<string[]>([]);
 
   const busyRef = useRef(false);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -705,6 +729,55 @@ export default function UserReportPage() {
 
     setReporter(session.name);
   }, [router]);
+
+  // Synchronize disabled categories from admin settings in real-time
+  useEffect(() => {
+    const syncDisabled = () => {
+      setDisabledCategories(getDisabledCategoryNames());
+    };
+
+    syncDisabled();
+
+    window.addEventListener("storage", syncDisabled);
+    window.addEventListener("unicare-category-metadata-updated", syncDisabled);
+    window.addEventListener("focus", syncDisabled);
+
+    return () => {
+      window.removeEventListener("storage", syncDisabled);
+      window.removeEventListener("unicare-category-metadata-updated", syncDisabled);
+      window.removeEventListener("focus", syncDisabled);
+    };
+  }, []);
+
+  // Preselect from URL query param (?category=...) if valid and not disabled
+  useEffect(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const catParam = urlParams.get("category");
+      if (catParam && Object.keys(QUESTIONS).includes(catParam)) {
+        const disabled = getDisabledCategoryNames();
+        if (!disabled.includes(catParam)) {
+          patch({ category: catParam });
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // If currently selected category becomes disabled by admin, clear selection and alert
+  useEffect(() => {
+    if (form.category && disabledCategories.includes(form.category)) {
+      patch({
+        category: "",
+        categoryOther: "",
+        otherProblem: "",
+        answers: {},
+        answerOther: {},
+      });
+      setError(`หมวดหมู่ "${form.category}" ถูกปิดรับแจ้งชั่วคราวโดยผู้ดูแลระบบ`);
+    }
+  }, [disabledCategories, form.category]);
 
   useEffect(() => {
     if (reporter !== null && !savedReport) {
@@ -726,6 +799,10 @@ export default function UserReportPage() {
   }
 
   function changeCategory(category: string) {
+    if (disabledCategories.includes(category)) {
+      setError(`หมวดหมู่ "${category}" ปิดรับแจ้งชั่วคราว ไม่สามารถเลือกได้`);
+      return;
+    }
     patch({
       category,
       categoryOther: "",
@@ -828,6 +905,10 @@ export default function UserReportPage() {
       if (!form.title.trim()) return "กรุณากรอกหัวข้อปัญหา";
       if (!Object.keys(QUESTIONS).includes(form.category)) {
         return "กรุณาเลือกประเภทปัญหา";
+      }
+
+      if (disabledCategories.includes(form.category)) {
+        return `หมวดหมู่ "${form.category}" ปิดรับแจ้งชั่วคราว กรุณาเลือกประเภทปัญหาอื่น`;
       }
 
       if (form.category === OTHER) {
@@ -1062,6 +1143,93 @@ export default function UserReportPage() {
       };
 
       await saveIssueReport(report);
+
+      // บันทึกลง localStorage (unicare_demo_issue_reports) เพื่อให้แสดงในหน้า "รายการของฉัน" และ "จัดการคำขอร้อง" ของแอดมิน
+      try {
+        const savedReportsStr = window.localStorage.getItem("unicare_demo_issue_reports");
+        const existingReports = savedReportsStr ? JSON.parse(savedReportsStr) : [];
+        let maxId = 108;
+        if (Array.isArray(existingReports)) {
+          existingReports.forEach((item: any) => {
+            const num = Number(item.issue_id);
+            if (!isNaN(num) && num > maxId) maxId = num;
+          });
+        }
+        const nextNumericId = maxId + 1;
+        const newReportForAdmin = {
+          issue_id: nextNumericId,
+          id: String(nextNumericId),
+          title: form.title.trim() || categoryLabel,
+          description:
+            form.additional.trim() ||
+            form.otherProblem.trim() ||
+            form.title.trim() ||
+            "รายละเอียดเรื่องร้องเรียน",
+          severity:
+            form.urgency === "เร่งด่วนมาก"
+              ? "High"
+              : form.urgency === "เร่งด่วน"
+                ? "Medium"
+                : "Low",
+          status: "Pending", // รอรับเรื่อง
+          date_created: new Date().toISOString(),
+          reporter_name: session.name,
+          reporter_email: session.email || "",
+          evidence_count: files.length,
+          issue_categories: {
+            category_name: categoryLabel,
+          },
+          issue_areas: {
+            area_name: locationLabel,
+          },
+          location: locationLabel,
+          locationDetail: form.landmark.trim(),
+          source: "user_report",
+          internal_id: id,
+        };
+
+        const updatedList = [
+          newReportForAdmin,
+          ...(Array.isArray(existingReports) ? existingReports : []),
+        ];
+        window.localStorage.setItem(
+          "unicare_demo_issue_reports",
+          JSON.stringify(updatedList)
+        );
+        window.dispatchEvent(new Event("unicare-demo-reports-updated"));
+
+        // ส่งการแจ้งเตือนแบบแยกกลุ่มผู้รับ
+        try {
+          // 1. ส่งถึงผู้ใช้ที่รายงานเรื่องนี้โดยเฉพาะ
+          addNotification({
+            title: "ส่งเรื่องร้องเรียนสำเร็จ",
+            description: `คำร้องเรียน #${id} (${categoryLabel}) ได้รับการส่งเข้าระบบเรียบร้อยแล้ว อยู่ระหว่างรอเจ้าหน้าที่รับเรื่อง`,
+            type: "status",
+            isRead: false,
+            link: "/my-reports",
+            targetRole: "user",
+            targetEmail: session.email || "",
+            targetName: session.name,
+            issueId: String(id),
+          });
+
+          // 2. ส่งถึงผู้ดูแลระบบ (Admin)
+          addNotification({
+            title: "มีคำร้องเรียนใหม่ส่งเข้ามา",
+            description: `คำร้องเรียน #${id} (${categoryLabel} - ${locationLabel}) ส่งโดย ${session.name}`,
+            type: form.urgency === "เร่งด่วนมาก" ? "urgent" : "status",
+            isRead: false,
+            link: "/admin/reports",
+            targetRole: "admin",
+            issueId: String(id),
+          });
+        } catch {
+          // ignore
+        }
+      } catch {
+        // ignore
+      }
+
       setSavedReport(report);
     } catch (cause) {
       setError(
@@ -1088,15 +1256,31 @@ export default function UserReportPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f3f8f5] px-4 py-6 text-slate-800 sm:px-6">
-      <div className="mx-auto max-w-5xl space-y-5">
-        <header>
-          <h1 className="text-2xl font-bold text-emerald-950">แจ้งปัญหา</h1>
-          <p className="mt-2 text-sm text-slate-600">ผู้แจ้ง: {reporter}</p>
-          <p className="mt-2 text-sm text-amber-800">
-            โหมดทดลอง: บันทึกในเบราว์เซอร์นี้ ยังไม่ส่งถึงเจ้าหน้าที่
-          </p>
-        </header>
+    <div className="min-h-screen bg-[#f3f8f5] text-slate-800">
+      <Header
+        title="แจ้งปัญหาและข้อเสนอแนะสิ่งแวดล้อม"
+        subtitle="ระบบรับแจ้งปัญหาและข้อเสนอแนะ มหาวิทยาลัยวลัยลักษณ์"
+        userName={reporter || "กิตติภูมิ"}
+        role="USER"
+        backHref="/user/dashboard"
+      />
+
+      <main className="px-4 py-6 sm:px-6">
+        <div className="mx-auto max-w-5xl space-y-5">
+          <header className="rounded-2xl bg-white border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold text-emerald-950">
+                แจ้งปัญหาใหม่ (Create Issue Report)
+              </h1>
+              <p className="mt-1 text-xs sm:text-sm text-slate-600">
+                ผู้แจ้ง: <span className="font-semibold text-emerald-900">{reporter}</span>
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium w-fit">
+              <span>⚠️</span>
+              <span>โหมดทดลอง: บันทึกในเบราว์เซอร์นี้</span>
+            </div>
+          </header>
 
         <ol className="grid grid-cols-4 gap-2 rounded-2xl bg-white p-4 shadow-sm">
           {STEPS.map((label, index) => (
@@ -1159,8 +1343,19 @@ export default function UserReportPage() {
                     label="ประเภทปัญหา *"
                     value={form.category}
                     options={Object.keys(QUESTIONS)}
+                    disabledOptions={disabledCategories}
                     onChange={changeCategory}
                   />
+
+                  {disabledCategories.length > 0 && (
+                    <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
+                      <span>⚠️</span>
+                      <div>
+                        <span className="font-semibold">ปิดรับแจ้งชั่วคราว:</span>{" "}
+                        {disabledCategories.join(", ")}
+                      </div>
+                    </div>
+                  )}
 
                   {form.category === OTHER && (
                     <>
@@ -1598,6 +1793,7 @@ export default function UserReportPage() {
       {savedReport && (
         <SuccessModal report={savedReport} onNewReport={resetForm} />
       )}
-    </main>
+      </main>
+    </div>
   );
 }
