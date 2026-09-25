@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+
 import {
   getDemoSession,
   type DemoSession,
@@ -108,56 +109,244 @@ export default function UserDashboardPage() {
     };
   }, []);
 
+  const [session, setSession] =
+    useState<DemoSession | null>(null);
+
+  const [
+    disabledCategories,
+    setDisabledCategories,
+  ] = useState<string[]>([]);
+
+  const [stats, setStats] = useState({
+    total: 0,
+    inProgress: 0,
+    resolved: 0,
+  });
+
+  /*
+   * ตรวจสอบบัญชีผู้ใช้งาน
+   */
   useEffect(() => {
-    const updateSession = () => {
-      const currentSession = getDemoSession();
-      if (!currentSession || currentSession.role !== "user") {
+    function updateSession() {
+      const currentSession =
+        getDemoSession();
+
+      if (
+        !currentSession ||
+        currentSession.role !== "user"
+      ) {
         router.replace("/login");
         return;
       }
+
       setSession(currentSession);
-    };
+    }
 
     updateSession();
 
-    window.addEventListener("unicare-profile-updated", updateSession);
-    window.addEventListener("storage", updateSession);
+    window.addEventListener(
+      "unicare-profile-updated",
+      updateSession,
+    );
+
+    window.addEventListener(
+      "storage",
+      updateSession,
+    );
 
     return () => {
-      window.removeEventListener("unicare-profile-updated", updateSession);
-      window.removeEventListener("storage", updateSession);
+      window.removeEventListener(
+        "unicare-profile-updated",
+        updateSession,
+      );
+
+      window.removeEventListener(
+        "storage",
+        updateSession,
+      );
     };
   }, [router]);
 
+  /*
+   * เลื่อนไปยังตำแหน่งที่ระบุใน URL
+   * หลังจาก Session และหน้าแสดงเสร็จแล้ว
+   *
+   * ตัวอย่าง URL:
+   * /user/dashboard#news
+   */
   useEffect(() => {
     const syncData = () => {
       setDisabledCategories(getDisabledCategoryNames());
       setAnnouncements(getAnnouncements());
 
-      const currentSession = getDemoSession();
+    let scrollTimer: ReturnType<
+      typeof setTimeout
+    > | null = null;
+
+    function scrollToCurrentHash() {
+      const hash =
+        window.location.hash;
+
+      if (!hash) return;
+
+      const elementId =
+        decodeURIComponent(
+          hash.substring(1),
+        );
+
+      /*
+       * ยกเลิก Timer เดิม
+       * ป้องกันการเลื่อนซ้ำ
+       */
+      if (scrollTimer) {
+        clearTimeout(scrollTimer);
+      }
+
+      /*
+       * รอ 250ms ให้หน้าและข้อมูล
+       * แสดงเรียบร้อยก่อนเริ่มเลื่อน
+       */
+      scrollTimer = setTimeout(() => {
+        const target =
+          document.getElementById(
+            elementId,
+          );
+
+        if (!target) return;
+
+        target.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 250);
+    }
+
+    scrollToCurrentHash();
+
+    window.addEventListener(
+      "hashchange",
+      scrollToCurrentHash,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "hashchange",
+        scrollToCurrentHash,
+      );
+
+      if (scrollTimer) {
+        clearTimeout(scrollTimer);
+      }
+    };
+  }, [session]);
+
+  /*
+   * ดึงข้อมูลหมวดหมู่และสถิติคำร้อง
+   */
+  useEffect(() => {
+    function syncData() {
+      setDisabledCategories(
+        getDisabledCategoryNames(),
+      );
+
+      const currentSession =
+        getDemoSession();
+
       if (!currentSession) return;
 
-      const issues = getAllCurrentIssues();
-      const currentName = (currentSession.name || "").trim().toLowerCase();
-      const currentEmail = (currentSession.email || "").trim().toLowerCase();
+      const issues =
+        getAllCurrentIssues();
 
-      const myIssues = issues.filter((i) => {
-        const rName = (i.reporterName || "").trim().toLowerCase();
-        const rEmail = (i.reporterEmail || "").trim().toLowerCase();
-        if (currentEmail && rEmail && currentEmail === rEmail) return true;
-        if (currentEmail === "user@unicare.local" && (rEmail === "kittipoom@example.com" || rName.includes("กิตติภูมิ"))) return true;
-        if (currentName && rName && currentName === rName) return true;
-        return false;
+      const currentName = (
+        currentSession.name || ""
+      )
+        .trim()
+        .toLowerCase();
+
+      const currentEmail = (
+        currentSession.email || ""
+      )
+        .trim()
+        .toLowerCase();
+
+      const myIssues = issues.filter(
+        (issue) => {
+          const reporterName = (
+            issue.reporterName || ""
+          )
+            .trim()
+            .toLowerCase();
+
+          const reporterEmail = (
+            issue.reporterEmail || ""
+          )
+            .trim()
+            .toLowerCase();
+
+          /*
+           * ตรวจสอบคำร้องจากอีเมล
+           */
+          if (
+            currentEmail &&
+            reporterEmail &&
+            currentEmail === reporterEmail
+          ) {
+            return true;
+          }
+
+          /*
+           * รองรับบัญชีผู้ใช้ทดลองเดิม
+           */
+          if (
+            currentEmail ===
+              "user@unicare.local" &&
+            (reporterEmail ===
+              "kittipoom@example.com" ||
+              reporterName.includes(
+                "กิตติภูมิ",
+              ))
+          ) {
+            return true;
+          }
+
+          /*
+           * ตรวจสอบคำร้องจากชื่อ
+           */
+          if (
+            currentName &&
+            reporterName &&
+            currentName === reporterName
+          ) {
+            return true;
+          }
+
+          return false;
+        },
+      );
+
+      const total =
+        myIssues.length;
+
+      const inProgress =
+        myIssues.filter(
+          (issue) =>
+            issue.status ===
+              "in_progress" ||
+            issue.status === "pending",
+        ).length;
+
+      const resolved =
+        myIssues.filter(
+          (issue) =>
+            issue.status === "resolved",
+        ).length;
+
+      setStats({
+        total,
+        inProgress,
+        resolved,
       });
-
-      const total = myIssues.length;
-      const inProgress = myIssues.filter(
-        (i) => i.status === "in_progress" || i.status === "pending",
-      ).length;
-      const resolved = myIssues.filter((i) => i.status === "resolved").length;
-
-      setStats({ total, inProgress, resolved });
-    };
+    }
 
     syncData();
 
@@ -186,10 +375,31 @@ export default function UserDashboardPage() {
     });
   }, [announcements]);
 
+      window.removeEventListener(
+        "unicare-profile-updated",
+        syncData,
+      );
+
+      window.removeEventListener(
+        "focus",
+        syncData,
+      );
+    };
+  }, []);
+
+  /*
+   * ระหว่างตรวจสอบ Session
+   */
   if (!session) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-50 text-emerald-900">
-        กำลังตรวจสอบบัญชี...
+        <div className="text-center">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-emerald-100 border-t-emerald-700" />
+
+          <p className="mt-4 text-sm font-semibold">
+            กำลังตรวจสอบบัญชี...
+          </p>
+        </div>
       </main>
     );
   }
@@ -201,12 +411,16 @@ export default function UserDashboardPage() {
         <Link href="/user/dashboard" className="flex items-center gap-2.5 text-base font-extrabold text-emerald-900">
           <UniCareLogo className="w-8 h-8" />
           <span>UniCare</span>
-          <span className="hidden sm:inline-block text-xs font-normal text-slate-400 ml-1">
+
+          <span className="ml-1 hidden text-xs font-normal text-slate-400 sm:inline-block">
             · มหาวิทยาลัยวลัยลักษณ์
           </span>
         </Link>
 
-        <AccountBar role="USER" userName={session.name} />
+        <AccountBar
+          role="USER"
+          userName={session.name}
+        />
       </header>
 
       {/* เนื้อหา Dashboard */}
@@ -219,6 +433,7 @@ export default function UserDashboardPage() {
           <p className="mt-2 text-xs sm:text-sm text-emerald-100/90 max-w-xl">
             แจ้งปัญหาและติดตามการดำเนินงานของเจ้าหน้าที่ได้แบบเรียลไทม์จากระบบ UniCare
           </p>
+
           <Link
             href="/user/report"
             className="mt-5 inline-flex items-center gap-2 rounded-xl bg-white px-5 py-3 text-xs sm:text-sm font-bold text-emerald-900 hover:bg-emerald-50 transition shadow-sm"
@@ -230,6 +445,7 @@ export default function UserDashboardPage() {
 
         {/* สรุปสถานะ 3 การ์ด */}
         <section className="grid gap-4 sm:grid-cols-3">
+          {/* รายงานทั้งหมด */}
           <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm transition hover:shadow-md">
             <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
@@ -239,10 +455,13 @@ export default function UserDashboardPage() {
             </div>
             <p className="mt-3 text-3xl font-extrabold text-emerald-950">{stats.total}</p>
             <p className="mt-1 text-xs text-slate-400">
-              {stats.total > 0 ? "เรื่องร้องเรียนทั้งหมดที่คุณแจ้งไว้" : "ยังไม่มีข้อมูลรายงาน"}
+              {stats.total > 0
+                ? "เรื่องร้องเรียนทั้งหมดที่คุณแจ้งไว้"
+                : "ยังไม่มีข้อมูลรายงาน"}
             </p>
           </div>
 
+          {/* กำลังดำเนินการ */}
           <div className="rounded-xl border border-amber-100 bg-white p-5 shadow-sm transition hover:shadow-md">
             <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-600">
               <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
@@ -252,7 +471,9 @@ export default function UserDashboardPage() {
             </div>
             <p className="mt-3 text-3xl font-extrabold text-amber-600">{stats.inProgress}</p>
             <p className="mt-1 text-xs text-slate-400">
-              {stats.inProgress > 0 ? "เจ้าหน้าที่กำลังเร่งดำเนินการแก้ไข" : "ไม่มีเคสค้าง"}
+              {stats.inProgress > 0
+                ? "เจ้าหน้าที่กำลังเร่งดำเนินการแก้ไข"
+                : "ไม่มีเคสค้าง"}
             </p>
           </div>
 
@@ -278,7 +499,9 @@ export default function UserDashboardPage() {
               <p className="mt-3 text-3xl font-extrabold text-emerald-600">{stats.resolved}</p>
             </div>
             <p className="mt-1 text-xs text-slate-400">
-              {stats.resolved > 0 ? "แก้ไขและดำเนินการสำเร็จแล้ว" : "ยังไม่มีเคสที่เสร็จสิ้น"}
+              {stats.resolved > 0
+                ? "แก้ไขและดำเนินการสำเร็จแล้ว"
+                : "ยังไม่มีเคสที่เสร็จสิ้น"}
             </p>
           </div>
         </section>
@@ -322,12 +545,35 @@ export default function UserDashboardPage() {
               </span>
             )}
           </div>
+
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {categories.map((category) => {
-              const isDisabled = disabledCategories.includes(category);
-              if (isDisabled) {
+            {categories.map(
+              (category) => {
+                const isDisabled =
+                  disabledCategories.includes(
+                    category,
+                  );
+
+                if (isDisabled) {
+                  return (
+                    <div
+                      key={category}
+                      title="หมวดหมู่นี้ปิดรับแจ้งชั่วคราว"
+                      className="cursor-not-allowed select-none rounded-xl border border-dashed border-slate-300 bg-slate-100 p-4 text-center text-sm text-slate-400 opacity-80"
+                    >
+                      <span className="line-through">
+                        🏷️ {category}
+                      </span>
+
+                      <span className="mt-1 block text-xs font-semibold text-rose-500">
+                        (ปิดรับแจ้งชั่วคราว)
+                      </span>
+                    </div>
+                  );
+                }
+
                 return (
-                  <div
+                  <Link
                     key={category}
                     title="หมวดหมู่นี้ปิดรับแจ้งชั่วคราว"
                     className="cursor-not-allowed rounded-xl border border-dashed border-slate-300 bg-slate-100 p-4 text-center text-xs sm:text-sm text-slate-400 select-none opacity-80"

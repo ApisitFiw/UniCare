@@ -3273,40 +3273,80 @@ function TextDetail({
         {displayValue(value)}
       </p>
     </div>
+
   );
+
 }
 
 function SummaryCard({
+
   active,
+
   icon,
+
   iconClass,
+
   label,
+
   description,
+
   count,
+
   onClick,
+
 }: {
+
   active: boolean;
+
   icon: ReactNode;
+
   iconClass: string;
+
   label: string;
+
   description: string;
+
   count: number;
+
   onClick: () => void;
+
 }) {
+
   return (
+
     <button
+
       type="button"
+
       onClick={onClick}
       className={`flex items-center gap-4 rounded-2xl border bg-white p-5 text-left shadow-sm ${
         active
           ? "border-emerald-500 ring-1 ring-emerald-100"
           : "border-slate-200"
       }`}
+
     >
       <span
         className={`flex h-11 w-11 items-center justify-center rounded-xl ${iconClass}`}
       >
         {icon}
+
+      </span>
+
+      <span className="flex-1">
+
+        <span className="block text-sm font-semibold">
+
+          {label}
+
+        </span>
+
+        <span className="text-[11px] text-slate-400">
+
+          {description}
+
+        </span>
+
       </span>
       <span className="flex-1">
         <span className="block text-sm font-semibold">
@@ -3320,17 +3360,25 @@ function SummaryCard({
         {count}
       </span>
     </button>
+
   );
+
 }
 
 function InfoCard({
+
   icon,
+
   label,
+
   value,
   isUserContent,
 }: {
+
   icon: ReactNode;
+
   label: string;
+
   value: string;
   isUserContent?: boolean;
 }) {
@@ -3346,7 +3394,9 @@ function InfoCard({
       <div className="flex items-center gap-3">
         <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
           {icon}
+
         </span>
+
         <div className="min-w-0">
           <p className="text-[10px] text-slate-400">
             {label}
@@ -3358,7 +3408,11 @@ function InfoCard({
             {value}
           </p>
         </div>
+
       </div>
+
     </div>
+
   );
+
 }

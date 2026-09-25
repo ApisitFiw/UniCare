@@ -2164,30 +2164,51 @@ export default function UserReportPage() {
         );
 
         const newReportForAdmin = {
+
           issue_id: nextNumericId,
+
           id: String(nextNumericId),
+
           title: form.title.trim() || categoryLabel,
+
           description:
+
             form.additional.trim() ||
+
             form.otherProblem.trim() ||
+
             form.title.trim() ||
+
             "รายละเอียดเรื่องร้องเรียน",
+
           severity:
+
             form.urgency === "เร่งด่วนมาก"
+
               ? "High"
+
               : form.urgency === "เร่งด่วน"
+
                 ? "Medium"
+
                 : "Low",
+
           status: "Pending", // รอรับเรื่อง
+
           date_created: new Date().toISOString(),
+
           reporter_name: session.name,
+
           reporter_email: session.email || "",
           reporter_phone: reporterPhone,
           evidence_count: files.length,
           evidence_files,
           issue_categories: {
+
             category_name: categoryLabel,
+
           },
+
           issue_areas: {
             area_name: effectivePlace,
           },
@@ -2209,7 +2230,9 @@ export default function UserReportPage() {
           additional: form.additional.trim(),
           answers: answerSummary,
           source: "user_report",
+
           internal_id: id,
+
         };
 
         const ticketNumber = `ISS-2026-${String(nextNumericId).padStart(3, "0")}`;
@@ -2224,8 +2247,11 @@ export default function UserReportPage() {
         }
 
         const updatedList = [
+
           newReportForAdmin,
+
           ...(Array.isArray(existingReports) ? existingReports : []),
+
         ];
 
         try {
