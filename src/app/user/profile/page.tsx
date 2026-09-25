@@ -1,46 +1,76 @@
 "use client";
 
 import {
-  FormEvent,
+  type FormEvent,
+  type ReactNode,
   useEffect,
   useMemo,
   useState,
-  type ReactNode,
 } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
+  Bell,
   Check,
-  CircleHelp,
-  ClipboardList,
   Eye,
   EyeOff,
-  Home,
   KeyRound,
-  LockKeyhole,
-  LogOut,
-  Mail,
-  Megaphone,
-  MessageCircle,
-  Newspaper,
+  MapPin,
   Pencil,
-  Phone,
   Save,
   ShieldCheck,
-  Sprout,
   Trash2,
   User,
   X,
 } from "lucide-react";
 
 import Header from "@/components/Header";
-import { USER_ACCOUNTS, getDemoSession } from "@/lib/demoAuth";
+import { getDemoSession } from "@/lib/demoAuth";
+
+type Gender =
+  | ""
+  | "male"
+  | "female"
+  | "other"
+  | "not-specified";
+
+type ResidenceLocation =
+  | ""
+  | "inside-campus"
+  | "outside-campus";
 
 type Profile = {
-  fullName: string;
-  email: string;
-  phone: string;
+  prefix: string;
+  firstName: string;
+  lastName: string;
+  nickname: string;
+  gender: Gender;
+  username: string;
+
+  residenceLocation: ResidenceLocation;
+
+  dormitory: string;
+  building: string;
+  floor: string;
+  roomNumber: string;
+
+  addressLine: string;
+  subdistrict: string;
+  district: string;
+  province: string;
+  postalCode: string;
+
+  notifyReportStatus: boolean;
+  notifyNews: boolean;
+  showNameOnReport: boolean;
+  anonymousReportDefault: boolean;
+};
+
+type SessionData = {
+  name?: string;
+  email?: string;
+  username?: string;
+  role?: "user" | "admin";
 };
 
 type AlertState = {
@@ -49,120 +79,311 @@ type AlertState = {
   message: string;
 } | null;
 
-const PROFILE_KEY = "unicare_demo_user_profile";
-const USERS_KEY = "unicare_demo_system_users";
+const SESSION_KEY =
+  "unicare_demo_session";
 
-const defaultProfile: Profile = {
-  fullName: "กิตติภูมิ",
-  email: "kittipoom@example.com",
-  phone: "081-234-5678",
+const PROFILE_KEY_PREFIX =
+  "unicare_demo_user_profile";
+
+const emptyProfile: Profile = {
+  prefix: "",
+  firstName: "",
+  lastName: "",
+  nickname: "",
+  gender: "",
+  username: "",
+
+  residenceLocation: "",
+
+  dormitory: "",
+  building: "",
+  floor: "",
+  roomNumber: "",
+
+  addressLine: "",
+  subdistrict: "",
+  district: "",
+  province: "",
+  postalCode: "",
+
+  notifyReportStatus: true,
+  notifyNews: false,
+  showNameOnReport: true,
+  anonymousReportDefault: false,
 };
 
-function getInitials(name: string) {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-  if (words.length >= 2) return `${words[0][0]}${words[1][0]}`;
-  return name.trim().slice(0, 2) || "U";
+function getFullName(profile: Profile) {
+  const prefix =
+    profile.prefix.trim();
+
+  const firstName =
+    profile.firstName.trim();
+
+  const lastName =
+    profile.lastName.trim();
+
+  return `${prefix}${firstName} ${lastName}`.trim();
+}
+
+/*
+ * สร้าง Storage Key จากบัญชีเดียวกับ AccountBar
+ */
+function getProfileStorageKey(
+  session: SessionData,
+) {
+  const identity =
+    session.email
+      ?.trim()
+      .toLowerCase() ||
+    session.username
+      ?.trim()
+      .toLowerCase() ||
+    session.name
+      ?.trim()
+      .toLowerCase() ||
+    "unknown-user";
+
+  return `${PROFILE_KEY_PREFIX}:${identity}`;
+}
+
+/*
+ * แยกชื่อจาก Session เพื่อใช้เป็นข้อมูลเริ่มต้น
+ */
+function createProfileFromSession(
+  session: SessionData,
+): Profile {
+  const displayName =
+    session.name?.trim() || "";
+
+  let prefix = "";
+  let nameWithoutPrefix =
+    displayName;
+
+  if (
+    displayName.startsWith(
+      "นางสาว",
+    )
+  ) {
+    prefix = "นางสาว";
+
+    nameWithoutPrefix =
+      displayName
+        .slice("นางสาว".length)
+        .trim();
+  } else if (
+    displayName.startsWith("นาย")
+  ) {
+    prefix = "นาย";
+
+    nameWithoutPrefix =
+      displayName
+        .slice("นาย".length)
+        .trim();
+  } else if (
+    displayName.startsWith("นาง")
+  ) {
+    prefix = "นาง";
+
+    nameWithoutPrefix =
+      displayName
+        .slice("นาง".length)
+        .trim();
+  }
+
+  const nameParts =
+    nameWithoutPrefix
+      .split(/\s+/)
+      .filter(Boolean);
+
+  const firstName =
+    nameParts[0] || "";
+
+  const lastName =
+    nameParts.slice(1).join(" ");
+
+  const username =
+    session.username?.trim() ||
+    session.email
+      ?.split("@")[0]
+      ?.trim() ||
+    "";
+
+  return {
+    ...emptyProfile,
+    prefix,
+    firstName,
+    lastName,
+    username,
+  };
+}
+
+function readStoredProfile(
+  key: string,
+): Profile | null {
+  try {
+    const stored =
+      window.localStorage.getItem(
+        key,
+      );
+
+    if (!stored) {
+      return null;
+    }
+
+    const parsed: unknown =
+      JSON.parse(stored);
+
+    if (
+      typeof parsed !== "object" ||
+      parsed === null
+    ) {
+      return null;
+    }
+
+    return {
+      ...emptyProfile,
+      ...(parsed as Partial<Profile>),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/*
+ * อัปเดต Session ที่ AccountBar ใช้
+ */
+function updateAccountSession(
+  session: SessionData,
+  profile: Profile,
+) {
+  const updatedSession = {
+    ...session,
+    name: getFullName(profile),
+    username: profile.username,
+  };
+
+  window.sessionStorage.setItem(
+    SESSION_KEY,
+    JSON.stringify(updatedSession),
+  );
+
+  window.localStorage.setItem(
+    SESSION_KEY,
+    JSON.stringify(updatedSession),
+  );
+
+  /*
+   * AccountBar เดิมฟัง Event นี้
+   */
+  window.dispatchEvent(
+    new Event(
+      "unicare-profile-updated",
+    ),
+  );
 }
 
 export default function UserProfilePage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<Profile>(defaultProfile);
-  const [draft, setDraft] = useState<Profile>(defaultProfile);
-  const [isEditing, setIsEditing] = useState(false);
-  const [passwordOpen, setPasswordOpen] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [alert, setAlert] = useState<AlertState>(null);
-  const [passwords, setPasswords] = useState({
-    current: "",
-    next: "",
-    confirm: "",
-  });
-  const [visible, setVisible] = useState({
-    current: false,
-    next: false,
-    confirm: false,
-  });
 
+  const [profile, setProfile] =
+    useState<Profile>(emptyProfile);
+
+  const [draft, setDraft] =
+    useState<Profile>(emptyProfile);
+
+  const [currentSession, setCurrentSession] =
+    useState<SessionData | null>(
+      null,
+    );
+
+  const [isLoading, setIsLoading] =
+    useState(true);
+
+  const [isEditing, setIsEditing] =
+    useState(false);
+
+  const [passwordOpen, setPasswordOpen] =
+    useState(false);
+
+  const [deleteOpen, setDeleteOpen] =
+    useState(false);
+
+  const [alert, setAlert] =
+    useState<AlertState>(null);
+
+  const [passwords, setPasswords] =
+    useState({
+      current: "",
+      next: "",
+      confirm: "",
+    });
+
+  const [visible, setVisible] =
+    useState({
+      current: false,
+      next: false,
+      confirm: false,
+    });
+
+  /*
+   * โหลดข้อมูลจากบัญชีเดียวกับ AccountBar
+   */
   useEffect(() => {
-    const session = getDemoSession();
-    const sessionEmail = session?.email?.toLowerCase();
-    const sessionName = session?.name;
+    const session =
+      getDemoSession() as SessionData | null;
 
-    let loadedProfile: Profile | null = null;
-
-    // 1. Try to load from unicare_demo_system_users matching current session
-    try {
-      const savedUsers = window.localStorage.getItem(USERS_KEY);
-      if (savedUsers) {
-        const parsed = JSON.parse(savedUsers);
-        if (Array.isArray(parsed)) {
-          const matched = parsed.find(
-            (u: any) =>
-              u.role !== "admin" &&
-              ((sessionEmail && u.email?.toLowerCase() === sessionEmail) ||
-                (sessionName && u.name === sessionName))
-          );
-          if (matched) {
-            loadedProfile = {
-              fullName: matched.name,
-              email: matched.email,
-              phone: matched.phone || "081-234-5678",
-            };
-          }
-        }
-      }
-    } catch {}
-
-    // 2. Try to load from unicare_demo_user_profile if it matches session
-    const saved = window.localStorage.getItem(PROFILE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as Profile;
-        if (
-          !sessionEmail ||
-          parsed.email?.toLowerCase() === sessionEmail ||
-          parsed.fullName === sessionName
-        ) {
-          if (!loadedProfile) {
-            loadedProfile = parsed;
-          } else {
-            loadedProfile = {
-              fullName: parsed.fullName || loadedProfile.fullName,
-              email: parsed.email || loadedProfile.email,
-              phone: parsed.phone || loadedProfile.phone,
-            };
-          }
-        }
-      } catch {}
+    if (!session) {
+      setIsLoading(false);
+      router.replace("/login");
+      return;
     }
 
-    if (!loadedProfile) {
-      const matched = USER_ACCOUNTS.find(
-        (u) =>
-          (sessionEmail && u.email.toLowerCase() === sessionEmail) ||
-          (sessionName && u.name === sessionName)
+    /*
+     * ป้องกัน Admin เข้าหน้า User Profile
+     */
+    if (session.role === "admin") {
+      setIsLoading(false);
+      router.replace(
+        "/admin/profile",
       );
-      if (matched) {
-        loadedProfile = {
-          fullName: matched.name,
-          email: matched.email,
-          phone: matched.phone,
-        };
-      } else {
-        loadedProfile = {
-          fullName: session?.name || defaultProfile.fullName,
-          email: session?.email || defaultProfile.email,
-          phone: defaultProfile.phone,
-        };
-      }
+      return;
     }
+
+    setCurrentSession(session);
+
+    const profileKey =
+      getProfileStorageKey(
+        session,
+      );
+
+    const storedProfile =
+      readStoredProfile(
+        profileKey,
+      );
+
+    const loadedProfile =
+      storedProfile ||
+      createProfileFromSession(
+        session,
+      );
 
     setProfile(loadedProfile);
     setDraft(loadedProfile);
-  }, []);
+    setIsLoading(false);
+  }, [router]);
 
-  const initials = useMemo(() => getInitials(profile.fullName), [profile.fullName]);
+  const fullName = useMemo(
+    () => getFullName(profile),
+    [profile],
+  );
+
+  const initials =
+    profile.firstName ||
+    profile.lastName
+      ? `${profile.firstName.charAt(
+          0,
+        )}${profile.lastName.charAt(0)}`
+      : "U";
 
   function startEditing() {
     setDraft(profile);
@@ -174,468 +395,1607 @@ export default function UserProfilePage() {
     setIsEditing(false);
   }
 
-  function saveProfile(event: FormEvent<HTMLFormElement>) {
+  /*
+   * บันทึกโปรไฟล์
+   */
+  function saveProfile(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
-    const cleaned = {
-      fullName: draft.fullName.trim(),
-      email: draft.email.trim(),
-      phone: draft.phone.trim(),
+
+    if (!currentSession) {
+      setAlert({
+        type: "error",
+        title:
+          "ไม่พบบัญชีผู้ใช้งาน",
+        message:
+          "กรุณาเข้าสู่ระบบใหม่อีกครั้ง",
+      });
+
+      return;
+    }
+
+    const cleanedProfile: Profile = {
+      ...draft,
+
+      prefix:
+        draft.prefix.trim(),
+
+      firstName:
+        draft.firstName.trim(),
+
+      lastName:
+        draft.lastName.trim(),
+
+      nickname:
+        draft.nickname.trim(),
+
+      username: draft.username
+        .trim()
+        .toLowerCase(),
+
+      dormitory:
+        draft.dormitory.trim(),
+
+      building:
+        draft.building.trim(),
+
+      floor:
+        draft.floor.trim(),
+
+      roomNumber:
+        draft.roomNumber.trim(),
+
+      addressLine:
+        draft.addressLine.trim(),
+
+      subdistrict:
+        draft.subdistrict.trim(),
+
+      district:
+        draft.district.trim(),
+
+      province:
+        draft.province.trim(),
+
+      postalCode:
+        draft.postalCode.trim(),
     };
 
-    if (!cleaned.fullName || !cleaned.email || !cleaned.phone) {
+    if (
+      !cleanedProfile.prefix ||
+      !cleanedProfile.firstName ||
+      !cleanedProfile.lastName
+    ) {
       setAlert({
         type: "warning",
         title: "ข้อมูลไม่ครบ",
-        message: "กรุณากรอกข้อมูลส่วนตัวให้ครบทุกช่อง",
+        message:
+          "กรุณากรอกคำนำหน้า ชื่อ และนามสกุลให้ครบ",
       });
+
       return;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleaned.email)) {
+    if (
+      !cleanedProfile.username
+    ) {
       setAlert({
         type: "warning",
-        title: "อีเมลไม่ถูกต้อง",
-        message: "กรุณากรอกอีเมลในรูปแบบที่ถูกต้อง",
+        title:
+          "ไม่พบชื่อผู้ใช้งาน",
+        message:
+          "กรุณาระบุชื่อผู้ใช้งาน",
       });
+
       return;
     }
 
-    setProfile(cleaned);
-    setDraft(cleaned);
+    if (
+      !cleanedProfile.residenceLocation
+    ) {
+      setAlert({
+        type: "warning",
+        title:
+          "กรุณาเลือกที่พัก",
+        message:
+          "กรุณาเลือกว่าปัจจุบันพักอยู่ภายในหรือนอกมหาวิทยาลัย",
+      });
+
+      return;
+    }
+
+    if (
+      cleanedProfile.residenceLocation ===
+        "inside-campus" &&
+      (!cleanedProfile.dormitory ||
+        !cleanedProfile.roomNumber)
+    ) {
+      setAlert({
+        type: "warning",
+        title:
+          "ข้อมูลหอพักไม่ครบ",
+        message:
+          "กรุณากรอกชื่อหอพักและเลขห้อง",
+      });
+
+      return;
+    }
+
+    if (
+      cleanedProfile.residenceLocation ===
+        "outside-campus" &&
+      cleanedProfile.postalCode &&
+      !/^\d{5}$/.test(
+        cleanedProfile.postalCode,
+      )
+    ) {
+      setAlert({
+        type: "warning",
+        title:
+          "รหัสไปรษณีย์ไม่ถูกต้อง",
+        message:
+          "รหัสไปรษณีย์ต้องเป็นตัวเลข 5 หลัก",
+      });
+
+      return;
+    }
+
+    const profileKey =
+      getProfileStorageKey(
+        currentSession,
+      );
+
+    /*
+     * บันทึกข้อมูลโดยใช้บัญชีเดียวกับ AccountBar
+     */
+    window.localStorage.setItem(
+      profileKey,
+      JSON.stringify(cleanedProfile),
+    );
+
+    /*
+     * อัปเดตชื่อใน AccountBar
+     */
+    updateAccountSession(
+      currentSession,
+      cleanedProfile,
+    );
+
+    const updatedSession = {
+      ...currentSession,
+      name:
+        getFullName(
+          cleanedProfile,
+        ),
+      username:
+        cleanedProfile.username,
+    };
+
+    setCurrentSession(
+      updatedSession,
+    );
+
+    setProfile(cleanedProfile);
+    setDraft(cleanedProfile);
     setIsEditing(false);
-    window.localStorage.setItem(PROFILE_KEY, JSON.stringify(cleaned));
-
-    // 1. Update demo session if active
-    const session = getDemoSession();
-    if (session) {
-      const updatedSession = {
-        ...session,
-        name: cleaned.fullName,
-        email: cleaned.email,
-      };
-      sessionStorage.setItem("unicare_demo_session", JSON.stringify(updatedSession));
-      localStorage.setItem("unicare_demo_session", JSON.stringify(updatedSession));
-    }
-
-    // 2. Synchronize with System Users (unicare_demo_system_users) so it shows in จัดการบัญชีผู้ใช้
-    try {
-      const savedUsers = window.localStorage.getItem(USERS_KEY);
-      if (savedUsers) {
-        const parsed = JSON.parse(savedUsers);
-        if (Array.isArray(parsed)) {
-          const targetEmail = (session?.email || profile.email).toLowerCase();
-          const targetName = session?.name || profile.fullName;
-
-          const updated = parsed.map((u: any) =>
-            u.role !== "admin" &&
-            (u.email?.toLowerCase() === targetEmail || u.name === targetName)
-              ? { ...u, name: cleaned.fullName, email: cleaned.email, phone: cleaned.phone }
-              : u
-          );
-          window.localStorage.setItem(USERS_KEY, JSON.stringify(updated));
-        }
-      }
-    } catch {
-      // ignore
-    }
-
-    // 3. Dispatch events to notify Header, AccountBar, and Admin User Management
-    window.dispatchEvent(new Event("unicare-profile-updated"));
-    window.dispatchEvent(new Event("unicare-demo-users-updated"));
 
     setAlert({
       type: "success",
-      title: "บันทึกข้อมูลสำเร็จ",
-      message: "ข้อมูลส่วนตัวของคุณถูกบันทึกเรียบร้อยแล้ว และซิงค์กับระบบจัดการบัญชีผู้ใช้",
+      title: "บันทึกสำเร็จ",
+      message:
+        "ข้อมูลบัญชีและข้อมูลที่อยู่ถูกบันทึกเรียบร้อยแล้ว",
     });
   }
 
   function closePasswordModal() {
     setPasswordOpen(false);
-    setPasswords({ current: "", next: "", confirm: "" });
-    setVisible({ current: false, next: false, confirm: false });
+
+    setPasswords({
+      current: "",
+      next: "",
+      confirm: "",
+    });
+
+    setVisible({
+      current: false,
+      next: false,
+      confirm: false,
+    });
   }
 
-  function changePassword(event: FormEvent<HTMLFormElement>) {
+  /*
+   * เปลี่ยนรหัสผ่านในระบบทดลอง
+   */
+  function changePassword(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
 
-    if (!passwords.current || !passwords.next || !passwords.confirm) {
+    if (
+      !passwords.current ||
+      !passwords.next ||
+      !passwords.confirm
+    ) {
       setAlert({
         type: "warning",
         title: "ข้อมูลไม่ครบ",
-        message: "กรุณากรอกรหัสผ่านให้ครบทุกช่อง",
+        message:
+          "กรุณากรอกรหัสผ่านให้ครบทุกช่อง",
       });
+
       return;
     }
-    if (passwords.next.length < 6) {
+
+    if (
+      passwords.next.length < 8
+    ) {
       setAlert({
         type: "warning",
-        title: "รหัสผ่านสั้นเกินไป",
-        message: "รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร",
+        title:
+          "รหัสผ่านสั้นเกินไป",
+        message:
+          "รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร",
       });
+
       return;
     }
-    if (passwords.next === passwords.current) {
+
+    if (
+      !/[A-Za-z]/.test(
+        passwords.next,
+      ) ||
+      !/\d/.test(passwords.next)
+    ) {
       setAlert({
         type: "warning",
-        title: "กรุณาใช้รหัสผ่านใหม่",
-        message: "รหัสผ่านใหม่ไม่ควรเหมือนรหัสผ่านปัจจุบัน",
+        title:
+          "รหัสผ่านไม่ปลอดภัย",
+        message:
+          "รหัสผ่านต้องมีตัวอักษรภาษาอังกฤษและตัวเลข",
       });
+
       return;
     }
-    if (passwords.next !== passwords.confirm) {
+
+    if (
+      passwords.next ===
+      passwords.current
+    ) {
+      setAlert({
+        type: "warning",
+        title:
+          "กรุณาใช้รหัสผ่านใหม่",
+        message:
+          "รหัสผ่านใหม่ไม่ควรเหมือนรหัสผ่านปัจจุบัน",
+      });
+
+      return;
+    }
+
+    if (
+      passwords.next !==
+      passwords.confirm
+    ) {
       setAlert({
         type: "error",
-        title: "รหัสผ่านไม่ตรงกัน",
-        message: "รหัสผ่านใหม่และการยืนยันรหัสผ่านไม่ตรงกัน",
+        title:
+          "รหัสผ่านไม่ตรงกัน",
+        message:
+          "กรุณายืนยันรหัสผ่านใหม่อีกครั้ง",
       });
+
       return;
     }
 
     closePasswordModal();
+
     setAlert({
       type: "success",
-      title: "เปลี่ยนรหัสผ่านสำเร็จ",
-      message: "โหมดทดลอง: ระบบตรวจสอบข้อมูลและจำลองการเปลี่ยนรหัสผ่านแล้ว",
+      title:
+        "เปลี่ยนรหัสผ่านสำเร็จ",
+      message:
+        "บันทึกรหัสผ่านใหม่ในระบบทดลองเรียบร้อยแล้ว",
     });
   }
 
-  function handleDeleteAccount() {
-    setIsDeleting(true);
+  /*
+   * ลบข้อมูลโปรไฟล์
+   */
+  function deleteAccount() {
+    if (currentSession) {
+      const profileKey =
+        getProfileStorageKey(
+          currentSession,
+        );
 
-    try {
-      const session = getDemoSession();
-      const targetEmail = (session?.email || profile.email).trim().toLowerCase();
-      const targetName = (session?.name || profile.fullName).trim();
-
-      const savedUsers = window.localStorage.getItem(USERS_KEY);
-      let systemUsers = savedUsers ? JSON.parse(savedUsers) : [];
-
-      if (!Array.isArray(systemUsers) || systemUsers.length === 0) {
-        systemUsers = USER_ACCOUNTS.map((u) => ({ ...u }));
-      }
-
-      const userIndex = systemUsers.findIndex(
-        (u: any) =>
-          (u.email && u.email.trim().toLowerCase() === targetEmail) ||
-          (u.name && u.name.trim() === targetName)
+      window.localStorage.removeItem(
+        profileKey,
       );
-
-      if (userIndex !== -1) {
-        systemUsers[userIndex] = {
-          ...systemUsers[userIndex],
-          status: "deleted",
-        };
-      } else {
-        systemUsers.push({
-          id: Date.now(),
-          name: profile.fullName,
-          email: profile.email,
-          phone: profile.phone,
-          status: "deleted",
-          role: "user",
-        });
-      }
-
-      window.localStorage.setItem(USERS_KEY, JSON.stringify(systemUsers));
-
-      // Clear session & cached profile
-      window.sessionStorage.removeItem("unicare_demo_session");
-      window.localStorage.removeItem("unicare_demo_session");
-      window.localStorage.removeItem("unicare_demo_user_profile");
-
-      // Notify other tabs and components
-      window.dispatchEvent(new Event("unicare-profile-updated"));
-      window.dispatchEvent(new Event("unicare-demo-users-updated"));
-
-      setDeleteModalOpen(false);
-
-      // Redirect to login page
-      router.push("/login");
-    } catch {
-      setIsDeleting(false);
-      setDeleteModalOpen(false);
-      setAlert({
-        type: "error",
-        title: "เกิดข้อผิดพลาด",
-        message: "ไม่สามารถลบบัญชีได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง",
-      });
     }
+
+    window.localStorage.removeItem(
+      SESSION_KEY,
+    );
+
+    window.sessionStorage.removeItem(
+      SESSION_KEY,
+    );
+
+    window.dispatchEvent(
+      new Event(
+        "unicare-profile-updated",
+      ),
+    );
+
+    router.replace("/login");
   }
 
-  return (
-    <div className="min-h-screen bg-[#f4f8f6] text-slate-800 md:flex">
-      <div className="min-w-0 flex-1">
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#f4f8f6]">
         <Header
           title="บัญชีของฉัน"
-          subtitle="จัดการข้อมูลส่วนตัวและความปลอดภัย"
-          userName={profile.fullName}
+          subtitle="กำลังโหลดข้อมูลบัญชี"
           role="USER"
         />
 
-        <main className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6 lg:p-8">
-          {/* ข้อมูลส่วนตัว */}
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
-              <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-                  <User className="h-5 w-5" />
-                </span>
-                <div>
-                  <h2 className="text-base font-bold text-slate-800">ข้อมูลส่วนตัว</h2>
-                  <p className="text-xs text-slate-400">ตรวจสอบและแก้ไขข้อมูลพื้นฐานของบัญชี</p>
-                </div>
-              </div>
-              {!isEditing && (
-                <button
-                  type="button"
-                  onClick={startEditing}
-                  className="flex items-center gap-2 rounded-lg border border-emerald-200 px-4 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 transition cursor-pointer"
-                >
-                  <Pencil className="h-3.5 w-3.5" /> แก้ไข
-                </button>
-              )}
-            </div>
+        <div className="flex min-h-[400px] items-center justify-center">
+          <div className="text-center">
+            <span className="mx-auto block h-9 w-9 animate-spin rounded-full border-4 border-emerald-100 border-t-emerald-600" />
 
-            <div className="grid md:grid-cols-[260px_1fr]">
+            <p className="mt-4 text-sm text-slate-500">
+              กำลังโหลดข้อมูล...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f4f8f6] text-slate-800">
+      <Header
+        title="บัญชีของฉัน"
+        subtitle="จัดการข้อมูลส่วนตัว ที่พัก และความเป็นส่วนตัว"
+        role="USER"
+      />
+
+      <main className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+        <form
+          onSubmit={saveProfile}
+          className="space-y-5"
+        >
+          {/* ข้อมูลผู้ใช้งาน */}
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <SectionTitle
+              icon={
+                <User className="h-5 w-5" />
+              }
+              title="ข้อมูลผู้ใช้งาน"
+              subtitle="ข้อมูลจากบัญชีที่เข้าสู่ระบบ"
+              action={
+                !isEditing ? (
+                  <button
+                    type="button"
+                    onClick={startEditing}
+                    className="flex items-center gap-2 rounded-lg border border-emerald-200 px-4 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-50"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    แก้ไข
+                  </button>
+                ) : null
+              }
+            />
+
+            <div className="grid md:grid-cols-[260px_minmax(0,1fr)]">
               <div className="flex flex-col items-center border-b border-slate-100 bg-slate-50/60 px-6 py-8 text-center md:border-b-0 md:border-r">
                 <span className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-xl font-bold text-emerald-700">
                   {initials}
                 </span>
-                <h3 className="mt-4 font-bold text-slate-800">{profile.fullName}</h3>
-                <p className="mt-1 text-xs text-slate-400">{profile.email}</p>
-                <span className="mt-5 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-700">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" /> บัญชีใช้งานอยู่
-                </span>
-              </div>
 
-              <form onSubmit={saveProfile} className="grid gap-5 p-5 sm:grid-cols-2 sm:p-7">
-                <ProfileField
-                  label="ชื่อ - นามสกุล"
-                  icon={<User className="h-4 w-4" />}
-                  value={draft.fullName}
-                  disabled={!isEditing}
-                  onChange={(value) => setDraft({ ...draft, fullName: value })}
-                />
-                <ProfileField
-                  label="อีเมล"
-                  type="email"
-                  icon={<Mail className="h-4 w-4" />}
-                  value={draft.email}
-                  disabled={!isEditing}
-                  onChange={(value) => setDraft({ ...draft, email: value })}
-                />
-                <ProfileField
-                  label="เบอร์โทรศัพท์"
-                  type="tel"
-                  icon={<Phone className="h-4 w-4" />}
-                  value={draft.phone}
-                  disabled={!isEditing}
-                  onChange={(value) => setDraft({ ...draft, phone: value })}
-                  fullWidth
-                />
-                {isEditing && (
-                  <div className="flex justify-end gap-3 sm:col-span-2">
-                    <button
-                      type="button"
-                      onClick={cancelEditing}
-                      className="rounded-lg bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 transition cursor-pointer"
-                    >
-                      ยกเลิก
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer"
-                    >
-                      <Save className="h-4 w-4" />
-                      บันทึกการเปลี่ยนแปลง
-                    </button>
-                  </div>
-                )}
-              </form>
-            </div>
-          </section>
-
-          {/* ความปลอดภัย */}
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-5 sm:px-6">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-                <ShieldCheck className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="text-base font-bold text-slate-800">ความปลอดภัย</h2>
-                <p className="text-xs text-slate-400">จัดการรหัสผ่านและความปลอดภัยของบัญชี</p>
-              </div>
-            </div>
-            <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
-              <div className="flex items-start gap-4">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                  <LockKeyhole className="h-5 w-5" />
-                </span>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-800">รหัสผ่าน</h3>
-                  <p className="mt-1 text-xs text-slate-500">อัปเดตรหัสผ่านสำหรับเข้าใช้งานระบบ</p>
-                  <p className="mt-1 text-[11px] text-slate-400">แนะนำให้เปลี่ยนรหัสผ่านเป็นระยะเพื่อเพิ่มความปลอดภัย</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPasswordOpen(true)}
-                className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer"
-              >
-                <KeyRound className="h-4 w-4" />
-                เปลี่ยนรหัสผ่าน
-              </button>
-            </div>
-          </section>
-
-          {/* โซนจัดการสถานะบัญชี / ลบบัญชีผู้ใช้ */}
-          <section className="overflow-hidden rounded-2xl border border-rose-200 bg-white shadow-xs">
-            <div className="flex items-center gap-3 border-b border-rose-100 bg-rose-50/50 px-5 py-4 sm:px-6">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 text-rose-700">
-                <Trash2 className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="text-base font-bold text-rose-900">ลบบัญชีผู้ใช้</h2>
-                <p className="text-xs text-rose-600/80">
-                  ปิดการใช้งานบัญชีของคุณออกจากระบบ
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
-              <div className="max-w-xl">
-                <h3 className="text-sm font-bold text-slate-800">
-                  ต้องการลบบัญชี {profile.fullName} หรือไม่?
+                <h3 className="mt-4 font-bold">
+                  {fullName ||
+                    currentSession?.name ||
+                    "ยังไม่มีข้อมูลชื่อ"}
                 </h3>
-                <p className="mt-1 text-xs text-slate-500 leading-relaxed">
-                  หากคุณลบบัญชี บัญชีของคุณจะถูกปิดการใช้งานทันทีและไม่สามารถเข้าสู่ระบบได้
-                  (ประวัติการแจ้งเรื่องเดิมยังคงอยู่ในระบบเพื่อให้เจ้าหน้าที่ติดตามและแก้ไขได้)
-                  ทั้งนี้คุณสามารถติดต่อผู้ดูแลระบบเพื่อขอ <strong className="text-slate-700">กู้คืนบัญชี</strong> ได้ในภายหลัง
+
+                <p className="mt-1 text-xs text-slate-400">
+                  {profile.username
+                    ? `@${profile.username}`
+                    : "ยังไม่มีชื่อผู้ใช้งาน"}
                 </p>
+
+                {currentSession?.email && (
+                  <p className="mt-1 break-all text-[11px] text-slate-400">
+                    {
+                      currentSession.email
+                    }
+                  </p>
+                )}
+
+                {profile.nickname && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    ชื่อเล่น:{" "}
+                    {profile.nickname}
+                  </p>
+                )}
+
+                <span className="mt-5 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-700">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  บัญชีใช้งานอยู่
+                </span>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setDeleteModalOpen(true)}
-                className="flex shrink-0 items-center justify-center gap-2 rounded-lg bg-rose-600 hover:bg-rose-700 px-5 py-2.5 text-xs font-bold text-white transition cursor-pointer shadow-xs hover:shadow-sm"
-              >
-                <Trash2 className="h-4 w-4" />
-                ลบบัญชีของฉัน
-              </button>
+              <div className="space-y-5 p-5 sm:p-7">
+                <div className="grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)_minmax(0,1fr)]">
+                  <SelectField
+                    label="คำนำหน้าชื่อ"
+                    value={draft.prefix}
+                    disabled={!isEditing}
+                    onChange={(value) =>
+                      setDraft({
+                        ...draft,
+                        prefix: value,
+                      })
+                    }
+                    options={[
+                      ["", "เลือก"],
+                      ["นาย", "นาย"],
+                      ["นาง", "นาง"],
+                      [
+                        "นางสาว",
+                        "นางสาว",
+                      ],
+                      [
+                        "อื่น ๆ",
+                        "อื่น ๆ",
+                      ],
+                    ]}
+                  />
+
+                  <ProfileField
+                    label="ชื่อ"
+                    value={
+                      draft.firstName
+                    }
+                    disabled={!isEditing}
+                    onChange={(value) =>
+                      setDraft({
+                        ...draft,
+                        firstName: value,
+                      })
+                    }
+                  />
+
+                  <ProfileField
+                    label="นามสกุล"
+                    value={
+                      draft.lastName
+                    }
+                    disabled={!isEditing}
+                    onChange={(value) =>
+                      setDraft({
+                        ...draft,
+                        lastName: value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <ProfileField
+                    label="ชื่อเล่น (ไม่บังคับ)"
+                    value={
+                      draft.nickname
+                    }
+                    disabled={!isEditing}
+                    onChange={(value) =>
+                      setDraft({
+                        ...draft,
+                        nickname: value,
+                      })
+                    }
+                  />
+
+                  <SelectField
+                    label="เพศ (ไม่บังคับ)"
+                    value={draft.gender}
+                    disabled={!isEditing}
+                    onChange={(value) =>
+                      setDraft({
+                        ...draft,
+                        gender:
+                          value as Gender,
+                      })
+                    }
+                    options={[
+                      ["", "ไม่ระบุ"],
+                      ["male", "ชาย"],
+                      ["female", "หญิง"],
+                      ["other", "อื่น ๆ"],
+                      [
+                        "not-specified",
+                        "ไม่ต้องการระบุ",
+                      ],
+                    ]}
+                  />
+                </div>
+
+                <ProfileField
+                  label="ชื่อผู้ใช้งาน"
+                  value={draft.username}
+                  disabled
+                  onChange={() =>
+                    undefined
+                  }
+                  helper="สร้างจากบัญชีที่เข้าสู่ระบบ"
+                />
+              </div>
             </div>
           </section>
-        </main>
-      </div>
 
-      {/* Modal เปลี่ยนรหัสผ่าน */}
-      {passwordOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={closePasswordModal}>
-          <div role="dialog" aria-modal="true" className="w-full max-w-lg rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <div className="flex items-start justify-between border-b border-slate-100 p-6">
-              <div className="flex gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-                  <LockKeyhole className="h-5 w-5" />
-                </span>
-                <div>
-                  <h2 className="font-bold">เปลี่ยนรหัสผ่าน</h2>
-                  <p className="mt-1 text-xs text-slate-400">กรอกรหัสผ่านปัจจุบันและกำหนดรหัสผ่านใหม่</p>
-                </div>
-              </div>
-              <button type="button" aria-label="ปิด" onClick={closePasswordModal} className="rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200 transition cursor-pointer">
-                <X className="h-4 w-4" />
-              </button>
+          {/* ข้อมูลที่อยู่ */}
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <SectionTitle
+              icon={
+                <MapPin className="h-5 w-5" />
+              }
+              title="ข้อมูลที่อยู่และหอพัก"
+              subtitle="ข้อมูลนี้จะถูกบันทึกแยกตามบัญชี"
+            />
+
+            <div className="p-5 sm:p-7">
+              <ResidenceSection
+                draft={draft}
+                disabled={!isEditing}
+                onChange={setDraft}
+              />
             </div>
-            <form onSubmit={changePassword} className="space-y-4 p-6">
-              <PasswordField label="รหัสผ่านปัจจุบัน" value={passwords.current} visible={visible.current} onChange={(value) => setPasswords({ ...passwords, current: value })} onToggle={() => setVisible({ ...visible, current: !visible.current })} />
-              <PasswordField label="รหัสผ่านใหม่" value={passwords.next} visible={visible.next} onChange={(value) => setPasswords({ ...passwords, next: value })} onToggle={() => setVisible({ ...visible, next: !visible.next })} />
-              <PasswordField label="ยืนยันรหัสผ่านใหม่" value={passwords.confirm} visible={visible.confirm} onChange={(value) => setPasswords({ ...passwords, confirm: value })} onToggle={() => setVisible({ ...visible, confirm: !visible.confirm })} />
-              <button type="button" onClick={() => { closePasswordModal(); setAlert({ type: "success", title: "ส่งคำขอแล้ว", message: "โหมดทดลอง: ระบบจำลองการส่งลิงก์รีเซ็ตรหัสผ่านไปยังอีเมลแล้ว" }); }} className="text-xs font-bold text-emerald-700 hover:underline">ลืมรหัสผ่าน?</button>
-              <div className="flex justify-end gap-3 border-t border-slate-100 pt-5">
-                <button type="button" onClick={closePasswordModal} className="rounded-lg bg-slate-100 px-5 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 transition cursor-pointer">ยกเลิก</button>
-                <button type="submit" className="rounded-lg bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 transition cursor-pointer">บันทึกรหัสผ่านใหม่</button>
+          </section>
+
+          {/* การแจ้งเตือน */}
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <SectionTitle
+              icon={
+                <Bell className="h-5 w-5" />
+              }
+              title="การแจ้งเตือน"
+              subtitle="ตั้งค่าการแจ้งเตือนของบัญชี"
+            />
+
+            <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-7">
+              <ToggleSetting
+                title="แจ้งเตือนสถานะคำร้อง"
+                description="รับการแจ้งเตือนเมื่อเจ้าหน้าที่อัปเดตคำร้อง"
+                checked={
+                  draft.notifyReportStatus
+                }
+                disabled={!isEditing}
+                onChange={(checked) =>
+                  setDraft({
+                    ...draft,
+                    notifyReportStatus:
+                      checked,
+                  })
+                }
+              />
+
+              <ToggleSetting
+                title="ข่าวสารและประกาศ"
+                description="รับข่าวสารและประกาศจากมหาวิทยาลัย"
+                checked={
+                  draft.notifyNews
+                }
+                disabled={!isEditing}
+                onChange={(checked) =>
+                  setDraft({
+                    ...draft,
+                    notifyNews: checked,
+                  })
+                }
+              />
+            </div>
+          </section>
+
+          {/* ความเป็นส่วนตัว */}
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <SectionTitle
+              icon={
+                <ShieldCheck className="h-5 w-5" />
+              }
+              title="ความเป็นส่วนตัว"
+              subtitle="กำหนดการแสดงชื่อของคุณในคำร้อง"
+            />
+
+            <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-7">
+              <ToggleSetting
+                title="แสดงชื่อของฉันในคำร้อง"
+                description="เจ้าหน้าที่สามารถเห็นชื่อเจ้าของคำร้องได้"
+                checked={
+                  draft.showNameOnReport
+                }
+                disabled={
+                  !isEditing ||
+                  draft.anonymousReportDefault
+                }
+                onChange={(checked) =>
+                  setDraft({
+                    ...draft,
+                    showNameOnReport:
+                      checked,
+                  })
+                }
+              />
+
+              <ToggleSetting
+                title="แจ้งปัญหาแบบไม่เปิดเผยชื่อ"
+                description="ซ่อนชื่อเมื่อสร้างคำร้องใหม่"
+                checked={
+                  draft.anonymousReportDefault
+                }
+                disabled={!isEditing}
+                onChange={(checked) =>
+                  setDraft({
+                    ...draft,
+                    anonymousReportDefault:
+                      checked,
+
+                    showNameOnReport:
+                      checked
+                        ? false
+                        : draft.showNameOnReport,
+                  })
+                }
+              />
+            </div>
+          </section>
+
+          {isEditing && (
+            <div className="sticky bottom-4 z-10 flex flex-col-reverse gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-slate-500">
+                กรุณาตรวจสอบข้อมูลก่อนบันทึก
+              </p>
+
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={
+                    cancelEditing
+                  }
+                  className="rounded-xl bg-slate-100 px-6 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200"
+                >
+                  ยกเลิก
+                </button>
+
+                <button
+                  type="submit"
+                  className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white hover:bg-emerald-700"
+                >
+                  <Save className="h-4 w-4" />
+                  บันทึกการเปลี่ยนแปลง
+                </button>
               </div>
-            </form>
+            </div>
+          )}
+        </form>
+
+        {/* ความปลอดภัย */}
+        <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <SectionTitle
+            icon={
+              <KeyRound className="h-5 w-5" />
+            }
+            title="ความปลอดภัย"
+            subtitle="จัดการรหัสผ่านสำหรับเข้าสู่ระบบ"
+          />
+
+          <div className="flex flex-col gap-5 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+            <div>
+              <h3 className="text-sm font-bold">
+                รหัสผ่าน
+              </h3>
+
+              <p className="mt-1 text-xs text-slate-500">
+                แนะนำให้เปลี่ยนรหัสผ่านเป็นระยะ
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setPasswordOpen(true)
+              }
+              className="flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-xs font-bold text-white hover:bg-emerald-700"
+            >
+              <KeyRound className="h-4 w-4" />
+              เปลี่ยนรหัสผ่าน
+            </button>
           </div>
-        </div>
-      )}
+        </section>
 
-      {/* Modal ยืนยันการลบบัญชี */}
-      {deleteModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-[2px]"
-          onClick={() => !isDeleting && setDeleteModalOpen(false)}
+        {/* ลบบัญชี */}
+        <section className="mt-5 overflow-hidden rounded-2xl border border-rose-200 bg-white shadow-sm">
+          <div className="flex items-center gap-3 border-b border-rose-100 bg-rose-50/50 px-5 py-4">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 text-rose-700">
+              <Trash2 className="h-5 w-5" />
+            </span>
+
+            <div>
+              <h2 className="font-bold text-rose-900">
+                ลบบัญชีผู้ใช้
+              </h2>
+
+              <p className="text-xs text-rose-600">
+                ลบข้อมูลโปรไฟล์ออกจากระบบทดลอง
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-sm font-bold">
+                ต้องการลบบัญชี{" "}
+                {fullName ||
+                  currentSession?.name ||
+                  "ของคุณ"}{" "}
+                หรือไม่?
+              </h3>
+
+              <p className="mt-1 text-xs text-slate-500">
+                เมื่อลบบัญชี ระบบจะนำคุณออกจากระบบทันที
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                setDeleteOpen(true)
+              }
+              className="rounded-lg bg-rose-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-rose-700"
+            >
+              ลบบัญชีของฉัน
+            </button>
+          </div>
+        </section>
+      </main>
+
+      {/* Modal รหัสผ่าน */}
+      {passwordOpen && (
+        <Modal
+          onClose={
+            closePasswordModal
+          }
         >
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
+          <div className="flex items-center justify-between border-b p-6">
+            <div>
+              <h2 className="font-bold">
+                เปลี่ยนรหัสผ่าน
+              </h2>
+
+              <p className="mt-1 text-xs text-slate-400">
+                กรอกรหัสผ่านปัจจุบันและรหัสผ่านใหม่
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={
+                closePasswordModal
+              }
+              className="rounded-full bg-slate-100 p-2"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <form
+            onSubmit={changePassword}
+            className="space-y-4 p-6"
           >
-            <div className="flex items-start gap-4">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-rose-100 text-rose-600">
-                <AlertTriangle className="h-6 w-6" />
-              </span>
-              <div>
-                <h2 className="text-base font-bold text-slate-900">
-                  ยืนยันการลบบัญชีของคุณ?
-                </h2>
-                <p className="mt-1 text-xs text-slate-500 leading-relaxed">
-                  คุณกำลังจะลบบัญชี{" "}
-                  <strong className="text-slate-800">{profile.fullName}</strong>{" "}
-                  (<span className="text-slate-600">{profile.email}</span>)
-                </p>
-              </div>
-            </div>
+            <PasswordField
+              label="รหัสผ่านปัจจุบัน"
+              value={
+                passwords.current
+              }
+              visible={
+                visible.current
+              }
+              onChange={(value) =>
+                setPasswords({
+                  ...passwords,
+                  current: value,
+                })
+              }
+              onToggle={() =>
+                setVisible({
+                  ...visible,
+                  current:
+                    !visible.current,
+                })
+              }
+            />
 
-            <div className="mt-4 rounded-xl bg-amber-50 p-3.5 border border-amber-200/70 text-xs text-amber-800 leading-relaxed">
-              ⚠️ <strong>ข้อควรระวัง:</strong> เมื่อกดลบบัญชีแล้ว ระบบจะออกจากระบบทันที
-              และคุณจะไม่สามารถล็อกอินเข้าสู่ระบบได้อีกจนกว่าผู้ดูแลระบบจะกดกู้คืนบัญชีให้
-            </div>
+            <PasswordField
+              label="รหัสผ่านใหม่"
+              value={passwords.next}
+              visible={visible.next}
+              onChange={(value) =>
+                setPasswords({
+                  ...passwords,
+                  next: value,
+                })
+              }
+              onToggle={() =>
+                setVisible({
+                  ...visible,
+                  next: !visible.next,
+                })
+              }
+            />
 
-            <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-4">
+            <PasswordField
+              label="ยืนยันรหัสผ่านใหม่"
+              value={
+                passwords.confirm
+              }
+              visible={
+                visible.confirm
+              }
+              onChange={(value) =>
+                setPasswords({
+                  ...passwords,
+                  confirm: value,
+                })
+              }
+              onToggle={() =>
+                setVisible({
+                  ...visible,
+                  confirm:
+                    !visible.confirm,
+                })
+              }
+            />
+
+            <div className="flex justify-end gap-3 border-t pt-5">
               <button
                 type="button"
-                disabled={isDeleting}
-                onClick={() => setDeleteModalOpen(false)}
-                className="rounded-lg bg-slate-100 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-200 transition cursor-pointer disabled:opacity-50"
+                onClick={
+                  closePasswordModal
+                }
+                className="rounded-lg bg-slate-100 px-5 py-2.5 text-xs font-bold"
               >
                 ยกเลิก
               </button>
+
+              <button
+                type="submit"
+                className="rounded-lg bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white"
+              >
+                บันทึกรหัสผ่านใหม่
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Modal ลบบัญชี */}
+      {deleteOpen && (
+        <Modal
+          onClose={() =>
+            setDeleteOpen(false)
+          }
+        >
+          <div className="p-7 text-center">
+            <AlertTriangle className="mx-auto h-10 w-10 text-rose-600" />
+
+            <h2 className="mt-4 font-bold">
+              ยืนยันการลบบัญชี?
+            </h2>
+
+            <p className="mt-2 text-xs text-slate-500">
+              ข้อมูลโปรไฟล์และข้อมูลที่อยู่จะถูกลบ
+            </p>
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
               <button
                 type="button"
-                disabled={isDeleting}
-                onClick={handleDeleteAccount}
-                className="flex items-center gap-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 px-4 py-2.5 text-xs font-bold text-white transition cursor-pointer disabled:opacity-50"
+                onClick={() =>
+                  setDeleteOpen(false)
+                }
+                className="rounded-lg bg-slate-100 p-3 text-sm font-bold"
               >
-                <Trash2 className="h-3.5 w-3.5" />
-                {isDeleting ? "กำลังลบบัญชี..." : "ยืนยันลบบัญชี"}
+                ยกเลิก
+              </button>
+
+              <button
+                type="button"
+                onClick={
+                  deleteAccount
+                }
+                className="rounded-lg bg-rose-600 p-3 text-sm font-bold text-white"
+              >
+                ยืนยันลบ
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Alert Modal */}
+      {/* Modal แจ้งผล */}
       {alert && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 p-4" onClick={() => setAlert(null)}>
-          <div role="alertdialog" className="w-full max-w-sm rounded-2xl bg-white p-7 text-center shadow-2xl" onClick={(event) => event.stopPropagation()}>
-            <span className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${alert.type === "success" ? "bg-emerald-50 text-emerald-600" : alert.type === "warning" ? "bg-amber-50 text-amber-600" : "bg-rose-50 text-rose-600"}`}>
-              {alert.type === "success" ? <Check className="h-8 w-8" /> : <CircleHelp className="h-8 w-8" />}
+        <Modal
+          onClose={() =>
+            setAlert(null)
+          }
+        >
+          <div className="p-7 text-center">
+            <span
+              className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full ${
+                alert.type === "success"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : alert.type ===
+                      "warning"
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-rose-100 text-rose-700"
+              }`}
+            >
+              {alert.type ===
+              "success" ? (
+                <Check className="h-7 w-7" />
+              ) : (
+                <AlertTriangle className="h-7 w-7" />
+              )}
             </span>
-            <h2 className="mt-5 text-lg font-bold">{alert.title}</h2><p className="mt-2 text-sm leading-6 text-slate-500">{alert.message}</p>
-            <button type="button" onClick={() => setAlert(null)} className="mt-6 w-full rounded-lg bg-emerald-600 py-3 text-sm font-bold text-white">ตกลง</button>
+
+            <h2 className="mt-4 font-bold">
+              {alert.title}
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-500">
+              {alert.message}
+            </p>
+
+            <button
+              type="button"
+              onClick={() =>
+                setAlert(null)
+              }
+              className="mt-6 w-full rounded-lg bg-emerald-700 p-3 font-bold text-white"
+            >
+              ตกลง
+            </button>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
 }
 
-function ProfileField({ label, icon, value, disabled, onChange, type = "text", fullWidth = false }: { label: string; icon: ReactNode; value: string; disabled: boolean; onChange: (value: string) => void; type?: string; fullWidth?: boolean }) {
-  return <label className={fullWidth ? "sm:col-span-2" : ""}><span className="mb-2 block text-xs font-bold text-slate-600">{label}</span><span className={`flex items-center gap-3 rounded-xl border px-4 ${disabled ? "border-slate-100 bg-slate-50 text-slate-400" : "border-emerald-300 bg-white text-emerald-700 ring-2 ring-emerald-50"}`}>{icon}<input type={type} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="min-w-0 flex-1 bg-transparent py-3 text-sm text-slate-700 outline-none disabled:cursor-not-allowed" /></span></label>;
+function ResidenceSection({
+  draft,
+  disabled,
+  onChange,
+}: {
+  draft: Profile;
+  disabled: boolean;
+  onChange: (
+    profile: Profile,
+  ) => void;
+}) {
+  function selectInsideCampus() {
+    onChange({
+      ...draft,
+
+      residenceLocation:
+        "inside-campus",
+
+      addressLine: "",
+      subdistrict: "",
+      district: "",
+      province: "",
+      postalCode: "",
+    });
+  }
+
+  function selectOutsideCampus() {
+    onChange({
+      ...draft,
+
+      residenceLocation:
+        "outside-campus",
+
+      dormitory: "",
+      building: "",
+      floor: "",
+      roomNumber: "",
+    });
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="mb-2 text-xs font-bold text-slate-600">
+          ปัจจุบันคุณพักอยู่ภายในมหาวิทยาลัยหรือไม่?
+        </p>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ResidenceChoice
+            title="อยู่ภายในมหาวิทยาลัย"
+            description="พักอยู่ในหอพักของมหาวิทยาลัย"
+            selected={
+              draft.residenceLocation ===
+              "inside-campus"
+            }
+            disabled={disabled}
+            onClick={
+              selectInsideCampus
+            }
+          />
+
+          <ResidenceChoice
+            title="อยู่นอกมหาวิทยาลัย"
+            description="บ้าน หอพัก หรือที่พักภายนอกมหาวิทยาลัย"
+            selected={
+              draft.residenceLocation ===
+              "outside-campus"
+            }
+            disabled={disabled}
+            onClick={
+              selectOutsideCampus
+            }
+          />
+        </div>
+      </div>
+
+      {!draft.residenceLocation && (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-7 text-center">
+          <MapPin className="mx-auto h-7 w-7 text-slate-300" />
+
+          <p className="mt-2 text-xs text-slate-400">
+            ยังไม่มีข้อมูลที่พัก กรุณากดแก้ไขและเลือกประเภทที่พัก
+          </p>
+        </div>
+      )}
+
+      {draft.residenceLocation ===
+        "inside-campus" && (
+        <div className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 sm:p-5">
+          <div>
+            <h4 className="text-sm font-bold text-emerald-900">
+              ข้อมูลหอพักภายในมหาวิทยาลัย
+            </h4>
+
+            <p className="mt-1 text-[11px] text-emerald-700/70">
+              กรุณากรอกชื่อหอพักและข้อมูลห้องพัก
+            </p>
+          </div>
+
+          <AddressField
+            label="ชื่อหอพัก"
+            value={draft.dormitory}
+            disabled={disabled}
+            required
+            placeholder="เช่น หอพักลักษณานิเวศ 3"
+            onChange={(value) =>
+              onChange({
+                ...draft,
+                dormitory: value,
+              })
+            }
+          />
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <AddressField
+              label="อาคาร"
+              value={draft.building}
+              disabled={disabled}
+              placeholder="เช่น อาคาร A"
+              onChange={(value) =>
+                onChange({
+                  ...draft,
+                  building: value,
+                })
+              }
+            />
+
+            <AddressField
+              label="ชั้น"
+              value={draft.floor}
+              disabled={disabled}
+              placeholder="เช่น 2"
+              onChange={(value) =>
+                onChange({
+                  ...draft,
+                  floor: value,
+                })
+              }
+            />
+
+            <AddressField
+              label="เลขห้อง"
+              value={
+                draft.roomNumber
+              }
+              disabled={disabled}
+              required
+              placeholder="เช่น 205"
+              onChange={(value) =>
+                onChange({
+                  ...draft,
+                  roomNumber: value,
+                })
+              }
+            />
+          </div>
+        </div>
+      )}
+
+      {draft.residenceLocation ===
+        "outside-campus" && (
+        <div className="space-y-4 rounded-2xl border border-sky-200 bg-sky-50/40 p-4 sm:p-5">
+          <div>
+            <h4 className="text-sm font-bold text-sky-900">
+              ข้อมูลที่พักภายนอกมหาวิทยาลัย
+            </h4>
+
+            <p className="mt-1 text-[11px] text-sky-700/70">
+              กรุณากรอกที่อยู่ปัจจุบันของคุณ
+            </p>
+          </div>
+
+          <AddressField
+            label="บ้านเลขที่ / หมู่ / ถนน / ชื่อหอพัก"
+            value={
+              draft.addressLine
+            }
+            disabled={disabled}
+            placeholder="เช่น 222 หมู่ 10 ถนนมหาวิทยาลัย"
+            onChange={(value) =>
+              onChange({
+                ...draft,
+                addressLine: value,
+              })
+            }
+          />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <AddressField
+              label="ตำบล / แขวง"
+              value={
+                draft.subdistrict
+              }
+              disabled={disabled}
+              placeholder="เช่น ไทยบุรี"
+              onChange={(value) =>
+                onChange({
+                  ...draft,
+                  subdistrict: value,
+                })
+              }
+            />
+
+            <AddressField
+              label="อำเภอ / เขต"
+              value={draft.district}
+              disabled={disabled}
+              placeholder="เช่น ท่าศาลา"
+              onChange={(value) =>
+                onChange({
+                  ...draft,
+                  district: value,
+                })
+              }
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
+            <AddressField
+              label="จังหวัด"
+              value={draft.province}
+              disabled={disabled}
+              placeholder="เช่น นครศรีธรรมราช"
+              onChange={(value) =>
+                onChange({
+                  ...draft,
+                  province: value,
+                })
+              }
+            />
+
+            <AddressField
+              label="รหัสไปรษณีย์"
+              value={
+                draft.postalCode
+              }
+              disabled={disabled}
+              placeholder="80160"
+              inputMode="numeric"
+              maxLength={5}
+              onChange={(value) =>
+                onChange({
+                  ...draft,
+
+                  postalCode: value
+                    .replace(/\D/g, "")
+                    .slice(0, 5),
+                })
+              }
+            />
+          </div>
+        </div>
+      )}
+
+      <p className="text-[10px] leading-5 text-slate-400">
+        ข้อมูลที่พักใช้สำหรับข้อมูลบัญชีเท่านั้น ไม่ใช้แทนตำแหน่งที่เกิดเหตุในคำร้อง
+      </p>
+    </div>
+  );
 }
 
-function PasswordField({ label, value, visible, onChange, onToggle }: { label: string; value: string; visible: boolean; onChange: (value: string) => void; onToggle: () => void }) {
-  return <label><span className="mb-2 block text-xs font-bold text-slate-600">{label}</span><span className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 focus-within:border-emerald-400 focus-within:ring-2 focus-within:ring-emerald-50"><LockKeyhole className="h-4 w-4 text-slate-400" /><input type={visible ? "text" : "password"} value={value} onChange={(event) => onChange(event.target.value)} className="min-w-0 flex-1 py-3 text-sm outline-none" /><button type="button" aria-label={visible ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"} onClick={onToggle} className="text-slate-400">{visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></span></label>;
+function ResidenceChoice({
+  title,
+  description,
+  selected,
+  disabled,
+  onClick,
+}: {
+  title: string;
+  description: string;
+  selected: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`rounded-xl border p-4 text-left transition ${
+        selected
+          ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-100"
+          : "border-slate-200 bg-white hover:border-emerald-200"
+      } ${
+        disabled
+          ? "cursor-default opacity-70"
+          : "cursor-pointer"
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <span
+          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+            selected
+              ? "border-emerald-600 bg-emerald-600"
+              : "border-slate-300 bg-white"
+          }`}
+        >
+          {selected && (
+            <Check className="h-3 w-3 text-white" />
+          )}
+        </span>
+
+        <span>
+          <span className="block text-sm font-bold">
+            {title}
+          </span>
+
+          <span className="mt-1 block text-[11px] text-slate-500">
+            {description}
+          </span>
+        </span>
+      </div>
+    </button>
+  );
+}
+
+function AddressField({
+  label,
+  value,
+  disabled,
+  onChange,
+  placeholder,
+  required = false,
+  inputMode,
+  maxLength,
+}: {
+  label: string;
+  value: string;
+  disabled: boolean;
+  onChange: (
+    value: string,
+  ) => void;
+  placeholder?: string;
+  required?: boolean;
+  inputMode?:
+    | "text"
+    | "numeric"
+    | "decimal"
+    | "tel"
+    | "email"
+    | "url"
+    | "search";
+  maxLength?: number;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-xs font-bold text-slate-600">
+        {label}
+
+        {required && (
+          <span className="ml-1 text-rose-500">
+            *
+          </span>
+        )}
+      </span>
+
+      <input
+        type="text"
+        value={value}
+        disabled={disabled}
+        required={required}
+        placeholder={placeholder}
+        inputMode={inputMode}
+        maxLength={maxLength}
+        onChange={(event) =>
+          onChange(
+            event.target.value,
+          )
+        }
+        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition placeholder:text-slate-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50 disabled:text-slate-500"
+      />
+    </label>
+  );
+}
+
+function SectionTitle({
+  icon,
+  title,
+  subtitle,
+  action,
+}: {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
+      <div className="flex items-center gap-3">
+        <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+          {icon}
+        </span>
+
+        <div>
+          <h2 className="font-bold">
+            {title}
+          </h2>
+
+          <p className="text-xs text-slate-400">
+            {subtitle}
+          </p>
+        </div>
+      </div>
+
+      {action}
+    </div>
+  );
+}
+
+function ProfileField({
+  label,
+  value,
+  disabled,
+  onChange,
+  helper,
+}: {
+  label: string;
+  value: string;
+  disabled: boolean;
+  onChange: (
+    value: string,
+  ) => void;
+  helper?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-xs font-bold text-slate-600">
+        {label}
+      </span>
+
+      <input
+        type="text"
+        value={value}
+        disabled={disabled}
+        onChange={(event) =>
+          onChange(
+            event.target.value,
+          )
+        }
+        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50 disabled:text-slate-500"
+      />
+
+      {helper && (
+        <span className="mt-1 block text-[10px] text-slate-400">
+          {helper}
+        </span>
+      )}
+    </label>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  disabled,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  disabled: boolean;
+  onChange: (
+    value: string,
+  ) => void;
+  options: [string, string][];
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-xs font-bold text-slate-600">
+        {label}
+      </span>
+
+      <select
+        value={value}
+        disabled={disabled}
+        onChange={(event) =>
+          onChange(
+            event.target.value,
+          )
+        }
+        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-emerald-500 disabled:bg-slate-50"
+      >
+        {options.map(
+          ([
+            optionValue,
+            optionLabel,
+          ]) => (
+            <option
+              key={optionValue}
+              value={optionValue}
+            >
+              {optionLabel}
+            </option>
+          ),
+        )}
+      </select>
+    </label>
+  );
+}
+
+function ToggleSetting({
+  title,
+  description,
+  checked,
+  disabled,
+  onChange,
+}: {
+  title: string;
+  description: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (
+    checked: boolean,
+  ) => void;
+}) {
+  return (
+    <label
+      className={`flex items-center justify-between gap-4 rounded-xl border border-slate-200 p-4 ${
+        disabled
+          ? "bg-slate-50/60"
+          : "cursor-pointer hover:border-emerald-200"
+      }`}
+    >
+      <span>
+        <span className="block text-sm font-bold">
+          {title}
+        </span>
+
+        <span className="mt-1 block text-xs text-slate-500">
+          {description}
+        </span>
+      </span>
+
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) =>
+          onChange(
+            event.target.checked,
+          )
+        }
+        className="h-5 w-5 accent-emerald-600"
+      />
+    </label>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  visible,
+  onChange,
+  onToggle,
+}: {
+  label: string;
+  value: string;
+  visible: boolean;
+  onChange: (
+    value: string,
+  ) => void;
+  onToggle: () => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-xs font-bold">
+        {label}
+      </span>
+
+      <div className="relative">
+        <input
+          type={
+            visible
+              ? "text"
+              : "password"
+          }
+          value={value}
+          required
+          onChange={(event) =>
+            onChange(
+              event.target.value,
+            )
+          }
+          className="h-11 w-full rounded-xl border border-slate-200 px-3 pr-11 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+        />
+
+        <button
+          type="button"
+          onClick={onToggle}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+        >
+          {visible ? (
+            <EyeOff className="h-4 w-4" />
+          ) : (
+            <Eye className="h-4 w-4" />
+          )}
+        </button>
+      </div>
+    </label>
+  );
+}
+
+function Modal({
+  children,
+  onClose,
+}: {
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"
+        onClick={(event) =>
+          event.stopPropagation()
+        }
+      >
+        {children}
+      </div>
+    </div>
+  );
 }
