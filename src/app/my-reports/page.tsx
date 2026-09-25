@@ -4,11 +4,12 @@ import React, { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { getDemoSession } from "@/lib/demoAuth";
+import { getDemoSession } from "@/lib/authService";
 import Header from "@/components/Header";
 import CaseClarificationDrawer from "@/components/CaseClarificationDrawer";
 import UserSidebar from "@/components/UserSidebar";
 import { getAllCurrentIssues } from "@/lib/issuesData";
+import { fetchIssuesFromSupabase } from "@/lib/supabaseService";
 import {
   MapPin,
   Clock,
@@ -20,7 +21,9 @@ import {
   Plus,
   X,
   ClipboardList,
+  Star,
 } from "lucide-react";
+import { isIssueEvaluated, getFeedbackByIssueId } from "@/lib/feedbackData";
 
 interface UserReportItem {
   id: string;
@@ -34,7 +37,7 @@ interface UserReportItem {
 
 export default function MyReportsPage() {
   const router = useRouter();
-  const [userName, setUserName] = useState<string>("กิตติภูมิ");
+  const [userName, setUserName] = useState<string>("สมชาย ใจดี");
   const [activeChatReport, setActiveChatReport] = useState<UserReportItem | null>(null);
   const [reports, setReports] = useState<UserReportItem[]>([]);
 
@@ -55,8 +58,16 @@ export default function MyReportsPage() {
 
       // Check email match
       if (currentEmail && repEmail && currentEmail === repEmail) return true;
-      // Check alias user@unicare.local for Kittipoom
-      if (currentEmail === "user@unicare.local" && (repEmail === "kittipoom@example.com" || repName.includes("กิตติภูมิ"))) return true;
+      // Check alias user@unicare.local
+      if (
+        currentEmail === "user@unicare.local" &&
+        (repEmail === "somchai@example.com" ||
+          repName.includes("สมชาย") ||
+          repEmail === "kittipoom@example.com" ||
+          repName.includes("กิตติภูมิ"))
+      ) {
+        return true;
+      }
       // Check name match
       if (currentName && repName && currentName === repName) return true;
 
@@ -109,15 +120,66 @@ export default function MyReportsPage() {
       loadReports();
     };
 
-    // 3. Listen to real-time updates from admin actions and user reports
+    // 3. Sync latest issues from Supabase
+    fetchIssuesFromSupabase().then((issues) => {
+      if (issues && issues.length > 0) {
+        try {
+          const saved = window.localStorage.getItem("unicare_demo_issue_reports");
+          const current = saved ? JSON.parse(saved) : [];
+          issues.forEach((remote) => {
+            const idx = current.findIndex(
+              (l: any) => String(l.id) === remote.id || String(l.issue_id) === remote.id
+            );
+            if (idx >= 0) {
+              current[idx].status = remote.status;
+            }
+          });
+          window.localStorage.setItem("unicare_demo_issue_reports", JSON.stringify(current));
+          handleUpdate();
+        } catch {
+          // ignore
+        }
+      }
+    });
+
+    const channel = supabase
+      .channel("unicare-user-issues-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "issues" }, () => {
+        fetchIssuesFromSupabase().then((issues) => {
+          if (issues && issues.length > 0) {
+            try {
+              const saved = window.localStorage.getItem("unicare_demo_issue_reports");
+              const current = saved ? JSON.parse(saved) : [];
+              issues.forEach((remote) => {
+                const idx = current.findIndex(
+                  (l: any) => String(l.id) === remote.id || String(l.issue_id) === remote.id
+                );
+                if (idx >= 0) {
+                  current[idx].status = remote.status;
+                }
+              });
+              window.localStorage.setItem("unicare_demo_issue_reports", JSON.stringify(current));
+              handleUpdate();
+            } catch {
+              // ignore
+            }
+          }
+        });
+      })
+      .subscribe();
+
+    // 4. Listen to real-time updates from admin actions and user reports
     window.addEventListener("storage", handleUpdate);
     window.addEventListener("unicare-demo-reports-updated", handleUpdate);
     window.addEventListener("unicare-profile-updated", handleUpdate);
+    window.addEventListener("unicare-feedbacks-updated", handleUpdate);
 
     return () => {
+      channel.unsubscribe();
       window.removeEventListener("storage", handleUpdate);
       window.removeEventListener("unicare-demo-reports-updated", handleUpdate);
       window.removeEventListener("unicare-profile-updated", handleUpdate);
+      window.removeEventListener("unicare-feedbacks-updated", handleUpdate);
     };
   }, [loadReports, router]);
 
@@ -138,7 +200,7 @@ export default function MyReportsPage() {
           backHref="/user/dashboard"
         />
 
-        <main className="p-6 lg:p-8 space-y-6 max-w-6xl w-full overflow-y-auto">
+        <main className="p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto overflow-y-auto">
           {/* Hero Banner */}
           <section className="relative rounded-2xl overflow-hidden shadow-md bg-gradient-to-r from-[#064e3b] via-[#047857] to-[#065f46] text-white p-6 sm:p-7 flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="space-y-1.5 max-w-xl">
@@ -148,7 +210,7 @@ export default function MyReportsPage() {
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
                 ติดตามสถานะและสนทนากับเจ้าหน้าที่
               </h2>
-              <p className="text-xs sm:text-sm text-emerald-100 font-light">
+              <p className="text-xs sm:text-sm text-emerald-100 font-normal">
                 หากเจ้าหน้าที่ต้องการข้อมูลเพิ่มเติม หรือคุณต้องการส่งรูปภาพ/เสียงหลักฐานเพิ่ม สามารถกดปุ่ม &quot;สนทนากับเจ้าหน้าที่&quot; ได้ทันที
               </p>
             </div>
@@ -164,7 +226,7 @@ export default function MyReportsPage() {
           {/* Cards List */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-bold text-slate-800 flex items-center gap-2">
                 <FolderOpen className="w-4 h-4 text-emerald-700" />
                 <span>ประวัติเรื่องร้องเรียนทั้งหมด ({reports.length} รายการ)</span>
               </h3>
@@ -242,7 +304,7 @@ export default function MyReportsPage() {
                       </div>
                     </div>
 
-                    <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                    <p className="text-xs text-slate-700 leading-relaxed font-medium notranslate" data-user-content="true">
                       {report.description}
                     </p>
 
@@ -252,15 +314,43 @@ export default function MyReportsPage() {
                         <span>{report.area}</span>
                       </div>
 
-                      {/* Action Button: เปิดแชทสนทนากับเจ้าหน้าที่ (User View) */}
-                      <button
-                        type="button"
-                        onClick={() => setActiveChatReport(report)}
-                        className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#1b5e4a] hover:bg-[#144737] text-white rounded-xl font-medium transition text-xs shadow-xs cursor-pointer"
-                      >
-                        <MessageCircle className="w-4 h-4" />
-                        <span>สนทนากับเจ้าหน้าที่ / ส่งข้อมูลเพิ่ม</span>
-                      </button>
+                      {/* Action Buttons */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {report.status === "resolved" && (() => {
+                          const evaluated = isIssueEvaluated(report.id);
+                          const fb = evaluated ? getFeedbackByIssueId(report.id) : undefined;
+                          if (evaluated) {
+                            return (
+                              <Link
+                                href={`/user/feedback?id=${encodeURIComponent(report.id)}`}
+                                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl font-medium transition text-xs shadow-xs"
+                                title="คลิกเพื่อดูผลการประเมินที่ส่งไปแล้ว"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>ประเมินแล้ว ({fb?.rating || 5} ดาว)</span>
+                              </Link>
+                            );
+                          }
+                          return (
+                            <Link
+                              href={`/user/feedback?id=${encodeURIComponent(report.id)}`}
+                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-xl font-bold transition text-xs shadow-xs animate-pulse"
+                              title="คลิกเพื่อประเมินความพึงพอใจ (ประเมินได้ 1 ครั้ง)"
+                            >
+                              <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+                              <span>ประเมินความพึงพอใจ</span>
+                            </Link>
+                          );
+                        })()}
+                        <button
+                          type="button"
+                          onClick={() => setActiveChatReport(report)}
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#1b5e4a] hover:bg-[#144737] text-white rounded-xl font-medium transition text-xs shadow-xs cursor-pointer"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          <span>สนทนากับเจ้าหน้าที่ / ส่งข้อมูลเพิ่ม</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

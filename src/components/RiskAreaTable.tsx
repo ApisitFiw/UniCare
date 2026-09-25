@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, RotateCcw, Search, Edit3, Trash2 } from "lucide-react";
 
 export type RiskArea = {
     id: number | string;
@@ -102,7 +102,7 @@ export default function RiskAreaTable({
                 <div className="card-title">
 
                     <div className="card-title-icon">
-                        📍
+                        <MapPin className="w-5 h-5 text-emerald-700" />
                     </div>
 
                     <div>
@@ -146,7 +146,8 @@ export default function RiskAreaTable({
                                 e.currentTarget.style.borderColor = "#cbd5e1";
                             }}
                         >
-                            🔄 คืนค่าเริ่มต้น (25 จุด)
+                            <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                            <span>คืนค่าเริ่มต้น (25 จุด)</span>
                         </button>
                     )}
 
@@ -154,8 +155,10 @@ export default function RiskAreaTable({
                         className="btn btn-green"
                         onClick={onAdd}
                         title="ปักหมุดสถานที่ใหม่จากหน้าแจ้งปัญหา"
+                        style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
                     >
-                        📍 ปักหมุดสถานที่
+                        <MapPin className="w-4 h-4" />
+                        <span>ปักหมุดสถานที่</span>
                     </button>
                 </div>
 
@@ -164,7 +167,7 @@ export default function RiskAreaTable({
             <div className="search">
 
                 <span className="search-icon">
-                    🔍
+                    <Search className="w-4 h-4 text-slate-400" />
                 </span>
 
                 <input
@@ -230,7 +233,7 @@ export default function RiskAreaTable({
                                                         color: (area.issueCount && area.issueCount > 0) ? "#ef4444" : "#0284c7",
                                                     }}
                                                 >
-                                                    📍
+                                                    <MapPin className="w-4 h-4" />
                                                 </div>
 
                                                 <div>
@@ -312,8 +315,9 @@ export default function RiskAreaTable({
                                                     onClick={() =>
                                                         onEdit(area)
                                                     }
+                                                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                                                 >
-                                                    ✏️
+                                                    <Edit3 className="w-3.5 h-3.5" />
                                                 </button>
 
                                                 <button
@@ -325,8 +329,9 @@ export default function RiskAreaTable({
                                                             area.name
                                                         )
                                                     }
+                                                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                                                 >
-                                                    🗑️
+                                                    <Trash2 className="w-3.5 h-3.5" />
                                                 </button>
 
                                             </div>

@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Menu } from 'lucide-react'
 import AccountBar from '@/components/AccountBar'
+import { useLanguage } from '@/context/LanguageContext'
 
 interface HeaderProps {
   title: string
@@ -19,24 +20,36 @@ export default function Header({
   role = 'ADMIN',
   backHref,
 }: HeaderProps) {
+  const { t } = useLanguage();
+
   return (
-    <header className="bg-white border-b border-slate-200/80 px-6 lg:px-8 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-xs">
-      <div className="flex items-center gap-3">
+    <header className="bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-xs">
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event("unicare-toggle-sidebar"))}
+          className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 transition md:hidden cursor-pointer shrink-0"
+          title={t("เปิดเมนูด้านข้าง")}
+          aria-label="Menu"
+        >
+          <Menu className="w-5 h-5 text-slate-700" />
+        </button>
+
         {backHref && (
           <Link
             href={backHref}
             className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 transition cursor-pointer shrink-0"
-            title="ย้อนกลับ"
+            title={t("ย้อนกลับ")}
           >
             <ArrowLeft className="w-5 h-5" />
           </Link>
         )}
         <div>
           <h1 className="text-sm lg:text-base font-bold text-slate-800 leading-tight">
-            {title}
+            {t(title)}
           </h1>
           <p className="text-[11px] lg:text-xs text-slate-400">
-            {subtitle}
+            {t(subtitle)}
           </p>
         </div>
       </div>

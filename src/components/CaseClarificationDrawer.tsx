@@ -10,6 +10,7 @@ import {
   Loader2,
   Wifi,
   WifiOff,
+  MessageSquare,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -330,8 +331,8 @@ export default function CaseClarificationDrawer({
             </div>
           ) : messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2 py-12">
-              <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center text-xl">
-                💬
+              <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-100">
+                <MessageSquare className="w-6 h-6" />
               </div>
               <p className="text-xs font-medium text-slate-600">ยังไม่มีข้อความซักถามสำหรับเคสนี้</p>
               <p className="text-[10px] text-slate-400">
@@ -409,12 +410,20 @@ export default function CaseClarificationDrawer({
                             {isSenderAdmin ? (
                               <span className="px-2 py-0.5 text-[10px] font-bold bg-[#1b5e4a] text-white rounded-md shadow-2xs flex items-center gap-1">
                                 <Shield className="w-2.5 h-2.5 text-emerald-300" />
-                                {msg.sender_name || 'เจ้าหน้าที่ / Admin'}
+                                {msg.sender_name ? (
+                                  <span className="notranslate" data-user-content="true">{msg.sender_name}</span>
+                                ) : (
+                                  'เจ้าหน้าที่ / Admin'
+                                )}
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-md border border-emerald-200 flex items-center gap-1">
                                 <User className="w-2.5 h-2.5 text-emerald-700" />
-                                {msg.sender_name || 'ผู้แจ้งเรื่อง (User)'}
+                                {msg.sender_name ? (
+                                  <span className="notranslate" data-user-content="true">{msg.sender_name}</span>
+                                ) : (
+                                  'ผู้แจ้งเรื่อง (User)'
+                                )}
                               </span>
                             )}
                           </span>
@@ -435,7 +444,7 @@ export default function CaseClarificationDrawer({
                           : 'bg-white text-slate-800 rounded-tl-none border-slate-200 shadow-2xs'
                       }`}
                     >
-                      <p className="whitespace-pre-wrap">{msg.message}</p>
+                      <p className="whitespace-pre-wrap notranslate" data-user-content="true">{msg.message}</p>
                     </div>
                   </div>
                 </div>

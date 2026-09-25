@@ -24,6 +24,9 @@ import {
   useEffect,
   useState,
 } from "react";
+import UniCareLogo from "@/components/UniCareLogo";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
+import { registerWithSupabase } from "@/lib/authService";
 
 type Gender =
   | ""
@@ -296,7 +299,7 @@ export default function RegisterPage() {
     setShowConfirmPassword(false);
   }
 
-  function handleSubmit(
+  async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
@@ -427,6 +430,25 @@ export default function RegisterPage() {
             new Date().toISOString(),
         };
 
+      // บันทึกบัญชีเข้า Supabase โดยตรง
+      const supaReg = await registerWithSupabase({
+        email: normalizedEmail,
+        password: form.password,
+        firstName: form.firstName,
+        lastName: form.lastName,
+        phone: cleanedPhone,
+        username: normalizedUsername,
+        prefix: form.prefix,
+        birthDate: form.birthDate,
+        gender: form.gender,
+      });
+
+      if (!supaReg.success) {
+        setError(supaReg.error || "เกิดข้อผิดพลาดในการบันทึกข้อมูลกับ Supabase");
+        setIsSubmitting(false);
+        return;
+      }
+
       /*
        * บันทึกบัญชีสำหรับระบบ Login
        */
@@ -515,9 +537,7 @@ export default function RegisterPage() {
             href="/"
             className="relative z-10 flex w-fit items-center gap-3"
           >
-            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/15 ring-1 ring-white/20">
-              <Leaf className="h-6 w-6 text-emerald-200" />
-            </span>
+            <UniCareLogo variant="dark" className="w-12 h-12" />
 
             <span>
               <span className="block text-xl font-extrabold tracking-wide">
@@ -584,14 +604,15 @@ export default function RegisterPage() {
         {/* ด้านขวา */}
         <section className="px-5 py-8 sm:px-10 lg:px-14 lg:py-10">
           <div className="mx-auto w-full max-w-2xl">
-            <div className="mb-7 flex items-center gap-2 text-[#08705f] lg:hidden">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50">
-                <Leaf className="h-5 w-5" />
-              </span>
-
-              <span className="font-extrabold">
-                UNICARE
-              </span>
+            {/* Header Action Bar with Language Switcher */}
+            <div className="mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[#08705f] lg:hidden">
+                <UniCareLogo className="w-9 h-9" />
+                <span className="font-extrabold text-sm tracking-wide">UNICARE</span>
+              </div>
+              <div className="ml-auto">
+                <LanguageSwitcher />
+              </div>
             </div>
 
             <div className="flex items-start justify-between gap-5">
@@ -1063,6 +1084,8 @@ export default function RegisterPage() {
                     ฉันยอมรับ{" "}
                     <Link
                       href="/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="font-bold text-emerald-700 hover:underline"
                     >
                       เงื่อนไขการใช้งาน
@@ -1081,6 +1104,8 @@ export default function RegisterPage() {
                     ฉันยอมรับ{" "}
                     <Link
                       href="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="font-bold text-emerald-700 hover:underline"
                     >
                       นโยบายความเป็นส่วนตัว

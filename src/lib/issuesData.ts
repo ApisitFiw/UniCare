@@ -24,8 +24,8 @@ export type TimelineEntry = {
 }
 
 export const STANDARD_CATEGORIES = [
-  'เสียงรบกวน',
   'ขยะ / ของเสีย',
+  'เสียงรบกวน',
   'น้ำ / น้ำเสีย',
   'อากาศ / มลพิษ',
   'แสงสว่าง',
@@ -174,6 +174,34 @@ export const initialMockIssues: IssueItem[] = [
     reporterEmail: 'pimchanok@example.com',
     status: 'in_progress',
     statusLabel: 'กำลังดำเนินการ',
+    urgency: 'ปกติ',
+  },
+  {
+    id: 'ISS-2026-111',
+    date: '11 ก.ย. 2568 - 09:30',
+    category: 'อื่น ๆ',
+    area: 'สนามฟุตบอลหญ้าเทียม',
+    description: 'พบสัตว์มีพิษ/สุนัขจรจัดบริเวณรอบสนาม มีพฤติกรรมดุร้ายต่อนักศึกษาที่มาออกกำลังกาย',
+    adminName: 'Achiraya (Admin)',
+    adminInitial: 'AC',
+    reporterName: 'สมชาย ใจดี',
+    reporterEmail: 'somchai@example.com',
+    status: 'resolved',
+    statusLabel: 'แก้ไขสำเร็จ',
+    urgency: 'เร่งด่วน',
+  },
+  {
+    id: 'ISS-2026-112',
+    date: '11 ก.ย. 2568 - 14:15',
+    category: 'อื่น ๆ',
+    area: 'วงเวียนหอพักนักศึกษา - ประตูทางเข้ามหาวิทยาลัย',
+    description: 'ป้ายประชาสัมพันธ์บอกทางชำรุดล้มเอียง กีดขวางทางเดินสัญจรช่วงเวลาเร่งด่วน',
+    adminName: 'กฤตภาส (Admin)',
+    adminInitial: 'กภ',
+    reporterName: 'นภัสสร แสงทอง',
+    reporterEmail: 'napatsorn@example.com',
+    status: 'pending',
+    statusLabel: 'รอดำเนินการ',
     urgency: 'ปกติ',
   },
 ]
@@ -325,6 +353,31 @@ export const initialTimelineHistory: Record<string, TimelineEntry[]> = {
       color: 'bg-amber-500',
     },
   ],
+  'ISS-2026-111': [
+    {
+      statusText: 'เปลี่ยนสถานะเป็น: แก้ไขสำเร็จ',
+      time: '11 ก.ย. 2568, 11:45 น.',
+      note: 'ทีมรักษาความปลอดภัยและเทศกิจเข้าจับสัตว์มีพิษและผลักดันสุนัขจรจัดออกจากพื้นที่เรียบร้อย',
+      author: 'Achiraya (Admin)',
+      color: 'bg-emerald-600',
+    },
+    {
+      statusText: 'สร้างเรื่องร้องเรียน (Reported)',
+      time: '11 ก.ย. 2568, 09:30 น.',
+      note: 'ผู้ใช้งานแจ้งเหตุผ่านระบบ UNICARE',
+      author: 'ระบบอัตโนมัติ',
+      color: 'bg-amber-500',
+    },
+  ],
+  'ISS-2026-112': [
+    {
+      statusText: 'สร้างเรื่องร้องเรียน (Reported)',
+      time: '11 ก.ย. 2568, 14:15 น.',
+      note: 'รับแจ้งเรื่องป้ายบอกทางชำรุด ประสานงานกองอาคารและสถานที่เตรียมเข้าแก้ไข',
+      author: 'ระบบอัตโนมัติ',
+      color: 'bg-amber-500',
+    },
+  ],
 }
 
 export type CategoryMetadata = {
@@ -380,13 +433,7 @@ export const DEFAULT_CATEGORY_METADATA: CategoryMetadata[] = [
 ]
 
 export function getCategoryIcon(name: string): string {
-  if (name.includes('ขยะ')) return '🗑️'
-  if (name.includes('น้ำ')) return '💧'
-  if (name.includes('อากาศ') || name.includes('มลพิษ')) return '🌫️'
-  if (name.includes('แสง') || name.includes('ไฟ')) return '💡'
-  if (name.includes('ต้นไม้')) return '🌳'
-  if (name.includes('เสียง')) return '🔊'
-  return '📋'
+  return ''
 }
 
 export function matchCategory(issueCategory: string, targetCategory: string): boolean {
@@ -395,19 +442,34 @@ export function matchCategory(issueCategory: string, targetCategory: string): bo
   const cleanTarget = targetCategory.trim().toLowerCase()
   if (cleanIssue === cleanTarget) return true
 
-  if (cleanTarget === 'ขยะ / ของเสีย' && cleanIssue.includes('ขยะ')) return true
-  if (cleanTarget === 'น้ำ / น้ำเสีย' && cleanIssue.includes('น้ำ')) return true
-  if (cleanTarget === 'อากาศ / มลพิษ' && (cleanIssue.includes('อากาศ') || cleanIssue.includes('มลพิษ'))) return true
+  if (cleanTarget === 'ขยะ / ของเสีย' && (cleanIssue.includes('ขยะ') || cleanIssue.includes('ของเสีย'))) return true
+  if (cleanTarget === 'น้ำ / น้ำเสีย' && (cleanIssue.includes('น้ำ') || cleanIssue.includes('ท่อระบาย'))) return true
+  if (
+    cleanTarget === 'อากาศ / มลพิษ' &&
+    (cleanIssue.includes('อากาศ') || cleanIssue.includes('มลพิษ') || cleanIssue.includes('กลิ่น') || cleanIssue.includes('ควัน') || cleanIssue.includes('ฝุ่น'))
+  )
+    return true
   if (cleanTarget === 'เสียงรบกวน' && cleanIssue.includes('เสียง')) return true
   if (cleanTarget === 'แสงสว่าง' && (cleanIssue.includes('แสง') || cleanIssue.includes('ไฟ'))) return true
   if (
     cleanTarget === 'ต้นไม้ / พื้นที่สีเขียว' &&
-    (cleanIssue.includes('ต้นไม้') || cleanIssue.includes('พื้นที่เขียว') || cleanIssue.includes('พื้นที่สีเขียว'))
+    (cleanIssue.includes('ต้นไม้') || cleanIssue.includes('กิ่งไม้') || cleanIssue.includes('พื้นที่เขียว') || cleanIssue.includes('พื้นที่สีเขียว'))
   )
     return true
-  if (cleanTarget === 'อื่น ๆ' && (cleanIssue.includes('อื่น') || cleanIssue.includes('ทั่วไป'))) return true
+  if (cleanTarget === 'อื่น ๆ' && (cleanIssue.includes('อื่น') || cleanIssue.includes('ทั่วไป') || cleanIssue.includes('สัตว์') || cleanIssue.includes('ป้าย'))) return true
 
   return false
+}
+
+export function normalizeCategoryName(rawCategory?: string): StandardCategory {
+  if (!rawCategory) return 'อื่น ๆ'
+  const trimmed = rawCategory.trim()
+  for (const cat of STANDARD_CATEGORIES) {
+    if (matchCategory(trimmed, cat)) {
+      return cat
+    }
+  }
+  return 'อื่น ๆ'
 }
 
 export function getCurrentAdminDisplayName(): string {
@@ -616,7 +678,7 @@ export function getAllCurrentIssues(): IssueItem[] {
             return {
               id: displayId,
               date: dateStr,
-              category: item.issue_categories?.category_name || item.title || originalMock?.category || 'อื่น ๆ',
+              category: normalizeCategoryName(item.category || item.issue_categories?.category_name || item.title || originalMock?.category),
               area: item.issue_areas?.area_name || item.location || originalMock?.area || 'มหาวิทยาลัยวลัยลักษณ์',
               description: item.description || item.title || originalMock?.description || 'รายละเอียดเรื่องร้องเรียน',
               adminName: normalized.adminName,
@@ -645,7 +707,44 @@ export function getAllCurrentIssues(): IssueItem[] {
         adminInitial: normalized.adminInitial,
       }
     })
-  return [...mappedFromLocal, ...fallbackItems]
+  return sortIssuesLatestFirst([...mappedFromLocal, ...fallbackItems])
+}
+
+const THAI_MONTH_MAP: Record<string, number> = {
+  'ม.ค.': 0, 'ก.พ.': 1, 'มี.ค.': 2, 'เม.ย.': 3, 'พ.ค.': 4, 'มิ.ย.': 5,
+  'ก.ค.': 6, 'ส.ค.': 7, 'ก.ย.': 8, 'ต.ค.': 9, 'พ.ย.': 10, 'ธ.ค.': 11,
+}
+
+export function parseIssueDateTimestamp(dateStr?: string, id?: string): number {
+  if (!dateStr) return 0
+  if (dateStr.includes('วันนี้')) return Date.now()
+
+  // Match formats like '07 ก.ย. 2568 - 14:20' or '08 ก.ย. 2568' or '08 ก.ย. 2026'
+  const match = dateStr.match(/(\d+)\s+([^\s]+)\s+(\d+)(?:\s*-\s*(\d+):(\d+))?/)
+  if (match) {
+    const day = parseInt(match[1], 10)
+    const month = THAI_MONTH_MAP[match[2]] ?? 8
+    let year = parseInt(match[3], 10)
+    if (year > 2500) year -= 543
+    const hour = match[4] ? parseInt(match[4], 10) : 0
+    const min = match[5] ? parseInt(match[5], 10) : 0
+    return new Date(year, month, day, hour, min).getTime()
+  }
+
+  const parsed = new Date(dateStr).getTime()
+  if (!isNaN(parsed)) return parsed
+
+  const num = id ? String(id).match(/\d+/) : null
+  return num ? parseInt(num[0], 10) : 0
+}
+
+export function sortIssuesLatestFirst(issuesList: IssueItem[]): IssueItem[] {
+  return [...issuesList].sort((a, b) => {
+    const timeA = parseIssueDateTimestamp(a.date, a.id)
+    const timeB = parseIssueDateTimestamp(b.date, b.id)
+    if (timeB !== timeA) return timeB - timeA
+    return String(b.id).localeCompare(String(a.id), undefined, { numeric: true })
+  })
 }
 
 export function getDefaultCategoryCounts(): Record<string, number> {

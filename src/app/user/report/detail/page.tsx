@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getDemoSession } from "@/lib/demoAuth";
+import { getDemoSession } from "@/lib/authService";
 import {
   getIssueReport,
   type IssueReport,
@@ -60,7 +60,7 @@ function Attachment({ file }: { file: File }) {
         </a>
       )}
 
-      <p className="break-all text-sm font-medium">{file.name}</p>
+      <p className="break-all text-sm font-medium notranslate" data-user-content="true">{file.name}</p>
 
       <p className="mt-1 text-xs text-slate-500">
         {(file.size / 1024 / 1024).toFixed(2)} MB
@@ -165,16 +165,16 @@ export default function ReportDetailPage() {
           backHref="/user/report"
         />
         <main className="px-4 py-8">
-          <div className="mx-auto max-w-4xl rounded-2xl bg-white p-6 shadow-sm border border-slate-200">
-            <h1 className="text-xl font-bold text-emerald-950">
+          <div className="mx-auto max-w-7xl rounded-2xl bg-white p-6 shadow-sm border border-slate-200">
+            <h1 className="text-xl sm:text-2xl font-bold text-emerald-950">
               รายละเอียดรายงาน
             </h1>
-            <p role="alert" className="mt-4 text-sm text-red-700">
+            <p role="alert" className="mt-4 text-sm font-medium text-red-700">
               {error || "ไม่พบรายงาน"}
             </p>
             <Link
               href="/user/report"
-              className="mt-5 inline-block rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white"
+              className="mt-5 inline-block rounded-xl bg-emerald-700 px-5 py-3 text-xs sm:text-sm font-semibold text-white hover:bg-emerald-800 transition"
             >
               กลับหน้าแจ้งปัญหา
             </Link>
@@ -263,52 +263,58 @@ export default function ReportDetailPage() {
         backHref="/my-reports"
       />
       <main className="px-4 py-8 sm:px-6">
-        <div className="mx-auto max-w-4xl space-y-5">
+        <div className="mx-auto max-w-7xl space-y-5">
           <Link
             href="/my-reports"
-            className="inline-block text-sm text-emerald-700 hover:underline"
+            className="inline-block text-xs sm:text-sm font-medium text-emerald-700 hover:underline"
           >
             ← ดูรายการแจ้งปัญหาทั้งหมด
           </Link>
 
         <header className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-emerald-700">
+            <p className="text-xs sm:text-sm font-bold text-emerald-700">
               {report.code}
             </p>
-            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
+            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
               {report.status}
             </span>
           </div>
 
-          <h1 className="mt-3 break-words text-2xl font-bold text-emerald-950">
+          <h1 className="mt-3 break-words text-xl sm:text-2xl font-bold text-emerald-950 notranslate" data-user-content="true">
             {report.title}
           </h1>
 
-          <p className="mt-3 text-sm text-amber-800">
+          <p className="mt-3 text-xs sm:text-sm font-medium text-amber-800">
             รายงานทดลองที่บันทึกในเบราว์เซอร์นี้
             ยังไม่ได้ส่งถึงเจ้าหน้าที่
           </p>
         </header>
 
         <dl className="divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white px-6 shadow-sm">
-          {rows.map(([label, value], index) => (
-            <div
-              key={`${label}-${index}`}
-              className="grid gap-2 py-4 text-sm sm:grid-cols-[210px_1fr]"
-            >
-              <dt className="text-slate-500">{label}</dt>
-              <dd className="min-w-0 whitespace-pre-wrap break-words font-medium">
-                {value}
-              </dd>
-            </div>
-          ))}
+          {rows.map(([label, value], index) => {
+            const isUserValue = label === "ผู้แจ้ง" || label === "รายละเอียดเพิ่มเติม" || label === "จุดสังเกตเพิ่มเติม";
+            return (
+              <div
+                key={`${label}-${index}`}
+                className="grid gap-2 py-4 text-xs sm:text-sm sm:grid-cols-[210px_1fr]"
+              >
+                <dt className="text-slate-500 font-semibold">{label}</dt>
+                <dd
+                  className={`min-w-0 whitespace-pre-wrap break-words font-normal text-slate-800 ${isUserValue ? "notranslate" : ""}`}
+                  {...(isUserValue ? { "data-user-content": "true" } : {})}
+                >
+                  {value}
+                </dd>
+              </div>
+            );
+          })}
         </dl>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-bold text-emerald-950">
+          <h2 className="mb-4 text-base sm:text-lg font-bold text-emerald-950">
             หลักฐานประกอบ
-            <span className="ml-2 text-sm font-normal text-slate-500">
+            <span className="ml-2 text-xs sm:text-sm font-normal text-slate-500">
               ({attachments.length} ไฟล์)
             </span>
           </h2>

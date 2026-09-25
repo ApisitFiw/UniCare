@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { useRouter } from "next/navigation";
+import { upsertProfileInSupabase, fetchProfileByEmailFromSupabase } from "@/lib/supabaseService";
 import {
   AlertTriangle,
   Bell,
@@ -22,10 +23,12 @@ import {
   Trash2,
   User,
   X,
+  Camera,
+  Upload,
 } from "lucide-react";
 
 import Header from "@/components/Header";
-import { getDemoSession } from "@/lib/demoAuth";
+import { getDemoSession, updateDemoSession } from "@/lib/authService";
 
 type Gender =
   | ""
@@ -40,6 +43,7 @@ type ResidenceLocation =
   | "outside-campus";
 
 type Profile = {
+  avatar?: string;
   prefix: string;
   firstName: string;
   lastName: string;
@@ -74,6 +78,7 @@ type SessionData = {
   email?: string;
   username?: string;
   role?: "user" | "admin";
+  avatar?: string;
 };
 
 type AlertState = {
@@ -249,6 +254,7 @@ function updateAccountSession(
     ...session,
     name: getFullName(profile),
     username: profile.username,
+    avatar: profile.avatar,
   };
 
   window.sessionStorage.setItem(
@@ -264,6 +270,11 @@ function updateAccountSession(
   window.dispatchEvent(
     new Event(
       "unicare-profile-updated",
+    ),
+  );
+  window.dispatchEvent(
+    new Event(
+      "storage",
     ),
   );
 }
@@ -344,7 +355,7 @@ export default function UserProfilePage() {
         profileKey,
       );
 
-    const loadedProfile =
+    let loadedProfile =
       storedProfile ||
       createProfileFromSession(
         session,
@@ -352,7 +363,76 @@ export default function UserProfilePage() {
 
     setProfile(loadedProfile);
     setDraft(loadedProfile);
-    setIsLoading(false);
+
+    // Fetch latest profile and avatar directly from Supabase
+    if (session.email) {
+      fetchProfileByEmailFromSupabase(session.email).then((remoteProfile) => {
+        if (remoteProfile) {
+          let meta: any = {};
+          if (remoteProfile.department && remoteProfile.department.startsWith("{")) {
+            try {
+              meta = JSON.parse(remoteProfile.department);
+            } catch {}
+          }
+
+          const fullNameStr = remoteProfile.full_name || "";
+          let pPrefix = meta.prefix || "";
+          let nameWithoutPrefix = fullNameStr;
+          if (!pPrefix) {
+            if (fullNameStr.startsWith("นางสาว")) {
+              pPrefix = "นางสาว";
+              nameWithoutPrefix = fullNameStr.slice("นางสาว".length).trim();
+            } else if (fullNameStr.startsWith("นาย")) {
+              pPrefix = "นาย";
+              nameWithoutPrefix = fullNameStr.slice("นาย".length).trim();
+            } else if (fullNameStr.startsWith("นาง")) {
+              pPrefix = "นาง";
+              nameWithoutPrefix = fullNameStr.slice("นาง".length).trim();
+            }
+          }
+          const parts = nameWithoutPrefix.split(/\s+/).filter(Boolean);
+          const pFirst = meta.firstName || parts[0] || "";
+          const pLast = meta.lastName || parts.slice(1).join(" ") || "";
+
+          const mergedProfile: Profile = {
+            ...loadedProfile,
+            avatar: remoteProfile.avatar_url || loadedProfile.avatar || undefined,
+            prefix: pPrefix || loadedProfile.prefix,
+            firstName: pFirst || loadedProfile.firstName,
+            lastName: pLast || loadedProfile.lastName,
+            nickname: meta.nickname || loadedProfile.nickname,
+            gender: meta.gender || loadedProfile.gender,
+            username: meta.username || loadedProfile.username || session.email?.split("@")[0] || "",
+            phone: meta.phone || loadedProfile.phone,
+            birthDate: meta.birthDate || loadedProfile.birthDate,
+            residenceLocation: meta.residenceLocation || loadedProfile.residenceLocation,
+            dormitory: meta.dormitory || loadedProfile.dormitory,
+            building: meta.building || loadedProfile.building,
+            floor: meta.floor || loadedProfile.floor,
+            roomNumber: meta.roomNumber || loadedProfile.roomNumber,
+            addressLine: meta.addressLine || loadedProfile.addressLine,
+            subdistrict: meta.subdistrict || loadedProfile.subdistrict,
+            district: meta.district || loadedProfile.district,
+            province: meta.province || loadedProfile.province,
+            postalCode: meta.postalCode || loadedProfile.postalCode,
+            notifyReportStatus: meta.notifyReportStatus ?? loadedProfile.notifyReportStatus,
+            notifyNews: meta.notifyNews ?? loadedProfile.notifyNews,
+            showNameOnReport: meta.showNameOnReport ?? loadedProfile.showNameOnReport,
+            anonymousReportDefault: meta.anonymousReportDefault ?? loadedProfile.anonymousReportDefault,
+          };
+
+          setProfile(mergedProfile);
+          setDraft(mergedProfile);
+          updateAccountSession(session, mergedProfile);
+        }
+        setIsLoading(false);
+      }).catch((err) => {
+        console.warn("fetchProfileByEmailFromSupabase error:", err);
+        setIsLoading(false);
+      });
+    } else {
+      setIsLoading(false);
+    }
   }, [router]);
 
   const fullName = useMemo(
@@ -378,6 +458,42 @@ export default function UserProfilePage() {
   function cancelEditing() {
     setDraft(profile);
     setIsEditing(false);
+  }
+
+  function handleAvatarUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setAlert({
+        type: "warning",
+        title: "ไฟล์ไม่ถูกต้อง",
+        message: "กรุณาเลือกไฟล์รูปภาพ (JPG, PNG, WEBP)",
+      });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setAlert({
+        type: "warning",
+        title: "ขนาดไฟล์ใหญ่เกินไป",
+        message: "กรุณาเลือกรูปภาพขนาดไม่เกิน 5 MB",
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      if (result) {
+        setDraft((prev) => ({ ...prev, avatar: result }));
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function removeAvatar() {
+    setDraft((prev) => ({ ...prev, avatar: undefined }));
   }
 
   function saveProfile(
@@ -565,6 +681,7 @@ export default function UserProfilePage() {
         ),
       username:
         cleanedProfile.username,
+      avatar: cleanedProfile.avatar,
     };
 
     setCurrentSession(
@@ -574,6 +691,40 @@ export default function UserProfilePage() {
     setProfile(cleanedProfile);
     setDraft(cleanedProfile);
     setIsEditing(false);
+
+    // Sync profile to Supabase
+    if (currentSession?.email) {
+      upsertProfileInSupabase({
+        email: currentSession.email,
+        full_name: getFullName(cleanedProfile),
+        role: "user",
+        avatar_url: cleanedProfile.avatar || null,
+        department: JSON.stringify({
+          prefix: cleanedProfile.prefix,
+          firstName: cleanedProfile.firstName,
+          lastName: cleanedProfile.lastName,
+          nickname: cleanedProfile.nickname,
+          phone: cleanedProfile.phone,
+          dormitory: cleanedProfile.dormitory,
+          building: cleanedProfile.building,
+          floor: cleanedProfile.floor,
+          roomNumber: cleanedProfile.roomNumber,
+          residenceLocation: cleanedProfile.residenceLocation,
+          gender: cleanedProfile.gender,
+          birthDate: cleanedProfile.birthDate,
+          addressLine: cleanedProfile.addressLine,
+          subdistrict: cleanedProfile.subdistrict,
+          district: cleanedProfile.district,
+          province: cleanedProfile.province,
+          postalCode: cleanedProfile.postalCode,
+          username: cleanedProfile.username,
+          notifyReportStatus: cleanedProfile.notifyReportStatus,
+          notifyNews: cleanedProfile.notifyNews,
+          showNameOnReport: cleanedProfile.showNameOnReport,
+          anonymousReportDefault: cleanedProfile.anonymousReportDefault,
+        }),
+      }).catch((err) => console.warn("Supabase user profile sync failed:", err));
+    }
 
     setAlert({
       type: "success",
@@ -745,7 +896,7 @@ export default function UserProfilePage() {
         role="USER"
       />
 
-      <main className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+      <main className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
         <form
           onSubmit={saveProfile}
           className="space-y-5"
@@ -775,17 +926,79 @@ export default function UserProfilePage() {
             <div className="grid md:grid-cols-[260px_minmax(0,1fr)]">
               {/* ข้อมูลสรุปฝั่งซ้าย */}
               <div className="flex flex-col items-center border-b border-slate-100 bg-slate-50/60 px-6 py-8 text-center md:border-b-0 md:border-r">
-                <span className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-xl font-bold text-emerald-700">
-                  {initials}
-                </span>
+                <div className="relative group">
+                  <div className="w-24 h-24 rounded-full overflow-hidden bg-emerald-100 text-2xl font-bold text-emerald-800 shadow-sm border-2 border-emerald-300 flex items-center justify-center">
+                    {(isEditing ? draft.avatar : profile.avatar) ? (
+                      <img
+                        src={isEditing ? draft.avatar : profile.avatar}
+                        alt="User Profile"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      initials
+                    )}
+                  </div>
+                  {isEditing && (
+                    <label
+                      htmlFor="user-avatar-file"
+                      className="absolute bottom-0 right-0 p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full shadow-md cursor-pointer transition transform hover:scale-110"
+                      title="เปลี่ยนรูปโปรไฟล์"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <input
+                        id="user-avatar-file"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleAvatarUpload}
+                      />
+                    </label>
+                  )}
+                </div>
 
-                <h3 className="mt-4 font-bold">
+                {isEditing ? (
+                  <div className="mt-3 flex flex-col items-center gap-1.5 w-full px-2">
+                    <label
+                      htmlFor="user-avatar-file-btn"
+                      className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-xl cursor-pointer transition inline-flex items-center gap-1.5 shadow-2xs"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>อัปโหลดรูปภาพ</span>
+                      <input
+                        id="user-avatar-file-btn"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleAvatarUpload}
+                      />
+                    </label>
+                    {draft.avatar && (
+                      <button
+                        type="button"
+                        onClick={removeAvatar}
+                        className="text-[11px] text-rose-600 hover:text-rose-700 hover:underline transition"
+                      >
+                        ลบรูปโปรไฟล์
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={startEditing}
+                    className="mt-3 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline transition"
+                  >
+                    เปลี่ยนรูปโปรไฟล์
+                  </button>
+                )}
+
+                <h3 className="mt-4 font-bold notranslate" data-user-content="true">
                   {fullName ||
                     currentSession?.name ||
                     "ยังไม่มีข้อมูลชื่อ"}
                 </h3>
 
-                <p className="mt-1 text-xs text-slate-400">
+                <p className="mt-1 text-xs text-slate-400 notranslate" data-user-content="true">
                   {profile.username
                     ? `@${profile.username}`
                     : "ยังไม่มีชื่อผู้ใช้งาน"}
@@ -794,7 +1007,7 @@ export default function UserProfilePage() {
                 {profile.nickname && (
                   <p className="mt-2 text-xs text-slate-500">
                     ชื่อเล่น:{" "}
-                    {profile.nickname}
+                    <span className="notranslate" data-user-content="true">{profile.nickname}</span>
                   </p>
                 )}
 

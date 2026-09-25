@@ -10,7 +10,9 @@ import {
   markAllNotificationsAsRead,
   markNotificationAsRead,
 } from "@/lib/notifications";
-import { getDemoSession } from "@/lib/demoAuth";
+import { Bell, ClipboardList, Megaphone, AlertTriangle } from "lucide-react";
+import { useLanguage } from "@/context/LanguageContext";
+import { getDemoSession } from "@/lib/authService";
 
 interface NotificationDropdownProps {
   role?: "ADMIN" | "USER";
@@ -111,6 +113,8 @@ export default function NotificationDropdown({
   const currentUser = getCurrentUser();
   const isAdmin = currentUser.role === "admin";
 
+  const { t, lang } = useLanguage();
+
   return (
     <div className="relative inline-block text-left" ref={dropdownRef}>
       {/* ปุ่มกดรูปกระดิ่ง */}
@@ -118,9 +122,10 @@ export default function NotificationDropdown({
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="relative w-9 h-9 rounded-full bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 flex items-center justify-center text-slate-600 transition cursor-pointer"
-        aria-label="การแจ้งเตือน"
+        aria-label={t("การแจ้งเตือน")}
+        title={t("การแจ้งเตือน")}
       >
-        <span className="text-base">🔔</span>
+        <Bell className="w-4 h-4" />
 
         {/* จุดตัวเลขสีเขียวแสดงยอดแจ้งเตือนที่ยังไม่ได้อ่าน */}
         {unreadCount > 0 && (
@@ -140,11 +145,11 @@ export default function NotificationDropdown({
           <div className="px-4 py-3 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <span className="text-sm font-bold text-slate-800">
-                การแจ้งเตือน
+                {t("การแจ้งเตือน")}
               </span>
               {unreadCount > 0 && (
                 <span className="bg-emerald-100 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                  ใหม่ {unreadCount}
+                  {lang === "en" ? "New" : "ใหม่"} {unreadCount}
                 </span>
               )}
             </div>
@@ -154,7 +159,7 @@ export default function NotificationDropdown({
                 onClick={handleMarkAllAsRead}
                 className="text-[11px] text-emerald-700 hover:text-emerald-800 font-medium hover:underline cursor-pointer"
               >
-                อ่านทั้งหมดแล้ว
+                {lang === "en" ? "Mark all read" : "อ่านทั้งหมดแล้ว"}
               </button>
             )}
           </div>
@@ -191,11 +196,13 @@ export default function NotificationDropdown({
                             : "bg-rose-100 text-rose-800"
                       }`}
                     >
-                      {item.type === "status"
-                        ? "📋"
-                        : item.type === "news"
-                          ? "📢"
-                          : "⚠️"}
+                      {item.type === "status" ? (
+                        <ClipboardList className="w-4 h-4" />
+                      ) : item.type === "news" ? (
+                        <Megaphone className="w-4 h-4" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4" />
+                      )}
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -231,7 +238,7 @@ export default function NotificationDropdown({
               })
             ) : (
               <div className="p-6 text-center text-xs text-slate-400">
-                ไม่มีการแจ้งเตือนใหม่สำหรับคุณ
+                {lang === "en" ? "No new notifications for you" : "ไม่มีการแจ้งเตือนใหม่สำหรับคุณ"}
               </div>
             )}
           </div>
@@ -244,8 +251,8 @@ export default function NotificationDropdown({
               className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 transition"
             >
               {isAdmin
-                ? "ดูรายการคำร้องเรียนทั้งหมด →"
-                : "ดูประวัติการแจ้งปัญหาทั้งหมด →"}
+                ? (lang === "en" ? "View all reports →" : "ดูรายการคำร้องเรียนทั้งหมด →")
+                : (lang === "en" ? "View all my reports →" : "ดูประวัติการแจ้งปัญหาทั้งหมด →")}
             </Link>
           </div>
         </div>

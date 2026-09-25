@@ -18,7 +18,7 @@ import Link from "next/link";
 
 import { useRouter } from "next/navigation";
 
-import { getDemoSession } from "@/lib/demoAuth";
+import { getDemoSession, USER_ACCOUNTS } from "@/lib/authService";
 
 import {
 
@@ -33,8 +33,10 @@ import {
 import { getDisabledCategoryNames } from "@/lib/issuesData";
 
 import { addNotification } from "@/lib/notifications";
+import { createIssueInSupabase } from "@/lib/supabaseService";
 
 import Header from "@/components/Header";
+import { ClipboardList, AlertTriangle, FolderOpen, CheckCircle2 } from "lucide-react";
 
 type Question = {
 
@@ -538,7 +540,7 @@ const URGENCIES: {
 
   value: Urgency;
 
-  icon: string;
+  icon: ReactNode;
 
   description: string;
 
@@ -548,7 +550,7 @@ const URGENCIES: {
 
     value: "ปกติ",
 
-    icon: "🟢",
+    icon: <span className="inline-block h-2.5 w-2.5 rounded-full bg-emerald-500 mr-1.5 align-middle" />,
 
     description: "สามารถรอการตรวจสอบตามลำดับได้",
 
@@ -558,7 +560,7 @@ const URGENCIES: {
 
     value: "เร่งด่วน",
 
-    icon: "🟡",
+    icon: <span className="inline-block h-2.5 w-2.5 rounded-full bg-amber-500 mr-1.5 align-middle" />,
 
     description:
 
@@ -570,7 +572,7 @@ const URGENCIES: {
 
     value: "เร่งด่วนมาก",
 
-    icon: "🔴",
+    icon: <span className="inline-block h-2.5 w-2.5 rounded-full bg-rose-500 mr-1.5 align-middle" />,
 
     description:
 
@@ -1112,7 +1114,7 @@ function EvidencePreview({
 
       )}
 
-      <p className="break-all text-sm font-medium">{file.name}</p>
+      <p className="break-all text-sm font-medium notranslate" data-user-content="true">{file.name}</p>
 
       <p className="mt-1 text-xs text-slate-500">
 
@@ -1192,9 +1194,9 @@ function SuccessModal({
 
       <div className="text-center">
 
-        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50 text-5xl text-emerald-700">
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
 
-          ✓
+          <CheckCircle2 className="h-12 w-12" />
 
         </div>
 
@@ -1258,11 +1260,13 @@ function SuccessModal({
 
           href="/my-reports"
 
-          className="rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white shadow-xs hover:bg-emerald-800 transition"
+          className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-5 py-3 text-sm font-semibold text-white shadow-xs hover:bg-emerald-800 transition"
 
         >
 
-          📋 ไปที่รายการของฉัน
+          <ClipboardList className="h-4 w-4" />
+
+          <span>ไปที่รายการของฉัน</span>
 
         </Link>
 
@@ -1605,6 +1609,9 @@ export default function UserReportPage() {
       ? `อื่น ๆ: ${form.categoryOther.trim()}`
 
       : form.category;
+
+  const placeTypeLabel =
+    form.placeType === OTHER ? form.locationOther.trim() : form.placeType;
 
   const placeLabel =
 
@@ -2078,6 +2085,84 @@ export default function UserReportPage() {
 
         const nextNumericId = maxId + 1;
 
+        let reporterPhone = (session as any).phone || "";
+        if (!reporterPhone && typeof window !== "undefined") {
+          try {
+            const userProfile = window.localStorage.getItem("unicare_demo_user_profile");
+            if (userProfile) {
+              const parsed = JSON.parse(userProfile);
+              if (parsed.phone) reporterPhone = parsed.phone;
+            }
+          } catch {}
+        }
+        if (!reporterPhone) {
+          const matched = USER_ACCOUNTS.find(
+            (u) => u.name === session.name || u.email === session.email
+          );
+          if (matched?.phone) reporterPhone = matched.phone;
+        }
+        if (!reporterPhone) {
+          reporterPhone = "082-345-6789";
+        }
+
+        const effectiveFloor = floorLabel || (floors.length === 0 ? "- (บริเวณทั่วไป / พื้นดิน)" : "ชั้น 1");
+        const effectivePlace = placeLabel || (form.placeType === OTHER ? form.locationOther.trim() : "มหาวิทยาลัยวลัยลักษณ์");
+        const effectivePlaceType = placeTypeLabel || "สถานที่ภายในมหาวิทยาลัย";
+        const effectiveArea = areaLabel || (form.placeType === OTHER ? form.locationOther.trim() : "บริเวณทั่วไป");
+        const effectiveLocationDetail = form.landmark.trim() || "- (ไม่มีจุดสังเกตเพิ่มเติม)";
+        const effectiveUrgencyReason =
+          form.urgency === "เร่งด่วนมาก"
+            ? form.urgencyReason.trim() || "ส่งผลกระทบต่อความปลอดภัยและการใช้ชีวิตประจำวัน"
+            : "";
+        const effectiveCommonPeriods =
+          form.frequency === "พบเป็นประจำ" && form.commonPeriods.length > 0
+            ? [...form.commonPeriods]
+            : form.commonPeriods.length > 0
+              ? [...form.commonPeriods]
+              : ["ตลอดทั้งวัน / ระหว่างช่วงเวลาทำกิจกรรม"];
+        const effectiveImpacts =
+          form.impacts.length > 0
+            ? form.impacts.map((val) => (val === OTHER ? `อื่น ๆ: ${form.impactOther.trim()}` : val))
+            : ["กระทบต่อการใช้ชีวิตประจำวัน"];
+
+        const readFileAsDataUrl = (file: File): Promise<string> => {
+          return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              resolve(typeof reader.result === "string" ? reader.result : "");
+            };
+            reader.onerror = () => resolve("");
+            reader.readAsDataURL(file);
+          });
+        };
+
+        const evidence_files = await Promise.all(
+          files.map(async (f, i) => {
+            let dataUrl = "";
+            try {
+              if (f.size <= 5 * 1024 * 1024) {
+                dataUrl = await readFileAsDataUrl(f);
+              }
+            } catch {}
+
+            return {
+              id: `${nextNumericId}-${i}`,
+              name: f.name,
+              size: f.size,
+              mimeType: f.type,
+              url: dataUrl,
+              dataUrl: dataUrl,
+              type: f.type.startsWith("image/")
+                ? ("image" as const)
+                : f.type.startsWith("audio/")
+                  ? ("audio" as const)
+                  : f.type.startsWith("video/")
+                    ? ("video" as const)
+                    : ("document" as const),
+            };
+          })
+        );
+
         const newReportForAdmin = {
 
           issue_id: nextNumericId,
@@ -2115,9 +2200,9 @@ export default function UserReportPage() {
           reporter_name: session.name,
 
           reporter_email: session.email || "",
-
+          reporter_phone: reporterPhone,
           evidence_count: files.length,
-
+          evidence_files,
           issue_categories: {
 
             category_name: categoryLabel,
@@ -2125,20 +2210,41 @@ export default function UserReportPage() {
           },
 
           issue_areas: {
-
-            area_name: locationLabel,
-
+            area_name: effectivePlace,
           },
-
+          category: categoryLabel,
           location: locationLabel,
-
-          locationDetail: form.landmark.trim(),
-
+          locationDetail: effectiveLocationDetail,
+          placeType: effectivePlaceType,
+          place: effectivePlace,
+          floor: effectiveFloor,
+          area: effectiveArea,
+          occurredAt: form.occurredAt || new Date().toISOString().split("T")[0],
+          ongoing: form.ongoing || "ยังเกิดปัญหาอยู่",
+          frequency: form.frequency || "พบเป็นประจำ",
+          commonPeriods: effectiveCommonPeriods,
+          urgency: form.urgency || "ปกติ",
+          urgencyReason: effectiveUrgencyReason,
+          impacts: effectiveImpacts,
+          impactOther: form.impacts.includes(OTHER) ? form.impactOther.trim() : "",
+          additional: form.additional.trim(),
+          answers: answerSummary,
           source: "user_report",
 
           internal_id: id,
 
         };
+
+        const ticketNumber = `ISS-2026-${String(nextNumericId).padStart(3, "0")}`;
+
+        // บันทึกลง IndexedDB พร้อมรหัสอ้างอิง เพื่อให้แอดมินเปิดดูหลักฐานได้เสมอ
+        try {
+          await saveIssueReport({ ...report, code: ticketNumber });
+          await saveIssueReport({ ...report, id: String(nextNumericId), code: ticketNumber });
+          await saveIssueReport({ ...report, id: ticketNumber, code: ticketNumber });
+        } catch (idbErr) {
+          console.warn("Failed saving IndexedDB aliases:", idbErr);
+        }
 
         const updatedList = [
 
@@ -2148,15 +2254,48 @@ export default function UserReportPage() {
 
         ];
 
-        window.localStorage.setItem(
-
-          "unicare_demo_issue_reports",
-
-          JSON.stringify(updatedList)
-
-        );
+        try {
+          window.localStorage.setItem(
+            "unicare_demo_issue_reports",
+            JSON.stringify(updatedList)
+          );
+        } catch {
+          // หากเกิน Quota ให้ตัด dataUrl ขนาดใหญ่ออก เพื่อให้ข้อมูลเคสและชื่อหลักฐานบันทึกสำเร็จ
+          try {
+            const leanList = updatedList.map((item: any) => ({
+              ...item,
+              evidence_files: item.evidence_files?.map((ef: any) => ({
+                ...ef,
+                url: "",
+                dataUrl: "",
+              })),
+            }));
+            window.localStorage.setItem(
+              "unicare_demo_issue_reports",
+              JSON.stringify(leanList)
+            );
+          } catch {}
+        }
 
         window.dispatchEvent(new Event("unicare-demo-reports-updated"));
+
+        // Sync new report to Supabase
+        await createIssueInSupabase({
+          ticketNumber: `ISS-2026-${String(nextNumericId).padStart(3, "0")}`,
+          title: form.title.trim() || categoryLabel,
+          description:
+            form.additional.trim() ||
+            form.otherProblem.trim() ||
+            form.title.trim() ||
+            "รายละเอียดเรื่องร้องเรียน",
+          categoryName: categoryLabel,
+          areaName: effectivePlace || locationLabel,
+          locationDetail: effectiveLocationDetail,
+          urgency: form.urgency as any,
+          reporterName: session.name,
+          reporterEmail: session.email || "",
+          reporterPhone,
+        }).catch((err) => console.warn("Supabase issue sync failed:", err));
 
         // ส่งการแจ้งเตือนแบบแยกกลุ่มผู้รับ
 
@@ -2282,7 +2421,7 @@ export default function UserReportPage() {
 
       <main className="px-4 py-6 sm:px-6">
 
-        <div className="mx-auto max-w-5xl space-y-5">
+        <div className="mx-auto max-w-7xl space-y-6">
 
           <header className="relative overflow-hidden rounded-2xl border border-[#0b5b49] bg-gradient-to-r from-[#075b46] via-[#087458] to-[#0a765a] p-5 text-white shadow-md sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 
@@ -2308,7 +2447,7 @@ export default function UserReportPage() {
 
             <div className="relative z-10 inline-flex w-fit items-center gap-1.5 rounded-full border border-white/35 bg-white/15 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
 
-              <span>⚠️</span>
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-200" />
 
               <span>โหมดทดลอง: บันทึกในเบราว์เซอร์นี้</span>
 
@@ -2438,7 +2577,7 @@ export default function UserReportPage() {
 
                     <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-800">
 
-                      <span>⚠️</span>
+                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
 
                       <div>
 
@@ -3028,9 +3167,9 @@ export default function UserReportPage() {
 
                   <Field label="หลักฐานประกอบ (ไม่บังคับ)">
 
-                    <div className="mt-3 rounded-2xl border-2 border-dashed border-emerald-300 bg-[#eef8f2] p-6">
+                    <div className="mt-3 rounded-2xl border-2 border-dashed border-emerald-300 bg-[#eef8f2] p-6 text-center">
 
-                      <span className="block text-3xl">📁</span>
+                      <FolderOpen className="mx-auto h-9 w-9 text-emerald-600" />
 
                       <span className="mt-3 block text-sm text-slate-600">
 
@@ -3122,27 +3261,29 @@ export default function UserReportPage() {
 
                   <dl className="divide-y divide-slate-200 rounded-xl border border-slate-200 px-4">
 
-                    {summaryRows.map(([label, value], index) => (
+                    {summaryRows.map(([label, value], index) => {
+                      const isUserVal =
+                        label === "รายละเอียดเพิ่มเติม" ||
+                        label === "จุดสังเกตเพิ่มเติม" ||
+                        label === "เหตุผลที่ต้องการให้ตรวจสอบทันที" ||
+                        label === "ชื่อผู้แจ้ง" ||
+                        label === "ผู้แจ้ง";
 
-                      <div
-
-                        key={`${label}-${index}`}
-
-                        className="grid gap-2 py-4 text-sm sm:grid-cols-[200px_1fr]"
-
-                      >
-
-                        <dt className="text-slate-500">{label}</dt>
-
-                        <dd className="min-w-0 whitespace-pre-wrap break-words font-medium">
-
-                          {value}
-
-                        </dd>
-
-                      </div>
-
-                    ))}
+                      return (
+                        <div
+                          key={`${label}-${index}`}
+                          className="grid gap-2 py-4 text-sm sm:grid-cols-[200px_1fr]"
+                        >
+                          <dt className="text-slate-500">{label}</dt>
+                          <dd
+                            className={`min-w-0 whitespace-pre-wrap break-words font-medium ${isUserVal ? "notranslate" : ""}`}
+                            {...(isUserVal ? { "data-user-content": "true" } : {})}
+                          >
+                            {value}
+                          </dd>
+                        </div>
+                      );
+                    })}
 
                   </dl>
 

@@ -9,6 +9,15 @@ import CategoryManager from "@/components/CategoryManager";
 import RiskAreaTable, {
     type RiskArea,
 } from "@/components/RiskAreaTable";
+import {
+    FolderKanban,
+    Map,
+    MapPin,
+    X,
+    AlertTriangle,
+    Save,
+    RotateCcw,
+} from "lucide-react";
 
 import {
     type LocationGroupedRiskArea,
@@ -31,6 +40,12 @@ const LocationPickerMap = dynamic(
 );
 
 import DeleteModal from "@/components/DeleteModal";
+import { supabase } from "@/lib/supabaseClient";
+import {
+    fetchRiskAreasFromSupabase,
+    saveRiskAreaToSupabase,
+    deleteRiskAreaFromSupabase,
+} from "@/lib/supabaseService";
 
 export default function CategoriesPage() {
 
@@ -48,12 +63,55 @@ export default function CategoriesPage() {
 
         updateAreas();
 
+        // Sync from Supabase risk_areas
+        fetchRiskAreasFromSupabase()
+            .then((areas) => {
+                if (areas && areas.length > 0) {
+                    areas.forEach((a) => {
+                        savePinnedLocation({
+                            id: a.id,
+                            name: a.name,
+                            lat: Number(a.latitude),
+                            lng: Number(a.longitude),
+                            description: a.frequent_issues || "",
+                        });
+                    });
+                    updateAreas();
+                }
+            })
+            .catch((err) => console.warn("Supabase risk areas load failed:", err));
+
+        const channel = supabase
+            .channel("unicare-risk-areas-live")
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "risk_areas" },
+                () => {
+                    fetchRiskAreasFromSupabase().then((areas) => {
+                        if (areas && areas.length > 0) {
+                            areas.forEach((a) => {
+                                savePinnedLocation({
+                                    id: a.id,
+                                    name: a.name,
+                                    lat: Number(a.latitude),
+                                    lng: Number(a.longitude),
+                                    description: a.frequent_issues || "",
+                                });
+                            });
+                            updateAreas();
+                        }
+                    });
+                }
+            )
+            .subscribe();
+
         window.addEventListener("storage", updateAreas);
         window.addEventListener("unicare-demo-reports-updated", updateAreas);
         window.addEventListener("unicare-pinned-locations-updated", updateAreas);
         window.addEventListener("focus", updateAreas);
 
         return () => {
+            channel.unsubscribe();
             window.removeEventListener("storage", updateAreas);
             window.removeEventListener("unicare-demo-reports-updated", updateAreas);
             window.removeEventListener("unicare-pinned-locations-updated", updateAreas);
@@ -306,6 +364,15 @@ export default function CategoriesPage() {
             description: description.trim(),
         });
 
+        // Supabase risk_areas sync
+        saveRiskAreaToSupabase({
+            id: editingArea?.id && String(editingArea.id).length === 36 ? String(editingArea.id) : undefined,
+            name: finalName,
+            latitude,
+            longitude,
+            frequent_issues: description.trim(),
+        }).catch((err) => console.warn("Supabase risk area save failed:", err));
+
         setGroupedAreas(getGroupedRiskAreas());
         closeRiskModal();
     }
@@ -335,9 +402,11 @@ export default function CategoriesPage() {
 
         if (idToDelete) {
             deletePinnedLocation(idToDelete);
+            deleteRiskAreaFromSupabase(idToDelete).catch((err) => console.warn("Supabase risk area delete failed:", err));
         }
         if (nameToDelete) {
             deletePinnedLocation(nameToDelete);
+            deleteRiskAreaFromSupabase(nameToDelete).catch((err) => console.warn("Supabase risk area delete failed:", err));
         }
 
         setGroupedAreas(getGroupedRiskAreas());
@@ -384,15 +453,16 @@ export default function CategoriesPage() {
             />
 
             {/* MAIN */}
-            <main className="p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full">
+            <main className="p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
 
                 {/* PAGE TITLE */}
-                <div className="page-title">
-                    <h1>
-                        ⚙️ ระบบหมวดหมู่และจัดการพื้นที่เสี่ยงสูง
+                <div className="page-title space-y-1">
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2">
+                        <FolderKanban className="w-6 h-6 text-emerald-700" />
+                        <span>ระบบหมวดหมู่และจัดการพื้นที่เสี่ยงสูง</span>
                     </h1>
 
-                    <p>
+                    <p className="text-xs sm:text-sm font-normal text-slate-500">
                         จัดการประเภทของปัญหา และกำหนดพื้นที่เสี่ยงสูงภายในมหาวิทยาลัย
                         เพื่อการจัดการที่รวดเร็วและมีประสิทธิภาพ
                     </p>
@@ -420,8 +490,8 @@ export default function CategoriesPage() {
 
                                 <div className="card-title">
 
-                                    <div className="card-title-icon">
-                                        🗺️
+                                    <div className="card-title-icon flex items-center justify-center">
+                                        <Map className="w-5 h-5 text-emerald-700" />
                                     </div>
 
                                     <div>
@@ -449,9 +519,17 @@ export default function CategoriesPage() {
                                                 : "คลิกเพื่อเลือกจุดบนแผนที่โดยตรง"
                                         }
                                     >
-                                        {isPinningMode
-                                            ? "✕ ยกเลิกโหมดปักหมุด"
-                                            : "📍 ปักหมุดบนแผนที่"}
+                                        {isPinningMode ? (
+                                            <span className="inline-flex items-center gap-1.5">
+                                                <X className="w-3.5 h-3.5" />
+                                                <span>ยกเลิกโหมดปักหมุด</span>
+                                            </span>
+                                        ) : (
+                                            <span className="inline-flex items-center gap-1.5">
+                                                <MapPin className="w-3.5 h-3.5" />
+                                                <span>ปักหมุดบนแผนที่</span>
+                                            </span>
+                                        )}
                                     </button>
                                 </div>
 
@@ -522,10 +600,13 @@ export default function CategoriesPage() {
                         <div className="modal-header">
 
                             <div>
-                                <h3>
-                                    {editingArea
-                                        ? "📍 แก้ไขตำแหน่งปักหมุดสถานที่"
-                                        : "📍 ปักหมุดสถานที่ใหม่"}
+                                <h3 className="flex items-center gap-1.5">
+                                    <MapPin className="w-4 h-4 text-emerald-600" />
+                                    <span>
+                                        {editingArea
+                                            ? "แก้ไขตำแหน่งปักหมุดสถานที่"
+                                            : "ปักหมุดสถานที่ใหม่"}
+                                    </span>
                                 </h3>
                                 <p style={{ fontSize: "12px", color: "#64748b", marginTop: "3px" }}>
                                     เลือกสถานที่จากแบบฟอร์มหน้าแจ้งปัญหา และระบุพิกัดตำแหน่งบนแผนที่
@@ -560,7 +641,7 @@ export default function CategoriesPage() {
                                 }
                             >
                                 {Object.entries(groupedPlaces).map(([cat, places]) => (
-                                    <optgroup key={cat} label={`📂 ${cat}`}>
+                                    <optgroup key={cat} label={cat}>
                                         {places.map((place) => (
                                             <option key={place.name} value={place.name}>
                                                 {place.name}
@@ -568,9 +649,9 @@ export default function CategoriesPage() {
                                         ))}
                                     </optgroup>
                                 ))}
-                                <optgroup label="⚙️ อื่นๆ">
+                                <optgroup label="อื่นๆ">
                                     <option value="__custom__">
-                                        ✏️ กำหนดชื่อสถานที่เอง...
+                                        กำหนดชื่อสถานที่เอง...
                                     </option>
                                 </optgroup>
                             </select>
@@ -614,7 +695,7 @@ export default function CategoriesPage() {
                                             gap: "5px",
                                         }}
                                     >
-                                        <span>⚠️</span>
+                                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
                                         <span>
                                             มีปัญหาที่ได้รับแจ้งในสถานที่นี้แล้ว {existingIssuesInPlace.length} เรื่อง
                                         </span>
@@ -642,7 +723,7 @@ export default function CategoriesPage() {
                                             gap: "5px",
                                         }}
                                     >
-                                        <span>📍</span>
+                                        <MapPin className="w-4 h-4 text-sky-600 shrink-0" />
                                         <span>
                                             จุดปักหมุดพร้อมใช้งาน (ยังไม่มีปัญหา)
                                         </span>
@@ -657,7 +738,10 @@ export default function CategoriesPage() {
                         {/* INTERACTIVE MAP PICKER */}
                         <div className="form-group">
                             <label className="flex items-center justify-between">
-                                <span>📍 คลิกบนแผนที่เพื่อระบุตำแหน่งปักหมุด</span>
+                                <span className="flex items-center gap-1.5">
+                                    <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>คลิกบนแผนที่เพื่อระบุตำแหน่งปักหมุด</span>
+                                </span>
                                 <span className="text-[11px] font-normal text-emerald-700">
                                     คลิกหรือลากหมุดบนแผนที่ได้
                                 </span>
@@ -707,12 +791,13 @@ export default function CategoriesPage() {
                             </button>
 
                             <button
-                                className="btn-save"
+                                className="btn-save flex items-center justify-center gap-1.5"
                                 onClick={
                                     saveRiskArea
                                 }
                             >
-                                💾 บันทึกจุดปักหมุด
+                                <Save className="w-3.5 h-3.5" />
+                                <span>บันทึกจุดปักหมุด</span>
                             </button>
 
                         </div>
@@ -783,11 +868,11 @@ export default function CategoriesPage() {
                                     display: "flex",
                                     alignItems: "center",
                                     justifyContent: "center",
-                                    fontSize: "22px",
+                                    border: "1px solid #a7f3d0",
                                     flexShrink: 0,
                                 }}
                             >
-                                🔄
+                                <RotateCcw className="w-5 h-5 text-emerald-600" />
                             </div>
                             <div>
                                 <h3 style={{ fontSize: "17px", fontWeight: "bold", color: "#1e293b", margin: 0 }}>

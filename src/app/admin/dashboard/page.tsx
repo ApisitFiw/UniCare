@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   getDemoSession,
   type DemoSession,
-} from "@/lib/demoAuth";
+} from "@/lib/authService";
 import Header from "@/components/Header";
 import {
   getAllCurrentIssues,
@@ -21,17 +21,69 @@ import {
   RotateCw,
   AlertTriangle,
   FolderOpen,
+  Volume2,
+  Trash2,
+  Droplets,
+  Wind,
+  Lightbulb,
+  Trees,
+  ShieldCheck,
+  Tag,
+  ClipboardList,
+  BarChart3,
 } from "lucide-react";
 
-function getCategoryIcon(category: string): string {
-  if (category.includes("เสียง")) return "🔊";
-  if (category.includes("ขยะ")) return "🗑️";
-  if (category.includes("น้ำ")) return "🚰";
-  if (category.includes("อากาศ") || category.includes("กลิ่น") || category.includes("ควัน")) return "💨";
-  if (category.includes("แสง") || category.includes("ไฟ")) return "💡";
-  if (category.includes("ต้นไม้") || category.includes("กิ่งไม้") || category.includes("เขียว")) return "🌳";
-  if (category.includes("ปลอดภัย") || category.includes("จราจร")) return "🛡️";
-  return "📢";
+function getCategoryIcon(category: string): ReactNode {
+  if (category.includes("เสียง")) return <Volume2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+  if (category.includes("ขยะ")) return <Trash2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+  if (category.includes("น้ำ")) return <Droplets className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+  if (category.includes("อากาศ") || category.includes("กลิ่น") || category.includes("ควัน")) return <Wind className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+  if (category.includes("แสง") || category.includes("ไฟ")) return <Lightbulb className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+  if (category.includes("ต้นไม้") || category.includes("กิ่งไม้") || category.includes("เขียว")) return <Trees className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+  if (category.includes("ปลอดภัย") || category.includes("จราจร")) return <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+  return <Tag className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+}
+
+function parseIssueDateTime(rawDate: string): { date: string; time: string } {
+  if (!rawDate) return { date: "-", time: "-" };
+
+  // 1. ISO string with T (e.g. 2026-09-25T14:20:00.000Z)
+  if (rawDate.includes("T")) {
+    const parsed = new Date(rawDate);
+    if (!isNaN(parsed.getTime())) {
+      const d = parsed.toLocaleDateString("th-TH", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      const t =
+        parsed.toLocaleTimeString("th-TH", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }) + " น.";
+      return { date: d, time: t };
+    }
+  }
+
+  // 2. Text containing time pattern HH:mm or HH:mm น.
+  const timeMatch = rawDate.match(/(\d{1,2}:\d{2}(?:\s*น\.)?)/);
+  if (timeMatch) {
+    const matchedTime = timeMatch[1].trim();
+    const formattedTime = matchedTime.endsWith("น.")
+      ? matchedTime
+      : `${matchedTime} น.`;
+    const datePart = rawDate
+      .replace(timeMatch[0], "")
+      .replace(/[\-–,]/g, "")
+      .replace(/เวลา/g, "")
+      .trim();
+    return {
+      date: datePart || "วันนี้",
+      time: formattedTime,
+    };
+  }
+
+  return { date: rawDate, time: "-" };
 }
 
 export default function AdminDashboardPage() {
@@ -91,7 +143,7 @@ export default function AdminDashboardPage() {
       label: "เรื่องร้องเรียนทั้งหมด",
       value: totalCount.toString(),
       note: "อัปเดตเรียลไทม์จากระบบติดตามสถานะ",
-      icon: "📢",
+      icon: <ClipboardList className="h-6 w-6 text-emerald-700" />,
       valueColor: "text-slate-900",
       noteColor: "text-emerald-700",
       iconColor: "border-emerald-100 bg-emerald-50",
@@ -100,7 +152,7 @@ export default function AdminDashboardPage() {
       label: "รอดำเนินการ / รอรับเรื่อง",
       value: pendingCount.toString(),
       note: pendingCount > 0 ? "• ต้องการการตรวจสอบและมอบหมาย" : "ไม่มีเคสค้าง",
-      icon: "⌛",
+      icon: <Clock className="h-6 w-6 text-rose-600" />,
       valueColor: "text-rose-600",
       noteColor: "text-rose-600",
       iconColor: "border-rose-100 bg-rose-50",
@@ -109,7 +161,7 @@ export default function AdminDashboardPage() {
       label: "กำลังดำเนินการ (In Progress)",
       value: inProgressCount.toString(),
       note: "อยู่ระหว่างการปฏิบัติงานของเจ้าหน้าที่",
-      icon: "🛠️",
+      icon: <RotateCw className="h-6 w-6 text-amber-600" />,
       valueColor: "text-amber-600",
       noteColor: "text-amber-600",
       iconColor: "border-amber-100 bg-amber-50",
@@ -118,7 +170,7 @@ export default function AdminDashboardPage() {
       label: "แก้ไขเสร็จสิ้น (Resolved)",
       value: resolvedCount.toString(),
       note: `คิดเป็นความสำเร็จ ${resolvedRate}%`,
-      icon: "✅",
+      icon: <CheckCircle2 className="h-6 w-6 text-emerald-600" />,
       valueColor: "text-emerald-700",
       noteColor: "text-emerald-700",
       iconColor: "border-emerald-100 bg-emerald-50",
@@ -135,6 +187,10 @@ export default function AdminDashboardPage() {
       return matchSearch && matchStatus;
     });
   }, [issues, search, statusFilter]);
+
+  const displayedIssues = useMemo(() => {
+    return filteredIssues.slice(0, 10);
+  }, [filteredIssues]);
 
   if (!session) {
     return (
@@ -167,7 +223,7 @@ export default function AdminDashboardPage() {
                 สวัสดีคุณ{session.name}, มีเคสรอดำเนินการ {pendingCount} รายการ
               </h2>
 
-              <p className="mt-2 text-sm leading-relaxed text-emerald-100/80">
+              <p className="mt-2 text-xs sm:text-sm font-normal leading-relaxed text-emerald-100/90">
                 ข้อมูลอิงจากระบบติดตามและจัดการสถานะ (ทั้งหมด {totalCount} เรื่อง · กำลังดำเนินการ {inProgressCount} เรื่อง · แก้ไขสำเร็จ {resolvedCount} เรื่อง)
               </p>
             </div>
@@ -177,15 +233,17 @@ export default function AdminDashboardPage() {
                 href="/admin/issues"
                 className="rounded-xl bg-white px-4 py-3 text-xs font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 flex items-center gap-1.5"
               >
-                <span>📋 ไปที่ระบบติดตามและจัดการสถานะ</span>
+                <ClipboardList className="w-3.5 h-3.5 text-emerald-900 shrink-0" />
+                <span>ไปที่ระบบติดตามและจัดการสถานะ</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
 
               <Link
                 href="/admin/analytics"
-                className="rounded-xl border border-white/20 px-4 py-3 text-xs font-semibold text-white transition hover:bg-white/10"
+                className="rounded-xl border border-white/20 px-4 py-3 text-xs font-semibold text-white transition hover:bg-white/10 flex items-center gap-1.5"
               >
-                📊 ดูสถิติรายงานภาพรวม
+                <BarChart3 className="w-3.5 h-3.5 text-white shrink-0" />
+                <span>ดูสถิติรายงานภาพรวม</span>
               </Link>
             </div>
           </div>
@@ -202,12 +260,12 @@ export default function AdminDashboardPage() {
               className="flex items-center justify-between gap-3 rounded-2xl border border-white bg-white p-5 shadow-sm hover:shadow-md transition"
             >
               <div>
-                <h3 className="text-xs font-medium text-slate-500">
+                <h3 className="text-xs font-semibold text-slate-500">
                   {item.label}
                 </h3>
 
                 <p
-                  className={`mt-2 text-3xl font-extrabold ${item.valueColor}`}
+                  className={`mt-2 text-2xl sm:text-3xl font-extrabold ${item.valueColor}`}
                 >
                   {item.value}
                 </p>
@@ -236,7 +294,7 @@ export default function AdminDashboardPage() {
                   รายการเรื่องร้องเรียนในระบบติดตามและจัดการสถานะ
                 </h2>
                 <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-                  {filteredIssues.length} รายการ
+                  แสดง {displayedIssues.length} จาก {filteredIssues.length} รายการล่าสุด
                 </span>
               </div>
 
@@ -318,6 +376,7 @@ export default function AdminDashboardPage() {
                   <th className="px-3 py-3.5">หมวดหมู่ / รายละเอียดปัญหา</th>
                   <th className="px-3 py-3.5">สถานที่เกิดเหตุ</th>
                   <th className="px-3 py-3.5">ความเร่งด่วน</th>
+                  <th className="px-3 py-3.5">วันที่แจ้ง</th>
                   <th className="px-3 py-3.5">เวลาที่แจ้ง</th>
                   <th className="px-3 py-3.5">สถานะปัจจุบัน</th>
                   <th className="px-3 py-3.5 text-center">จัดการสถานะ</th>
@@ -325,94 +384,102 @@ export default function AdminDashboardPage() {
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {filteredIssues.map((report) => (
-                  <tr
-                    key={report.id}
-                    className="transition hover:bg-emerald-50/40"
-                  >
-                    <td className="whitespace-nowrap px-3 py-4 font-bold text-emerald-800">
-                      <Link
-                        href={`/admin/issues?issueId=${encodeURIComponent(report.id)}`}
-                        className="hover:underline flex items-center gap-1 text-[#1b5e4a]"
-                        title="คลิกเพื่อเปิด Modal ไทม์ไลน์และจัดการเคสนี้"
-                      >
-                        #{report.id}
-                      </Link>
-                    </td>
+                {displayedIssues.map((report) => {
+                  const { date, time } = parseIssueDateTime(report.date);
 
-                    <td className="px-3 py-4 max-w-xs">
-                      <p className="font-semibold text-slate-800 flex items-center gap-1.5">
-                        <span>{getCategoryIcon(report.category)}</span>
-                        <span>{report.category}</span>
-                      </p>
-                      <p className="mt-1 text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
-                        {report.description}
-                      </p>
-                    </td>
+                  return (
+                    <tr
+                      key={report.id}
+                      className="transition hover:bg-emerald-50/40"
+                    >
+                      <td className="whitespace-nowrap px-3 py-4 font-bold text-emerald-800">
+                        <Link
+                          href={`/admin/issues?issueId=${encodeURIComponent(report.id)}`}
+                          className="hover:underline flex items-center gap-1 text-[#1b5e4a]"
+                          title="คลิกเพื่อเปิด Modal ไทม์ไลน์และจัดการเคสนี้"
+                        >
+                          #{report.id}
+                        </Link>
+                      </td>
 
-                    <td className="px-3 py-4 text-slate-600">
-                      <div className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
-                        <span className="font-medium text-slate-700">{report.area}</span>
-                      </div>
-                    </td>
+                      <td className="px-3 py-4 max-w-xs">
+                        <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+                          <span>{getCategoryIcon(report.category)}</span>
+                          <span>{report.category}</span>
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-500 line-clamp-2 leading-relaxed notranslate" data-user-content="true">
+                          {report.description}
+                        </p>
+                      </td>
 
-                    <td className="px-3 py-4">
-                      <span
-                        className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
-                          report.urgency === "เร่งด่วนมาก"
-                            ? "bg-rose-50 text-rose-700 border-rose-200"
-                            : report.urgency === "เร่งด่วน"
-                              ? "bg-amber-50 text-amber-700 border-amber-200"
-                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        }`}
-                      >
-                        {report.urgency || "ปกติ"}
-                      </span>
-                    </td>
+                      <td className="px-3 py-4 text-slate-600">
+                        <div className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
+                          <span className="font-medium text-slate-700">{report.area}</span>
+                        </div>
+                      </td>
 
-                    <td className="whitespace-nowrap px-3 py-4 text-slate-400 text-[11px]">
-                      {report.date}
-                    </td>
-
-                    <td className="px-3 py-4">
-                      {report.status === "in_progress" && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
-                          <span>กำลังดำเนินการ</span>
+                      <td className="px-3 py-4">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
+                            report.urgency === "เร่งด่วนมาก"
+                              ? "bg-rose-50 text-rose-700 border-rose-200"
+                              : report.urgency === "เร่งด่วน"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          }`}
+                        >
+                          {report.urgency || "ปกติ"}
                         </span>
-                      )}
-                      {report.status === "pending" && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                          <span>รอดำเนินการ</span>
-                        </span>
-                      )}
-                      {report.status === "resolved" && (
-                        <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          <span>แก้ไขสำเร็จ</span>
-                        </span>
-                      )}
-                    </td>
+                      </td>
 
-                    <td className="whitespace-nowrap px-3 py-4 text-center">
-                      <Link
-                        href={`/admin/issues?issueId=${encodeURIComponent(report.id)}`}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1b5e4a] text-white hover:bg-[#144737] text-[11px] font-semibold transition shadow-xs cursor-pointer"
-                        title="เปิดแก้ไขและบันทึกไทม์ไลน์ในระบบติดตามสถานะ"
-                      >
-                        <span>จัดการสถานะ</span>
-                        <ArrowRight className="w-3 h-3" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="whitespace-nowrap px-3 py-4 text-slate-600 text-[11px] font-medium">
+                        {date}
+                      </td>
 
-                {filteredIssues.length === 0 && (
+                      <td className="whitespace-nowrap px-3 py-4 text-slate-400 text-[11px]">
+                        {time}
+                      </td>
+
+                      <td className="px-3 py-4">
+                        {report.status === "in_progress" && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
+                            <span>กำลังดำเนินการ</span>
+                          </span>
+                        )}
+                        {report.status === "pending" && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                            <span>รอดำเนินการ</span>
+                          </span>
+                        )}
+                        {report.status === "resolved" && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>แก้ไขสำเร็จ</span>
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="whitespace-nowrap px-3 py-4 text-center">
+                        <Link
+                          href={`/admin/issues?issueId=${encodeURIComponent(report.id)}`}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1b5e4a] text-white hover:bg-[#144737] text-[11px] font-semibold transition shadow-xs cursor-pointer"
+                          title="เปิดแก้ไขและบันทึกไทม์ไลน์ในระบบติดตามสถานะ"
+                        >
+                          <span>จัดการสถานะ</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {displayedIssues.length === 0 && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-4 py-12 text-center text-slate-400"
                     >
                       ไม่พบเรื่องร้องเรียนที่ตรงกับเงื่อนไขการค้นหา
@@ -424,9 +491,7 @@ export default function AdminDashboardPage() {
           </div>
 
           <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-400 border-t border-slate-100 pt-3">
-            <p>
-              ✅ ข้อมูลจริงเชื่อมโยงแบบเรียลไทม์กับระบบติดตามและจัดการสถานะ (Status Tracking & Action Log)
-            </p>
+            <span>แสดง 10 รายการล่าสุด</span>
             <Link
               href="/admin/issues"
               className="text-emerald-700 font-semibold hover:underline flex items-center gap-1"

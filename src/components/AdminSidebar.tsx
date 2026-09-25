@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -11,16 +11,24 @@ import {
   Star,
   LogOut,
   User,
+  Users,
   X,
+  Newspaper,
+  Sprout,
+  Leaf,
 } from "lucide-react";
-import { signOutDemo } from "@/lib/demoAuth";
+import { signOutDemo, getDemoSession } from "@/lib/authService";
+import UniCareLogo from "@/components/UniCareLogo";
+import { useLanguage } from "@/context/LanguageContext";
 
 const adminNavItems = [
   { label: "หน้าหลัก", href: "/admin/dashboard", icon: Home },
-  { label: "จัดการบัญชีผู้ใช้", href: "/admin/users", icon: User },
+  { label: "จัดการบัญชี", href: "/admin/profile", icon: User },
+  { label: "จัดการบัญชีผู้ใช้", href: "/admin/users", icon: Users },
+  { label: "ประกาศข่าวสาร", href: "/admin/announcements", icon: Newspaper },
   { label: "จัดการคำร้อง", href: "/admin/reports", icon: ClipboardList },
   { label: "สถิติและรายงาน", href: "/admin/analytics", icon: BarChart3 },
-  { label: "ผลการประเมิน (CSAT)", href: "/admin/feedback", icon: Star },
+  { label: "ผลการประเมิน (CSAT)", href: "/admin/evaluation", icon: Star },
   {
     label: "ติดตามและจัดการสถานะ",
     href: "/admin/issues",
@@ -36,8 +44,28 @@ const adminNavItems = [
 export default function DashboardSidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useLanguage();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const handleToggle = () => setMobileOpen((prev) => !prev);
+    const handleClose = () => setMobileOpen(false);
+
+    window.addEventListener("unicare-toggle-sidebar", handleToggle);
+    window.addEventListener("resize", handleClose);
+
+    return () => {
+      window.removeEventListener("unicare-toggle-sidebar", handleToggle);
+      window.removeEventListener("resize", handleClose);
+    };
+  }, []);
+
+  // Close mobile drawer on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   function handleLogout() {
     setShowLogoutModal(true);
@@ -59,8 +87,71 @@ export default function DashboardSidebar() {
     }
   }
 
+  const renderNavContent = () => (
+    <>
+      <div className="space-y-6">
+        <Link
+          href="/admin/dashboard"
+          className="group flex items-center space-x-3 border-b border-white/15 pb-4"
+        >
+          <UniCareLogo variant="dark" className="w-10 h-10 transition-transform group-hover:scale-105" />
+
+          <div>
+            <h1 className="text-xl font-extrabold uppercase leading-none tracking-wider text-white">
+              UniCare
+            </h1>
+            <p className="mt-1 text-[10px] font-medium text-emerald-100">
+              {t("มหาวิทยาลัยวลัยลักษณ์")}
+            </p>
+          </div>
+        </Link>
+
+        <nav className="space-y-1.5 text-xs font-medium">
+          {adminNavItems.map((item) => {
+            const Icon = item.icon;
+            const active =
+              pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={`flex items-center space-x-3 rounded-xl px-3.5 py-2.5 transition ${
+                  active
+                    ? "bg-[#c5e8d5] font-bold text-[#0d3b2e] shadow-sm"
+                    : "text-emerald-100 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span>{t(item.label)}</span>
+              </Link>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-4 flex w-full items-center space-x-3 rounded-2xl border border-white/15 bg-white/5 px-4 py-2.5 text-left text-xs font-semibold text-rose-100 shadow-sm transition hover:bg-white/10 hover:text-white cursor-pointer"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            <span>{t("ออกจากระบบ")}</span>
+          </button>
+        </nav>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-black/15 p-3.5 text-center mt-6">
+        <p className="flex items-center justify-center gap-1.5 text-xs font-medium leading-relaxed text-emerald-100">
+          <span>{t("ร่วมสร้างมหาวิทยาลัยน่าอยู่ไปด้วยกัน")}</span>
+          <Leaf className="h-3.5 w-3.5 text-emerald-300" />
+        </p>
+      </div>
+    </>
+  );
+
   return (
     <>
+      {/* Desktop Sidebar */}
       <aside
         className="sticky top-0 z-30 hidden h-screen w-64 flex-shrink-0 flex-col justify-between overflow-y-auto border-r border-[#103e31] p-5 text-white shadow-lg md:flex"
         style={{
@@ -68,65 +159,37 @@ export default function DashboardSidebar() {
             "linear-gradient(180deg, #2b8273 0%, #1c5e52 40%, #15453b 70%, #0f3028 100%)",
         }}
       >
-        <div className="space-y-6">
-          <Link
-            href="/admin/dashboard"
-            className="group flex items-center space-x-3 border-b border-white/15 pb-4"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/20 text-xl font-bold transition-transform group-hover:scale-105">
-              🌱
-            </div>
-
-            <div>
-              <h1 className="text-xl font-extrabold uppercase leading-none tracking-wider text-white">
-                UniCare
-              </h1>
-              <p className="mt-1 text-[10px] font-medium text-emerald-100">
-                มหาวิทยาลัยวลัยลักษณ์
-              </p>
-            </div>
-          </Link>
-
-          <nav className="space-y-1.5 text-xs font-medium">
-            {adminNavItems.map((item) => {
-              const Icon = item.icon;
-              const active =
-                pathname === item.href || pathname.startsWith(`${item.href}/`);
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={active ? "page" : undefined}
-                  className={`flex items-center space-x-3 rounded-xl px-3.5 py-2.5 transition ${
-                    active
-                      ? "bg-[#c5e8d5] font-bold text-[#0d3b2e] shadow-sm"
-                      : "text-emerald-100 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="mt-4 flex w-full items-center space-x-3 rounded-2xl border border-white/15 bg-white/5 px-4 py-2.5 text-left text-xs font-semibold text-rose-100 shadow-sm transition hover:bg-white/10 hover:text-white"
-            >
-              <LogOut className="h-4 w-4 shrink-0" />
-              <span>ออกจากระบบ</span>
-            </button>
-          </nav>
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-black/15 p-3.5 text-center">
-          <p className="text-xs font-medium leading-relaxed text-emerald-100">
-            ร่วมสร้างมหาวิทยาลัยน่าอยู่ไปด้วยกัน 🌱
-          </p>
-        </div>
+        {renderNavContent()}
       </aside>
+
+      {/* Mobile Slide Bar Drawer */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs md:hidden"
+          onClick={() => setMobileOpen(false)}
+        >
+          <aside
+            className="fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col justify-between overflow-y-auto p-5 text-white shadow-2xl transition-transform duration-300"
+            style={{
+              background:
+                "linear-gradient(180deg, #2b8273 0%, #1c5e52 40%, #15453b 70%, #0f3028 100%)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-end pb-2">
+              <button
+                type="button"
+                onClick={() => setMobileOpen(false)}
+                className="rounded-full bg-white/10 p-1.5 text-white/80 hover:bg-white/20 transition"
+                aria-label="ปิดเมนู"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {renderNavContent()}
+          </aside>
+        </div>
+      )}
 
       {showLogoutModal && (
         <div
@@ -161,15 +224,11 @@ export default function DashboardSidebar() {
                 id="logout-modal-title"
                 className="mt-6 text-xl font-extrabold text-slate-800"
               >
-                ยืนยันการออกจากระบบ
+                {t("ยืนยันการออกจากระบบ")}
               </h2>
 
               <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-slate-500">
-                คุณต้องการออกจากระบบ UniCare หรือไม่?
-              </p>
-
-              <p className="mt-2 text-xs text-slate-400">
-                คุณจะต้องเข้าสู่ระบบอีกครั้งเพื่อใช้งานหน้า Admin
+                {t("คุณแน่ใจหรือไม่ว่าต้องการออกจากระบบ UniCare?")}
               </p>
 
               <div className="mt-7 grid grid-cols-2 gap-3">
@@ -177,19 +236,19 @@ export default function DashboardSidebar() {
                   type="button"
                   disabled={isLoggingOut}
                   onClick={closeLogoutModal}
-                  className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
+                  className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50 cursor-pointer"
                 >
-                  ยกเลิก
+                  {t("ยกเลิก")}
                 </button>
 
                 <button
                   type="button"
                   disabled={isLoggingOut}
                   onClick={confirmLogout}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-rose-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex items-center justify-center gap-2 rounded-xl bg-rose-500 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-rose-600 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
                 >
                   <LogOut className="h-4 w-4" />
-                  {isLoggingOut ? "กำลังออก..." : "ออกจากระบบ"}
+                  {isLoggingOut ? t("กำลังออก...") : t("ออกจากระบบ")}
                 </button>
               </div>
             </div>

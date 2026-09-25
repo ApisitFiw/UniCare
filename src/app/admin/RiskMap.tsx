@@ -4,6 +4,16 @@ import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import {
+  MapPin,
+  AlertCircle,
+  CheckCircle2,
+  Palette,
+  AlertTriangle,
+  Clock,
+  Check,
+  X,
+} from "lucide-react";
 
 import {
   type LocationGroupedRiskArea,
@@ -38,7 +48,7 @@ function createPopupContent(area: LocationGroupedRiskArea): string {
           <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
             <div>
               <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 4px;">
-                📍 ${escapeHtml(area.name)}
+                ${escapeHtml(area.name)}
               </h4>
               <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
                 พิกัด: ${area.lat.toFixed(4)}, ${area.lng.toFixed(4)}
@@ -50,8 +60,8 @@ function createPopupContent(area: LocationGroupedRiskArea): string {
           </div>
         </div>
         <div style="padding: 10px; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; font-size: 11px; color: #475569; line-height: 1.5;">
-          ${area.category ? `<div style="font-weight:600; color:#1e293b; margin-bottom:3px;">🏷️ หมวดหมู่: ${escapeHtml(area.category)}</div>` : ""}
-          ✅ ปักหมุดสถานที่เรียบร้อยแล้ว<br/>
+          ${area.category ? `<div style="font-weight:600; color:#1e293b; margin-bottom:3px;">หมวดหมู่: ${escapeHtml(area.category)}</div>` : ""}
+          ปักหมุดสถานที่เรียบร้อยแล้ว<br/>
           เมื่อมีผู้ใช้งานแจ้งปัญหาในสถานที่นี้ ตำแหน่งหมุดเตือนความเสี่ยงจะแสดงที่พิกัดนี้บนแผนที่โดยอัตโนมัติ
         </div>
         <div style="display: flex; gap: 8px; margin-top: 10px; padding-top: 8px; border-top: 1px solid #f1f5f9;">
@@ -60,14 +70,14 @@ function createPopupContent(area: LocationGroupedRiskArea): string {
             class="btn-popup-edit"
             style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 10px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11px; font-weight: 600; color: #1e293b; cursor: pointer;"
           >
-            ✏️ แก้ไขหมุด
+            แก้ไขหมุด
           </button>
           <button
             type="button"
             class="btn-popup-delete"
             style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 6px 10px; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; font-size: 11px; font-weight: 600; color: #e11d48; cursor: pointer;"
           >
-            🗑️ ลบหมุดนี้
+            ลบหมุดนี้
           </button>
         </div>
         <div style="margin-top: 8px; text-align: center;">
@@ -76,7 +86,7 @@ function createPopupContent(area: LocationGroupedRiskArea): string {
             class="btn-goto-issues"
             style="display: inline-flex; align-items: center; justify-content: center; gap: 4px; width: 100%; padding: 7px 10px; background: #0284c7; color: #ffffff; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none; cursor: pointer; box-shadow: 0 1px 2px rgba(2, 132, 199, 0.2);"
           >
-            📋 ไปที่ระบบติดตามและจัดการสถานะ &rarr;
+            ไปที่ระบบติดตามและจัดการสถานะ &rarr;
           </a>
         </div>
       </div>
@@ -139,13 +149,13 @@ function createPopupContent(area: LocationGroupedRiskArea): string {
             </div>
           </div>
           <div style="font-size: 12px; font-weight: 600; color: #1e293b; margin-bottom: 3px;">
-            🏷️ ${escapeHtml(issue.category)}
+            ${escapeHtml(issue.category)}
           </div>
           <div style="font-size: 11px; color: #475569; line-height: 1.45; margin-bottom: 6px;">
             ${escapeHtml(issue.description)}
           </div>
           <div style="font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #f1f5f9; padding-top: 5px;">
-            <span>📅 ${escapeHtml(issue.date)}</span>
+            <span>${escapeHtml(issue.date)}</span>
             <a
               href="/admin/issues?issueId=${encodeURIComponent(issue.id)}"
               class="btn-goto-issues"
@@ -166,7 +176,7 @@ function createPopupContent(area: LocationGroupedRiskArea): string {
         <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
           <div>
             <h4 style="margin: 0; font-size: 14px; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 4px;">
-              📍 ${escapeHtml(area.name)}
+              ${escapeHtml(area.name)}
             </h4>
             <div style="font-size: 10px; color: #64748b; margin-top: 2px;">
               พิกัด: ${area.lat.toFixed(4)}, ${area.lng.toFixed(4)}
@@ -195,14 +205,14 @@ function createPopupContent(area: LocationGroupedRiskArea): string {
             class="btn-popup-edit"
             style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 5px 8px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11px; font-weight: 600; color: #1e293b; cursor: pointer;"
           >
-            ✏️ แก้ไขตำแหน่งหมุด
+            แก้ไขตำแหน่งหมุด
           </button>
           <button
             type="button"
             class="btn-popup-delete"
             style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 5px 8px; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; font-size: 11px; font-weight: 600; color: #e11d48; cursor: pointer;"
           >
-            🗑️ ลบหมุด
+            ลบหมุด
           </button>
         </div>
         <div style="text-align: center;">
@@ -211,7 +221,7 @@ function createPopupContent(area: LocationGroupedRiskArea): string {
             class="btn-goto-issues"
             style="display: inline-flex; align-items: center; justify-content: center; gap: 4px; width: 100%; padding: 7px 10px; background: #1b5e4a; color: #ffffff; border-radius: 6px; font-size: 11.5px; font-weight: 600; text-decoration: none; cursor: pointer; box-shadow: 0 1px 2px rgba(27, 94, 74, 0.2);"
           >
-            📋 ไปที่ระบบติดตามและจัดการสถานะ &rarr;
+            ไปที่ระบบติดตามและจัดการสถานะ &rarr;
           </a>
         </div>
       </div>
@@ -330,7 +340,10 @@ export default function RiskMap({
           ? `<div class="marker-pulse"></div>`
           : "";
 
-      const iconText = area.issueCount > 0 ? (area.issueCount > 1 ? area.issueCount : "⚠️") : "📍";
+      const iconContent =
+        area.issueCount > 0
+          ? `<span style="font-weight: 700; font-size: 13px;">${area.issueCount}</span>`
+          : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>`;
       const pinBgColor = area.issueCount > 0 ? area.highestUrgencyColor : "#0284c7";
       const pinTitle =
         area.issueCount > 0
@@ -343,7 +356,7 @@ export default function RiskMap({
           <div class="risk-pin-wrapper">
             ${pulseHtml}
             <div class="risk-pin" style="background-color: ${pinBgColor};" title="${pinTitle}">
-              ${iconText}
+              ${iconContent}
             </div>
           </div>
         `,
@@ -436,24 +449,25 @@ export default function RiskMap({
           >
             <span className="flex items-center gap-1.5">
               <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-300 animate-ping" />
-              📍 คลิกบนแผนที่ตรงจุดที่ต้องการปักหมุด
+              <MapPin className="w-4 h-4 text-emerald-100" /> คลิกบนแผนที่ตรงจุดที่ต้องการปักหมุด
             </span>
             {onCancelPinning && (
               <button
                 type="button"
                 onClick={onCancelPinning}
+                className="inline-flex items-center gap-1"
                 style={{
                   background: "rgba(255,255,255,0.25)",
                   border: "none",
                   borderRadius: "9999px",
-                  padding: "2px 10px",
+                  padding: "3px 10px",
                   color: "#ffffff",
                   fontSize: "11px",
                   cursor: "pointer",
                   fontWeight: 600,
                 }}
               >
-                ✕ ยกเลิก
+                <X className="w-3 h-3" /> ยกเลิก
               </button>
             )}
           </div>
@@ -475,7 +489,7 @@ export default function RiskMap({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3.5">
           <div className="flex items-center gap-2">
             <span className="flex items-center justify-center w-6 h-6 rounded-lg bg-emerald-100 text-emerald-800 text-xs font-bold">
-              🎨
+              <Palette className="w-3.5 h-3.5" />
             </span>
             <h4 className="text-[13px] font-bold text-slate-800 tracking-tight">
               ระดับความสำคัญของพื้นที่ (ความหมายของสีหมุดบนแผนที่)
@@ -490,7 +504,7 @@ export default function RiskMap({
           {/* เร่งด่วนมาก */}
           <div className="flex items-center gap-3 p-2.5 rounded-xl bg-red-50/90 border border-red-200/90 shadow-2xs">
             <div className="w-8 h-8 rounded-full bg-[#ef4444] text-white flex items-center justify-center text-xs font-bold shadow-xs shrink-0 border-2 border-white ring-2 ring-red-400/40">
-              ⚠️
+              <AlertTriangle className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">
               <div className="text-xs font-bold text-red-950">เร่งด่วนมาก</div>
@@ -501,7 +515,7 @@ export default function RiskMap({
           {/* เร่งด่วน */}
           <div className="flex items-center gap-3 p-2.5 rounded-xl bg-amber-50/90 border border-amber-200/90 shadow-2xs">
             <div className="w-8 h-8 rounded-full bg-[#f59e0b] text-white flex items-center justify-center text-xs font-bold shadow-xs shrink-0 border-2 border-white ring-2 ring-amber-400/40">
-              ⚠️
+              <Clock className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">
               <div className="text-xs font-bold text-amber-950">เร่งด่วน</div>
@@ -512,7 +526,7 @@ export default function RiskMap({
           {/* ปกติ */}
           <div className="flex items-center gap-3 p-2.5 rounded-xl bg-emerald-50/90 border border-emerald-200/90 shadow-2xs">
             <div className="w-8 h-8 rounded-full bg-[#10b981] text-white flex items-center justify-center text-xs font-bold shadow-xs shrink-0 border-2 border-white ring-2 ring-emerald-400/40">
-              ✓
+              <Check className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">
               <div className="text-xs font-bold text-emerald-950">ปกติ</div>
@@ -523,7 +537,7 @@ export default function RiskMap({
           {/* จุดปักหมุด */}
           <div className="flex items-center gap-3 p-2.5 rounded-xl bg-sky-50/90 border border-sky-200/90 shadow-2xs">
             <div className="w-8 h-8 rounded-full bg-[#0284c7] text-white flex items-center justify-center text-xs font-bold shadow-xs shrink-0 border-2 border-white ring-2 ring-sky-400/40">
-              📍
+              <MapPin className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">
               <div className="text-xs font-bold text-sky-950">จุดปักหมุด</div>
