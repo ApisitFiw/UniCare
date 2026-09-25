@@ -23,10 +23,9 @@ import { useLanguage } from "@/context/LanguageContext";
 
 const adminNavItems = [
   { label: "หน้าหลัก", href: "/admin/dashboard", icon: Home },
-  { label: "จัดการบัญชี", href: "/admin/profile", icon: User },
   { label: "จัดการบัญชีผู้ใช้", href: "/admin/users", icon: Users },
-  { label: "ประกาศข่าวสาร", href: "/admin/announcements", icon: Newspaper },
   { label: "จัดการคำร้อง", href: "/admin/reports", icon: ClipboardList },
+  { label: "ประกาศข่าวสาร", href: "/admin/announcements", icon: Newspaper },
   { label: "สถิติและรายงาน", href: "/admin/analytics", icon: BarChart3 },
   { label: "ผลการประเมิน (CSAT)", href: "/admin/evaluation", icon: Star },
   {
