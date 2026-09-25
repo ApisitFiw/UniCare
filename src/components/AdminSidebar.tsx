@@ -11,13 +11,15 @@ import {
   Star,
   LogOut,
   User,
+  Users,
   X,
 } from "lucide-react";
 import { signOutDemo } from "@/lib/demoAuth";
 
 const adminNavItems = [
   { label: "หน้าหลัก", href: "/admin/dashboard", icon: Home },
-  { label: "จัดการบัญชีผู้ใช้", href: "/admin/users", icon: User },
+  { label: "จัดการบัญชี", href: "/admin/profile", icon: User },
+  { label: "จัดการบัญชีผู้ใช้", href: "/admin/users", icon: Users },
   { label: "จัดการคำร้อง", href: "/admin/reports", icon: ClipboardList },
   { label: "สถิติและรายงาน", href: "/admin/analytics", icon: BarChart3 },
   { label: "ผลการประเมิน (CSAT)", href: "/admin/evaluation", icon: Star },
