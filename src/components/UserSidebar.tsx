@@ -43,17 +43,17 @@ const menu = [
   },
   {
     label: "ข่าวสาร / ประกาศ",
-    href: "/user/dashboard?tab=news",
+    href: "/user/dashboard#news",
     icon: Newspaper,
   },
   {
     label: "คำถามที่พบบ่อย",
-    href: "/user/dashboard?tab=faq",
+    href: "/user/help",
     icon: CircleHelp,
   },
   {
     label: "ติดต่อเรา",
-    href: "/user/dashboard?tab=contact",
+    href: "/user/help#contact",
     icon: MessageCircle,
   },
 ];
