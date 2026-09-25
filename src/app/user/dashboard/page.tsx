@@ -258,22 +258,48 @@ export default function UserDashboardPage() {
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-base sm:text-lg font-bold text-slate-800">
-            ข่าวสารและประกาศ
-          </h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {/* ข่าวสารและประกาศ */}
+        <section
+          id="news"
+          className="scroll-mt-24 rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-xl">
+              📰
+            </span>
+
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-slate-800">
+                ข่าวสารและประกาศ
+              </h2>
+
+              <p className="mt-0.5 text-xs text-slate-400">
+                ข่าวสารและกิจกรรมล่าสุดภายในมหาวิทยาลัย
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
             {news.map((item) => (
               <article
                 key={item.title}
-                className="rounded-xl border border-slate-100 bg-slate-50 p-4"
+                className="rounded-xl border border-slate-100 bg-slate-50 p-4 transition hover:border-emerald-200 hover:bg-emerald-50/40"
               >
-                <h3 className="text-xs sm:text-sm font-bold text-slate-800">
-                  {item.icon} {item.title}
-                </h3>
-                <p className="mt-2 text-xs sm:text-sm font-normal text-slate-600">
-                  {item.description}
-                </p>
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-lg shadow-sm">
+                    {item.icon}
+                  </span>
+
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-bold text-slate-800">
+                      {item.title}
+                    </h3>
+
+                    <p className="mt-2 text-xs sm:text-sm leading-6 text-slate-600">
+                      {item.description}
+                    </p>
+                  </div>
+                </div>
               </article>
             ))}
           </div>
