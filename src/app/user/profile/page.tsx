@@ -47,6 +47,9 @@ type Profile = {
   gender: Gender;
   username: string;
 
+  phone: string;
+  birthDate: string;
+
   residenceLocation: ResidenceLocation;
 
   dormitory: string;
@@ -93,6 +96,9 @@ const emptyProfile: Profile = {
   gender: "",
   username: "",
 
+  phone: "",
+  birthDate: "",
+
   residenceLocation: "",
 
   dormitory: "",
@@ -113,21 +119,15 @@ const emptyProfile: Profile = {
 };
 
 function getFullName(profile: Profile) {
-  const prefix =
-    profile.prefix.trim();
-
+  const prefix = profile.prefix.trim();
   const firstName =
     profile.firstName.trim();
-
   const lastName =
     profile.lastName.trim();
 
   return `${prefix}${firstName} ${lastName}`.trim();
 }
 
-/*
- * สร้าง Storage Key จากบัญชีเดียวกับ AccountBar
- */
 function getProfileStorageKey(
   session: SessionData,
 ) {
@@ -146,9 +146,6 @@ function getProfileStorageKey(
   return `${PROFILE_KEY_PREFIX}:${identity}`;
 }
 
-/*
- * แยกชื่อจาก Session เพื่อใช้เป็นข้อมูลเริ่มต้น
- */
 function createProfileFromSession(
   session: SessionData,
 ): Profile {
@@ -165,7 +162,6 @@ function createProfileFromSession(
     )
   ) {
     prefix = "นางสาว";
-
     nameWithoutPrefix =
       displayName
         .slice("นางสาว".length)
@@ -174,7 +170,6 @@ function createProfileFromSession(
     displayName.startsWith("นาย")
   ) {
     prefix = "นาย";
-
     nameWithoutPrefix =
       displayName
         .slice("นาย".length)
@@ -183,7 +178,6 @@ function createProfileFromSession(
     displayName.startsWith("นาง")
   ) {
     prefix = "นาง";
-
     nameWithoutPrefix =
       displayName
         .slice("นาง".length)
@@ -226,9 +220,7 @@ function readStoredProfile(
         key,
       );
 
-    if (!stored) {
-      return null;
-    }
+    if (!stored) return null;
 
     const parsed: unknown =
       JSON.parse(stored);
@@ -249,9 +241,6 @@ function readStoredProfile(
   }
 }
 
-/*
- * อัปเดต Session ที่ AccountBar ใช้
- */
 function updateAccountSession(
   session: SessionData,
   profile: Profile,
@@ -272,9 +261,6 @@ function updateAccountSession(
     JSON.stringify(updatedSession),
   );
 
-  /*
-   * AccountBar เดิมฟัง Event นี้
-   */
   window.dispatchEvent(
     new Event(
       "unicare-profile-updated",
@@ -291,7 +277,10 @@ export default function UserProfilePage() {
   const [draft, setDraft] =
     useState<Profile>(emptyProfile);
 
-  const [currentSession, setCurrentSession] =
+  const [
+    currentSession,
+    setCurrentSession,
+  ] =
     useState<SessionData | null>(
       null,
     );
@@ -325,9 +314,6 @@ export default function UserProfilePage() {
       confirm: false,
     });
 
-  /*
-   * โหลดข้อมูลจากบัญชีเดียวกับ AccountBar
-   */
   useEffect(() => {
     const session =
       getDemoSession() as SessionData | null;
@@ -338,9 +324,6 @@ export default function UserProfilePage() {
       return;
     }
 
-    /*
-     * ป้องกัน Admin เข้าหน้า User Profile
-     */
     if (session.role === "admin") {
       setIsLoading(false);
       router.replace(
@@ -382,7 +365,9 @@ export default function UserProfilePage() {
     profile.lastName
       ? `${profile.firstName.charAt(
           0,
-        )}${profile.lastName.charAt(0)}`
+        )}${profile.lastName.charAt(
+          0,
+        )}`
       : "U";
 
   function startEditing() {
@@ -395,9 +380,6 @@ export default function UserProfilePage() {
     setIsEditing(false);
   }
 
-  /*
-   * บันทึกโปรไฟล์
-   */
   function saveProfile(
     event: FormEvent<HTMLFormElement>,
   ) {
@@ -411,7 +393,6 @@ export default function UserProfilePage() {
         message:
           "กรุณาเข้าสู่ระบบใหม่อีกครั้ง",
       });
-
       return;
     }
 
@@ -433,6 +414,13 @@ export default function UserProfilePage() {
       username: draft.username
         .trim()
         .toLowerCase(),
+
+      phone: draft.phone
+        .replace(/\D/g, "")
+        .slice(0, 10),
+
+      birthDate:
+        draft.birthDate.trim(),
 
       dormitory:
         draft.dormitory.trim(),
@@ -473,7 +461,6 @@ export default function UserProfilePage() {
         message:
           "กรุณากรอกคำนำหน้า ชื่อ และนามสกุลให้ครบ",
       });
-
       return;
     }
 
@@ -487,7 +474,22 @@ export default function UserProfilePage() {
         message:
           "กรุณาระบุชื่อผู้ใช้งาน",
       });
+      return;
+    }
 
+    if (
+      cleanedProfile.phone &&
+      !/^\d{9,10}$/.test(
+        cleanedProfile.phone,
+      )
+    ) {
+      setAlert({
+        type: "warning",
+        title:
+          "เบอร์โทรศัพท์ไม่ถูกต้อง",
+        message:
+          "กรุณากรอกเบอร์โทรศัพท์เป็นตัวเลข 9–10 หลัก",
+      });
       return;
     }
 
@@ -501,7 +503,6 @@ export default function UserProfilePage() {
         message:
           "กรุณาเลือกว่าปัจจุบันพักอยู่ภายในหรือนอกมหาวิทยาลัย",
       });
-
       return;
     }
 
@@ -518,7 +519,6 @@ export default function UserProfilePage() {
         message:
           "กรุณากรอกชื่อหอพักและเลขห้อง",
       });
-
       return;
     }
 
@@ -537,7 +537,6 @@ export default function UserProfilePage() {
         message:
           "รหัสไปรษณีย์ต้องเป็นตัวเลข 5 หลัก",
       });
-
       return;
     }
 
@@ -546,17 +545,13 @@ export default function UserProfilePage() {
         currentSession,
       );
 
-    /*
-     * บันทึกข้อมูลโดยใช้บัญชีเดียวกับ AccountBar
-     */
     window.localStorage.setItem(
       profileKey,
-      JSON.stringify(cleanedProfile),
+      JSON.stringify(
+        cleanedProfile,
+      ),
     );
 
-    /*
-     * อัปเดตชื่อใน AccountBar
-     */
     updateAccountSession(
       currentSession,
       cleanedProfile,
@@ -584,7 +579,7 @@ export default function UserProfilePage() {
       type: "success",
       title: "บันทึกสำเร็จ",
       message:
-        "ข้อมูลบัญชีและข้อมูลที่อยู่ถูกบันทึกเรียบร้อยแล้ว",
+        "ข้อมูลบัญชี เบอร์โทรศัพท์ วันเกิด และข้อมูลที่อยู่ถูกบันทึกเรียบร้อยแล้ว",
     });
   }
 
@@ -604,9 +599,6 @@ export default function UserProfilePage() {
     });
   }
 
-  /*
-   * เปลี่ยนรหัสผ่านในระบบทดลอง
-   */
   function changePassword(
     event: FormEvent<HTMLFormElement>,
   ) {
@@ -623,7 +615,6 @@ export default function UserProfilePage() {
         message:
           "กรุณากรอกรหัสผ่านให้ครบทุกช่อง",
       });
-
       return;
     }
 
@@ -637,7 +628,6 @@ export default function UserProfilePage() {
         message:
           "รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร",
       });
-
       return;
     }
 
@@ -654,7 +644,6 @@ export default function UserProfilePage() {
         message:
           "รหัสผ่านต้องมีตัวอักษรภาษาอังกฤษและตัวเลข",
       });
-
       return;
     }
 
@@ -669,7 +658,6 @@ export default function UserProfilePage() {
         message:
           "รหัสผ่านใหม่ไม่ควรเหมือนรหัสผ่านปัจจุบัน",
       });
-
       return;
     }
 
@@ -684,7 +672,6 @@ export default function UserProfilePage() {
         message:
           "กรุณายืนยันรหัสผ่านใหม่อีกครั้ง",
       });
-
       return;
     }
 
@@ -699,9 +686,6 @@ export default function UserProfilePage() {
     });
   }
 
-  /*
-   * ลบข้อมูลโปรไฟล์
-   */
   function deleteAccount() {
     if (currentSession) {
       const profileKey =
@@ -789,6 +773,7 @@ export default function UserProfilePage() {
             />
 
             <div className="grid md:grid-cols-[260px_minmax(0,1fr)]">
+              {/* ข้อมูลสรุปฝั่งซ้าย */}
               <div className="flex flex-col items-center border-b border-slate-100 bg-slate-50/60 px-6 py-8 text-center md:border-b-0 md:border-r">
                 <span className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-xl font-bold text-emerald-700">
                   {initials}
@@ -806,14 +791,6 @@ export default function UserProfilePage() {
                     : "ยังไม่มีชื่อผู้ใช้งาน"}
                 </p>
 
-                {currentSession?.email && (
-                  <p className="mt-1 break-all text-[11px] text-slate-400">
-                    {
-                      currentSession.email
-                    }
-                  </p>
-                )}
-
                 {profile.nickname && (
                   <p className="mt-2 text-xs text-slate-500">
                     ชื่อเล่น:{" "}
@@ -827,6 +804,7 @@ export default function UserProfilePage() {
                 </span>
               </div>
 
+              {/* แบบฟอร์มฝั่งขวา */}
               <div className="space-y-5 p-5 sm:p-7">
                 <div className="grid gap-4 sm:grid-cols-[150px_minmax(0,1fr)_minmax(0,1fr)]">
                   <SelectField
@@ -920,6 +898,72 @@ export default function UserProfilePage() {
                       ],
                     ]}
                   />
+                </div>
+
+                {/* ข้อมูลติดต่อ */}
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 p-4">
+                  <div className="mb-4">
+                    <h4 className="text-sm font-bold text-emerald-900">
+                      ข้อมูลการติดต่อและข้อมูลส่วนตัว
+                    </h4>
+
+                    <p className="mt-1 text-[11px] text-emerald-700/70">
+                      อีเมลมาจากบัญชีที่เข้าสู่ระบบ
+                      ส่วนเบอร์โทรศัพท์และวันเกิดสามารถแก้ไขได้
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    <ProfileField
+                      label="อีเมล"
+                      value={
+                        currentSession?.email ||
+                        ""
+                      }
+                      disabled
+                      type="email"
+                      onChange={() =>
+                        undefined
+                      }
+                      helper="เชื่อมกับบัญชีที่เข้าสู่ระบบ"
+                    />
+
+                    <ProfileField
+                      label="เบอร์โทรศัพท์ (ไม่บังคับ)"
+                      value={draft.phone}
+                      disabled={!isEditing}
+                      type="tel"
+                      inputMode="numeric"
+                      placeholder="เช่น 0812345678"
+                      maxLength={10}
+                      onChange={(value) =>
+                        setDraft({
+                          ...draft,
+                          phone: value
+                            .replace(
+                              /\D/g,
+                              "",
+                            )
+                            .slice(0, 10),
+                        })
+                      }
+                    />
+
+                    <ProfileField
+                      label="วันเกิด (ไม่บังคับ)"
+                      value={
+                        draft.birthDate
+                      }
+                      disabled={!isEditing}
+                      type="date"
+                      onChange={(value) =>
+                        setDraft({
+                          ...draft,
+                          birthDate: value,
+                        })
+                      }
+                    />
+                  </div>
                 </div>
 
                 <ProfileField
@@ -1040,7 +1084,6 @@ export default function UserProfilePage() {
                     ...draft,
                     anonymousReportDefault:
                       checked,
-
                     showNameOnReport:
                       checked
                         ? false
@@ -1060,9 +1103,7 @@ export default function UserProfilePage() {
               <div className="flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={
-                    cancelEditing
-                  }
+                  onClick={cancelEditing}
                   className="rounded-xl bg-slate-100 px-6 py-3 text-sm font-bold text-slate-600 hover:bg-slate-200"
                 >
                   ยกเลิก
@@ -1160,7 +1201,7 @@ export default function UserProfilePage() {
         </section>
       </main>
 
-      {/* Modal รหัสผ่าน */}
+      {/* Modal เปลี่ยนรหัสผ่าน */}
       {passwordOpen && (
         <Modal
           onClose={
@@ -1386,10 +1427,8 @@ function ResidenceSection({
   function selectInsideCampus() {
     onChange({
       ...draft,
-
       residenceLocation:
         "inside-campus",
-
       addressLine: "",
       subdistrict: "",
       district: "",
@@ -1401,10 +1440,8 @@ function ResidenceSection({
   function selectOutsideCampus() {
     onChange({
       ...draft,
-
       residenceLocation:
         "outside-campus",
-
       dormitory: "",
       building: "",
       floor: "",
@@ -1615,9 +1652,11 @@ function ResidenceSection({
               onChange={(value) =>
                 onChange({
                   ...draft,
-
                   postalCode: value
-                    .replace(/\D/g, "")
+                    .replace(
+                      /\D/g,
+                      "",
+                    )
                     .slice(0, 5),
                 })
               }
@@ -1627,7 +1666,8 @@ function ResidenceSection({
       )}
 
       <p className="text-[10px] leading-5 text-slate-400">
-        ข้อมูลที่พักใช้สำหรับข้อมูลบัญชีเท่านั้น ไม่ใช้แทนตำแหน่งที่เกิดเหตุในคำร้อง
+        ข้อมูลที่พักใช้สำหรับข้อมูลบัญชีเท่านั้น
+        ไม่ใช้แทนตำแหน่งที่เกิดเหตุในคำร้อง
       </p>
     </div>
   );
@@ -1787,6 +1827,10 @@ function ProfileField({
   disabled,
   onChange,
   helper,
+  type = "text",
+  inputMode,
+  placeholder,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -1795,6 +1839,21 @@ function ProfileField({
     value: string,
   ) => void;
   helper?: string;
+  type?:
+    | "text"
+    | "email"
+    | "tel"
+    | "date";
+  inputMode?:
+    | "text"
+    | "numeric"
+    | "decimal"
+    | "tel"
+    | "email"
+    | "url"
+    | "search";
+  placeholder?: string;
+  maxLength?: number;
 }) {
   return (
     <label className="block">
@@ -1803,15 +1862,18 @@ function ProfileField({
       </span>
 
       <input
-        type="text"
+        type={type}
         value={value}
         disabled={disabled}
+        inputMode={inputMode}
+        placeholder={placeholder}
+        maxLength={maxLength}
         onChange={(event) =>
           onChange(
             event.target.value,
           )
         }
-        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50 disabled:text-slate-500"
+        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition placeholder:text-slate-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50 disabled:text-slate-500"
       />
 
       {helper && (

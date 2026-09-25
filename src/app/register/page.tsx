@@ -3,13 +3,15 @@
 import {
   ArrowRight,
   Bell,
+  CalendarDays,
   CheckCircle2,
   Eye,
   EyeOff,
   FileText,
-  Languages,
   Leaf,
   LockKeyhole,
+  Mail,
+  Phone,
   ShieldCheck,
   User,
   UserPlus,
@@ -23,8 +25,12 @@ import {
   useState,
 } from "react";
 
-type Gender = "" | "male" | "female" | "other" | "not-specified";
-type Language = "th" | "en";
+type Gender =
+  | ""
+  | "male"
+  | "female"
+  | "other"
+  | "not-specified";
 
 interface RegisterForm {
   prefix: string;
@@ -32,27 +38,38 @@ interface RegisterForm {
   lastName: string;
   nickname: string;
   gender: Gender;
+
+  email: string;
+  phone: string;
+  birthDate: string;
+
   username: string;
   password: string;
   confirmPassword: string;
-  language: Language;
 }
 
 interface DemoRegisteredUser {
   id: string;
+
   prefix: string;
   firstName: string;
   lastName: string;
   nickname?: string;
   gender?: Gender;
+
+  email: string;
+  phone?: string;
+  birthDate?: string;
+
   username: string;
   password: string;
-  language: Language;
   role: "user";
+
   notifyReportStatus: boolean;
   notifyNews: boolean;
   showNameOnReport: boolean;
   anonymousReportDefault: boolean;
+
   acceptedTerms: boolean;
   acceptedPrivacy: boolean;
   createdAt: string;
@@ -64,10 +81,14 @@ const initialForm: RegisterForm = {
   lastName: "",
   nickname: "",
   gender: "",
+
+  email: "",
+  phone: "",
+  birthDate: "",
+
   username: "",
   password: "",
   confirmPassword: "",
-  language: "th",
 };
 
 const inputClassName =
@@ -76,22 +97,63 @@ const inputClassName =
 export default function RegisterPage() {
   const router = useRouter();
 
-  const [form, setForm] = useState<RegisterForm>(initialForm);
+  const [form, setForm] =
+    useState<RegisterForm>(
+      initialForm,
+    );
 
-  const [notifyReportStatus, setNotifyReportStatus] = useState(true);
-  const [notifyNews, setNotifyNews] = useState(false);
-  const [showNameOnReport, setShowNameOnReport] = useState(true);
-  const [anonymousReportDefault, setAnonymousReportDefault] = useState(false);
+  const [
+    notifyReportStatus,
+    setNotifyReportStatus,
+  ] = useState(true);
 
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
+  const [
+    notifyNews,
+    setNotifyNews,
+  ] = useState(false);
 
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [
+    showNameOnReport,
+    setShowNameOnReport,
+  ] = useState(true);
 
-  const [error, setError] = useState("");
-  const [registerSuccess, setRegisterSuccess] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [
+    anonymousReportDefault,
+    setAnonymousReportDefault,
+  ] = useState(false);
+
+  const [
+    acceptedTerms,
+    setAcceptedTerms,
+  ] = useState(false);
+
+  const [
+    acceptedPrivacy,
+    setAcceptedPrivacy,
+  ] = useState(false);
+
+  const [
+    showPassword,
+    setShowPassword,
+  ] = useState(false);
+
+  const [
+    showConfirmPassword,
+    setShowConfirmPassword,
+  ] = useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  const [
+    registerSuccess,
+    setRegisterSuccess,
+  ] = useState(false);
+
+  const [
+    isSubmitting,
+    setIsSubmitting,
+  ] = useState(false);
 
   useEffect(() => {
     if (anonymousReportDefault) {
@@ -99,7 +161,9 @@ export default function RegisterPage() {
     }
   }, [anonymousReportDefault]);
 
-  function updateForm<K extends keyof RegisterForm>(
+  function updateForm<
+    K extends keyof RegisterForm,
+  >(
     field: K,
     value: RegisterForm[K],
   ) {
@@ -114,7 +178,19 @@ export default function RegisterPage() {
   }
 
   function validateForm() {
-    const username = form.username.trim();
+    const email =
+      form.email
+        .trim()
+        .toLowerCase();
+
+    const phone =
+      form.phone.replace(
+        /\D/g,
+        "",
+      );
+
+    const username =
+      form.username.trim();
 
     if (!form.prefix) {
       return "กรุณาเลือกคำนำหน้าชื่อ";
@@ -128,6 +204,25 @@ export default function RegisterPage() {
       return "กรุณากรอกนามสกุล";
     }
 
+    if (!email) {
+      return "กรุณากรอกอีเมล";
+    }
+
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        email,
+      )
+    ) {
+      return "รูปแบบอีเมลไม่ถูกต้อง";
+    }
+
+    if (
+      phone &&
+      !/^\d{9,10}$/.test(phone)
+    ) {
+      return "เบอร์โทรศัพท์ต้องเป็นตัวเลข 9–10 หลัก";
+    }
+
     if (!username) {
       return "กรุณากรอกชื่อผู้ใช้งาน";
     }
@@ -136,7 +231,11 @@ export default function RegisterPage() {
       return "ชื่อผู้ใช้งานต้องมีอย่างน้อย 4 ตัวอักษร";
     }
 
-    if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
+    if (
+      !/^[a-zA-Z0-9._-]+$/.test(
+        username,
+      )
+    ) {
       return "ชื่อผู้ใช้งานใช้ได้เฉพาะภาษาอังกฤษ ตัวเลข จุด ขีดกลาง และขีดล่าง";
     }
 
@@ -144,19 +243,30 @@ export default function RegisterPage() {
       return "กรุณากรอกรหัสผ่าน";
     }
 
-    if (form.password.length < 8) {
+    if (
+      form.password.length < 8
+    ) {
       return "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร";
     }
 
-    if (!/[A-Za-z]/.test(form.password)) {
+    if (
+      !/[A-Za-z]/.test(
+        form.password,
+      )
+    ) {
       return "รหัสผ่านต้องมีตัวอักษรภาษาอังกฤษอย่างน้อย 1 ตัว";
     }
 
-    if (!/[0-9]/.test(form.password)) {
+    if (
+      !/[0-9]/.test(form.password)
+    ) {
       return "รหัสผ่านต้องมีตัวเลขอย่างน้อย 1 ตัว";
     }
 
-    if (form.password !== form.confirmPassword) {
+    if (
+      form.password !==
+      form.confirmPassword
+    ) {
       return "รหัสผ่านและการยืนยันรหัสผ่านไม่ตรงกัน";
     }
 
@@ -173,21 +283,27 @@ export default function RegisterPage() {
 
   function resetForm() {
     setForm(initialForm);
+
     setNotifyReportStatus(true);
     setNotifyNews(false);
     setShowNameOnReport(true);
     setAnonymousReportDefault(false);
+
     setAcceptedTerms(false);
     setAcceptedPrivacy(false);
+
     setShowPassword(false);
     setShowConfirmPassword(false);
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
     setError("");
 
-    const validationError = validateForm();
+    const validationError =
+      validateForm();
 
     if (validationError) {
       setError(validationError);
@@ -197,52 +313,178 @@ export default function RegisterPage() {
     setIsSubmitting(true);
 
     try {
-      const storedUsers = localStorage.getItem("unicare-demo-users");
+      const storedUsers =
+        localStorage.getItem(
+          "unicare-demo-users",
+        );
 
-      let users: DemoRegisteredUser[] = [];
+      let users: DemoRegisteredUser[] =
+        [];
 
       if (storedUsers) {
         try {
-          users = JSON.parse(storedUsers);
+          const parsed =
+            JSON.parse(storedUsers);
+
+          users = Array.isArray(parsed)
+            ? parsed
+            : [];
         } catch {
           users = [];
         }
       }
 
-      const normalizedUsername = form.username.trim().toLowerCase();
+      const normalizedUsername =
+        form.username
+          .trim()
+          .toLowerCase();
 
-      const usernameAlreadyExists = users.some(
-        (user) => user.username.toLowerCase() === normalizedUsername,
-      );
+      const normalizedEmail =
+        form.email
+          .trim()
+          .toLowerCase();
+
+      const cleanedPhone =
+        form.phone
+          .replace(/\D/g, "")
+          .slice(0, 10);
+
+      const usernameAlreadyExists =
+        users.some(
+          (user) =>
+            user.username.toLowerCase() ===
+            normalizedUsername,
+        );
 
       if (usernameAlreadyExists) {
-        setError("ชื่อผู้ใช้งานนี้ถูกใช้งานแล้ว กรุณาเลือกชื่ออื่น");
+        setError(
+          "ชื่อผู้ใช้งานนี้ถูกใช้งานแล้ว กรุณาเลือกชื่ออื่น",
+        );
         return;
       }
 
-      const newUser: DemoRegisteredUser = {
-        id: crypto.randomUUID(),
+      const emailAlreadyExists =
+        users.some(
+          (user) =>
+            user.email
+              ?.trim()
+              .toLowerCase() ===
+            normalizedEmail,
+        );
+
+      if (emailAlreadyExists) {
+        setError(
+          "อีเมลนี้ถูกใช้ลงทะเบียนแล้ว กรุณาใช้อีเมลอื่น",
+        );
+        return;
+      }
+
+      const newUser: DemoRegisteredUser =
+        {
+          id: crypto.randomUUID(),
+
+          prefix: form.prefix,
+          firstName:
+            form.firstName.trim(),
+          lastName:
+            form.lastName.trim(),
+
+          nickname:
+            form.nickname.trim() ||
+            undefined,
+
+          gender:
+            form.gender ||
+            undefined,
+
+          email: normalizedEmail,
+
+          phone:
+            cleanedPhone ||
+            undefined,
+
+          birthDate:
+            form.birthDate ||
+            undefined,
+
+          username:
+            normalizedUsername,
+
+          password:
+            form.password,
+
+          role: "user",
+
+          notifyReportStatus,
+          notifyNews,
+          showNameOnReport,
+          anonymousReportDefault,
+
+          acceptedTerms,
+          acceptedPrivacy,
+
+          createdAt:
+            new Date().toISOString(),
+        };
+
+      /*
+       * บันทึกบัญชีสำหรับระบบ Login
+       */
+      localStorage.setItem(
+        "unicare-demo-users",
+        JSON.stringify([
+          ...users,
+          newUser,
+        ]),
+      );
+
+      /*
+       * สร้างข้อมูลเริ่มต้นสำหรับหน้า Profile
+       * Storage Key ตรงกับหน้า /user/profile
+       */
+      const profileStorageKey =
+        `unicare_demo_user_profile:${normalizedEmail}`;
+
+      const profileData = {
         prefix: form.prefix,
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        nickname: form.nickname.trim() || undefined,
-        gender: form.gender || undefined,
-        username: normalizedUsername,
-        password: form.password,
-        language: form.language,
-        role: "user",
+        firstName:
+          form.firstName.trim(),
+        lastName:
+          form.lastName.trim(),
+        nickname:
+          form.nickname.trim(),
+        gender: form.gender,
+        username:
+          normalizedUsername,
+
+        phone: cleanedPhone,
+        birthDate:
+          form.birthDate,
+
+        residenceLocation: "",
+
+        dormitory: "",
+        building: "",
+        floor: "",
+        roomNumber: "",
+
+        addressLine: "",
+        subdistrict: "",
+        district: "",
+        province: "",
+        postalCode: "",
+
         notifyReportStatus,
         notifyNews,
         showNameOnReport,
         anonymousReportDefault,
-        acceptedTerms,
-        acceptedPrivacy,
-        createdAt: new Date().toISOString(),
       };
 
       localStorage.setItem(
-        "unicare-demo-users",
-        JSON.stringify([...users, newUser]),
+        profileStorageKey,
+        JSON.stringify(
+          profileData,
+        ),
       );
 
       resetForm();
@@ -252,7 +494,9 @@ export default function RegisterPage() {
         router.replace("/login");
       }, 1800);
     } catch {
-      setError("ไม่สามารถสร้างบัญชีได้ กรุณาลองใหม่อีกครั้ง");
+      setError(
+        "ไม่สามารถสร้างบัญชีได้ กรุณาลองใหม่อีกครั้ง",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -262,12 +506,11 @@ export default function RegisterPage() {
     <main className="min-h-screen bg-slate-100 px-4 py-6 sm:px-6 lg:flex lg:items-center lg:justify-center lg:py-10">
       <section className="mx-auto grid w-full max-w-7xl overflow-hidden rounded-[30px] bg-white shadow-[0_25px_80px_rgba(15,74,62,0.16)] lg:grid-cols-[0.85fr_1.15fr]">
         {/* ด้านซ้าย */}
-        <aside className="relative hidden min-h-[850px] overflow-hidden bg-gradient-to-br from-[#12836f] via-[#08705f] to-[#04493f] p-10 text-white lg:flex lg:flex-col">
-          {/* พื้นหลังตกแต่ง */}
+        <aside className="relative hidden min-h-[900px] overflow-hidden bg-gradient-to-br from-[#12836f] via-[#08705f] to-[#04493f] p-10 text-white lg:flex lg:flex-col">
           <div className="absolute -left-32 top-48 h-80 w-80 rounded-full bg-emerald-300/10" />
+
           <div className="absolute -bottom-40 -right-28 h-[440px] w-[440px] rounded-full bg-emerald-950/25" />
 
-          {/* โลโก้ */}
           <Link
             href="/"
             className="relative z-10 flex w-fit items-center gap-3"
@@ -287,7 +530,6 @@ export default function RegisterPage() {
             </span>
           </Link>
 
-          {/* เนื้อหาฝั่งซ้าย */}
           <div className="relative z-10 mt-8">
             <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-semibold text-emerald-50 ring-1 ring-white/10">
               <UserPlus className="h-3.5 w-3.5" />
@@ -301,25 +543,32 @@ export default function RegisterPage() {
             </h1>
 
             <p className="mt-4 max-w-md text-sm leading-7 text-emerald-50/85">
-              สร้างบัญชีสำหรับแจ้งปัญหา ติดตามความคืบหน้า
+              สร้างบัญชีสำหรับแจ้งปัญหา
+              ติดตามความคืบหน้า
               รับข่าวสารและร่วมดูแลสภาพแวดล้อมภายในมหาวิทยาลัย
             </p>
 
             <div className="mt-7 space-y-3">
               <FeatureItem
-                icon={<FileText className="h-4 w-4" />}
+                icon={
+                  <FileText className="h-4 w-4" />
+                }
                 title="แจ้งและติดตามปัญหา"
                 description="ตรวจสอบสถานะและประวัติคำร้องของคุณ"
               />
 
               <FeatureItem
-                icon={<Bell className="h-4 w-4" />}
+                icon={
+                  <Bell className="h-4 w-4" />
+                }
                 title="รับการแจ้งเตือน"
                 description="รับข่าวสารเมื่อสถานะคำร้องมีการเปลี่ยนแปลง"
               />
 
               <FeatureItem
-                icon={<ShieldCheck className="h-4 w-4" />}
+                icon={
+                  <ShieldCheck className="h-4 w-4" />
+                }
                 title="ควบคุมความเป็นส่วนตัว"
                 description="เลือกแสดงชื่อหรือแจ้งปัญหาแบบไม่เปิดเผยชื่อ"
               />
@@ -327,23 +576,24 @@ export default function RegisterPage() {
           </div>
 
           <p className="relative z-10 mt-auto pt-8 text-[10px] text-emerald-100/70">
-            © 2026 UniCare · Walailak University
+            © 2026 UniCare ·
+            Walailak University
           </p>
         </aside>
 
         {/* ด้านขวา */}
         <section className="px-5 py-8 sm:px-10 lg:px-14 lg:py-10">
           <div className="mx-auto w-full max-w-2xl">
-            {/* โลโก้มือถือ */}
             <div className="mb-7 flex items-center gap-2 text-[#08705f] lg:hidden">
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-50">
                 <Leaf className="h-5 w-5" />
               </span>
 
-              <span className="font-extrabold">UNICARE</span>
+              <span className="font-extrabold">
+                UNICARE
+              </span>
             </div>
 
-            {/* ส่วนหัวและลิงก์กลับหน้า Login */}
             <div className="flex items-start justify-between gap-5">
               <div>
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
@@ -355,7 +605,8 @@ export default function RegisterPage() {
                 </h2>
 
                 <p className="mt-1 text-xs leading-5 text-slate-400">
-                  กรอกข้อมูลและตั้งค่าบัญชีสำหรับเข้าใช้งานระบบ UNICARE
+                  กรอกข้อมูลและตั้งค่าบัญชีสำหรับเข้าใช้งานระบบ
+                  UNICARE
                 </p>
               </div>
 
@@ -374,13 +625,13 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {/* ลิงก์ Login บนมือถือ */}
             <div className="mt-3 sm:hidden">
               <Link
                 href="/login"
                 className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:underline"
               >
-                มีบัญชีอยู่แล้ว? กลับเข้าสู่ระบบ
+                มีบัญชีอยู่แล้ว?
+                กลับเข้าสู่ระบบ
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
@@ -390,7 +641,10 @@ export default function RegisterPage() {
                 <CheckCircle2 className="h-6 w-6 shrink-0" />
 
                 <div>
-                  <p className="text-sm font-bold">สร้างบัญชีสำเร็จ</p>
+                  <p className="text-sm font-bold">
+                    สร้างบัญชีสำเร็จ
+                  </p>
+
                   <p className="mt-0.5 text-xs">
                     กำลังนำคุณไปยังหน้าเข้าสู่ระบบ...
                   </p>
@@ -398,85 +652,246 @@ export default function RegisterPage() {
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="mt-7 space-y-7">
+            <form
+              onSubmit={handleSubmit}
+              className="mt-7 space-y-7"
+            >
               {/* ข้อมูลผู้ใช้งาน */}
               <FormSection
                 number="1"
                 title="ข้อมูลผู้ใช้งาน"
-                description="ข้อมูลสำหรับแสดงในบัญชีและคำร้องของคุณ"
+                description="ข้อมูลส่วนตัวสำหรับแสดงในบัญชีและคำร้อง"
               >
                 <div className="grid gap-4 sm:grid-cols-[0.7fr_1.15fr_1.15fr]">
-                  <FormLabel label="คำนำหน้าชื่อ" required>
+                  <FormLabel
+                    label="คำนำหน้าชื่อ"
+                    required
+                  >
                     <select
                       required
                       value={form.prefix}
                       onChange={(event) =>
-                        updateForm("prefix", event.target.value)
+                        updateForm(
+                          "prefix",
+                          event.target.value,
+                        )
                       }
-                      className={inputClassName}
+                      className={
+                        inputClassName
+                      }
                     >
-                      <option value="">เลือก</option>
-                      <option value="นาย">นาย</option>
-                      <option value="นาง">นาง</option>
-                      <option value="นางสาว">นางสาว</option>
-                      <option value="อื่น ๆ">อื่น ๆ</option>
+                      <option value="">
+                        เลือก
+                      </option>
+
+                      <option value="นาย">
+                        นาย
+                      </option>
+
+                      <option value="นาง">
+                        นาง
+                      </option>
+
+                      <option value="นางสาว">
+                        นางสาว
+                      </option>
+
+                      <option value="อื่น ๆ">
+                        อื่น ๆ
+                      </option>
                     </select>
                   </FormLabel>
 
-                  <FormLabel label="ชื่อ" required>
+                  <FormLabel
+                    label="ชื่อ"
+                    required
+                  >
                     <input
                       type="text"
                       required
-                      value={form.firstName}
+                      value={
+                        form.firstName
+                      }
                       onChange={(event) =>
-                        updateForm("firstName", event.target.value)
+                        updateForm(
+                          "firstName",
+                          event.target.value,
+                        )
                       }
                       placeholder="กรอกชื่อ"
-                      className={inputClassName}
+                      className={
+                        inputClassName
+                      }
                     />
                   </FormLabel>
 
-                  <FormLabel label="นามสกุล" required>
+                  <FormLabel
+                    label="นามสกุล"
+                    required
+                  >
                     <input
                       type="text"
                       required
-                      value={form.lastName}
+                      value={
+                        form.lastName
+                      }
                       onChange={(event) =>
-                        updateForm("lastName", event.target.value)
+                        updateForm(
+                          "lastName",
+                          event.target.value,
+                        )
                       }
                       placeholder="กรอกนามสกุล"
-                      className={inputClassName}
+                      className={
+                        inputClassName
+                      }
                     />
                   </FormLabel>
                 </div>
 
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <FormLabel label="ชื่อเล่น" optional>
+                  <FormLabel
+                    label="ชื่อเล่น"
+                    optional
+                  >
                     <input
                       type="text"
-                      value={form.nickname}
+                      value={
+                        form.nickname
+                      }
                       onChange={(event) =>
-                        updateForm("nickname", event.target.value)
+                        updateForm(
+                          "nickname",
+                          event.target.value,
+                        )
                       }
                       placeholder="กรอกชื่อเล่น"
-                      className={inputClassName}
+                      className={
+                        inputClassName
+                      }
                     />
                   </FormLabel>
 
-                  <FormLabel label="เพศ" optional>
+                  <FormLabel
+                    label="เพศ"
+                    optional
+                  >
                     <select
                       value={form.gender}
                       onChange={(event) =>
-                        updateForm("gender", event.target.value as Gender)
+                        updateForm(
+                          "gender",
+                          event.target
+                            .value as Gender,
+                        )
                       }
-                      className={inputClassName}
+                      className={
+                        inputClassName
+                      }
                     >
-                      <option value="">เลือกเพศ</option>
-                      <option value="male">ชาย</option>
-                      <option value="female">หญิง</option>
-                      <option value="other">อื่น ๆ</option>
-                      <option value="not-specified">ไม่ต้องการระบุ</option>
+                      <option value="">
+                        ไม่ระบุ
+                      </option>
+
+                      <option value="male">
+                        ชาย
+                      </option>
+
+                      <option value="female">
+                        หญิง
+                      </option>
+
+                      <option value="other">
+                        อื่น ๆ
+                      </option>
+
+                      <option value="not-specified">
+                        ไม่ต้องการระบุ
+                      </option>
                     </select>
+                  </FormLabel>
+                </div>
+
+                <div className="mt-4">
+                  <FormLabel
+                    label="อีเมล"
+                    required
+                  >
+                    <div className="relative">
+                      <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+                      <input
+                        type="email"
+                        required
+                        autoComplete="email"
+                        value={form.email}
+                        onChange={(event) =>
+                          updateForm(
+                            "email",
+                            event.target.value,
+                          )
+                        }
+                        placeholder="example@email.com"
+                        className={`${inputClassName} pl-10`}
+                      />
+                    </div>
+                  </FormLabel>
+                </div>
+
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <FormLabel
+                    label="เบอร์โทรศัพท์"
+                    optional
+                  >
+                    <div className="relative">
+                      <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        maxLength={10}
+                        value={form.phone}
+                        onChange={(event) =>
+                          updateForm(
+                            "phone",
+                            event.target.value
+                              .replace(
+                                /\D/g,
+                                "",
+                              )
+                              .slice(
+                                0,
+                                10,
+                              ),
+                          )
+                        }
+                        placeholder="เช่น 0812345678"
+                        className={`${inputClassName} pl-10`}
+                      />
+                    </div>
+                  </FormLabel>
+
+                  <FormLabel
+                    label="วันเกิด"
+                    optional
+                  >
+                    <div className="relative">
+                      <CalendarDays className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+
+                      <input
+                        type="date"
+                        value={
+                          form.birthDate
+                        }
+                        onChange={(event) =>
+                          updateForm(
+                            "birthDate",
+                            event.target.value,
+                          )
+                        }
+                        className={`${inputClassName} pl-10`}
+                      />
+                    </div>
                   </FormLabel>
                 </div>
               </FormSection>
@@ -485,9 +900,12 @@ export default function RegisterPage() {
               <FormSection
                 number="2"
                 title="ข้อมูลบัญชี"
-                description="ใช้สำหรับเข้าสู่ระบบ UNICARE"
+                description="ชื่อผู้ใช้งานและรหัสผ่านสำหรับเข้าสู่ระบบ"
               >
-                <FormLabel label="ชื่อผู้ใช้งาน" required>
+                <FormLabel
+                  label="ชื่อผู้ใช้งาน"
+                  required
+                >
                   <div className="relative">
                     <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
 
@@ -497,7 +915,10 @@ export default function RegisterPage() {
                       autoComplete="username"
                       value={form.username}
                       onChange={(event) =>
-                        updateForm("username", event.target.value)
+                        updateForm(
+                          "username",
+                          event.target.value,
+                        )
                       }
                       placeholder="ตั้งชื่อผู้ใช้งานอย่างน้อย 4 ตัวอักษร"
                       className={`${inputClassName} pl-10`}
@@ -506,55 +927,66 @@ export default function RegisterPage() {
                 </FormLabel>
 
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <FormLabel label="รหัสผ่าน" required>
+                  <FormLabel
+                    label="รหัสผ่าน"
+                    required
+                  >
                     <PasswordInput
-                      value={form.password}
-                      visible={showPassword}
+                      value={
+                        form.password
+                      }
+                      visible={
+                        showPassword
+                      }
                       placeholder="อย่างน้อย 8 ตัวอักษร"
-                      onChange={(value) => updateForm("password", value)}
+                      onChange={(value) =>
+                        updateForm(
+                          "password",
+                          value,
+                        )
+                      }
                       onToggle={() =>
-                        setShowPassword((previous) => !previous)
+                        setShowPassword(
+                          (previous) =>
+                            !previous,
+                        )
                       }
                     />
                   </FormLabel>
 
-                  <FormLabel label="ยืนยันรหัสผ่าน" required>
+                  <FormLabel
+                    label="ยืนยันรหัสผ่าน"
+                    required
+                  >
                     <PasswordInput
-                      value={form.confirmPassword}
-                      visible={showConfirmPassword}
+                      value={
+                        form.confirmPassword
+                      }
+                      visible={
+                        showConfirmPassword
+                      }
                       placeholder="กรอกรหัสผ่านอีกครั้ง"
                       onChange={(value) =>
-                        updateForm("confirmPassword", value)
+                        updateForm(
+                          "confirmPassword",
+                          value,
+                        )
                       }
                       onToggle={() =>
-                        setShowConfirmPassword((previous) => !previous)
+                        setShowConfirmPassword(
+                          (previous) =>
+                            !previous,
+                        )
                       }
                     />
                   </FormLabel>
                 </div>
 
                 <p className="mt-2 text-[10px] leading-5 text-slate-400">
-                  รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร
+                  รหัสผ่านต้องมีอย่างน้อย 8
+                  ตัวอักษร
                   และประกอบด้วยตัวอักษรภาษาอังกฤษกับตัวเลข
                 </p>
-
-                <div className="mt-4">
-                  <FormLabel label="ภาษาที่ต้องการใช้งาน">
-                    <div className="grid grid-cols-2 gap-3">
-                      <LanguageButton
-                        active={form.language === "th"}
-                        label="ภาษาไทย"
-                        onClick={() => updateForm("language", "th")}
-                      />
-
-                      <LanguageButton
-                        active={form.language === "en"}
-                        label="English"
-                        onClick={() => updateForm("language", "en")}
-                      />
-                    </div>
-                  </FormLabel>
-                </div>
               </FormSection>
 
               {/* การตั้งค่า */}
@@ -567,30 +999,48 @@ export default function RegisterPage() {
                   <SettingSwitch
                     title="แจ้งเตือนเมื่อสถานะคำร้องเปลี่ยนแปลง"
                     description="รับแจ้งเตือนเมื่อเจ้าหน้าที่รับเรื่องหรืออัปเดตสถานะ"
-                    checked={notifyReportStatus}
-                    onChange={setNotifyReportStatus}
+                    checked={
+                      notifyReportStatus
+                    }
+                    onChange={
+                      setNotifyReportStatus
+                    }
                   />
 
                   <SettingSwitch
                     title="รับข่าวสารและประกาศ"
                     description="รับข่าวสารเกี่ยวกับมหาวิทยาลัยและสิ่งแวดล้อม"
-                    checked={notifyNews}
-                    onChange={setNotifyNews}
+                    checked={
+                      notifyNews
+                    }
+                    onChange={
+                      setNotifyNews
+                    }
                   />
 
                   <SettingSwitch
                     title="แสดงชื่อของฉันในคำร้อง"
                     description="เจ้าหน้าที่สามารถเห็นชื่อเจ้าของคำร้องได้"
-                    checked={showNameOnReport}
-                    disabled={anonymousReportDefault}
-                    onChange={setShowNameOnReport}
+                    checked={
+                      showNameOnReport
+                    }
+                    disabled={
+                      anonymousReportDefault
+                    }
+                    onChange={
+                      setShowNameOnReport
+                    }
                   />
 
                   <SettingSwitch
                     title="แจ้งปัญหาแบบไม่เปิดเผยชื่อเป็นค่าเริ่มต้น"
                     description="ซ่อนชื่อของคุณเมื่อสร้างคำร้องใหม่"
-                    checked={anonymousReportDefault}
-                    onChange={setAnonymousReportDefault}
+                    checked={
+                      anonymousReportDefault
+                    }
+                    onChange={
+                      setAnonymousReportDefault
+                    }
                   />
                 </div>
               </FormSection>
@@ -603,8 +1053,12 @@ export default function RegisterPage() {
               >
                 <div className="space-y-3">
                   <ConsentCheckbox
-                    checked={acceptedTerms}
-                    onChange={setAcceptedTerms}
+                    checked={
+                      acceptedTerms
+                    }
+                    onChange={
+                      setAcceptedTerms
+                    }
                   >
                     ฉันยอมรับ{" "}
                     <Link
@@ -617,8 +1071,12 @@ export default function RegisterPage() {
                   </ConsentCheckbox>
 
                   <ConsentCheckbox
-                    checked={acceptedPrivacy}
-                    onChange={setAcceptedPrivacy}
+                    checked={
+                      acceptedPrivacy
+                    }
+                    onChange={
+                      setAcceptedPrivacy
+                    }
                   >
                     ฉันยอมรับ{" "}
                     <Link
@@ -643,7 +1101,10 @@ export default function RegisterPage() {
 
               <button
                 type="submit"
-                disabled={isSubmitting || registerSuccess}
+                disabled={
+                  isSubmitting ||
+                  registerSuccess
+                }
                 className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#119c78] to-[#08705f] text-sm font-bold text-white shadow-md shadow-emerald-900/10 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {registerSuccess ? (
@@ -682,7 +1143,10 @@ function FeatureItem({
       </span>
 
       <span>
-        <span className="block text-xs font-bold">{title}</span>
+        <span className="block text-xs font-bold">
+          {title}
+        </span>
+
         <span className="mt-1 block text-[10px] leading-4 text-emerald-100/75">
           {description}
         </span>
@@ -710,7 +1174,10 @@ function FormSection({
         </span>
 
         <div>
-          <h3 className="text-sm font-extrabold text-slate-800">{title}</h3>
+          <h3 className="text-sm font-extrabold text-slate-800">
+            {title}
+          </h3>
+
           <p className="mt-0.5 text-[10px] leading-4 text-slate-400">
             {description}
           </p>
@@ -738,10 +1205,16 @@ function FormLabel({
       <span className="mb-1.5 block text-xs font-semibold text-slate-700">
         {label}
 
-        {required && <span className="ml-1 text-rose-500">*</span>}
+        {required && (
+          <span className="ml-1 text-rose-500">
+            *
+          </span>
+        )}
 
         {optional && (
-          <span className="ml-1 font-normal text-slate-400">(ไม่บังคับ)</span>
+          <span className="ml-1 font-normal text-slate-400">
+            (ไม่บังคับ)
+          </span>
         )}
       </span>
 
@@ -760,7 +1233,9 @@ function PasswordInput({
   value: string;
   visible: boolean;
   placeholder: string;
-  onChange: (value: string) => void;
+  onChange: (
+    value: string,
+  ) => void;
   onToggle: () => void;
 }) {
   return (
@@ -768,11 +1243,19 @@ function PasswordInput({
       <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
 
       <input
-        type={visible ? "text" : "password"}
+        type={
+          visible
+            ? "text"
+            : "password"
+        }
         required
         autoComplete="new-password"
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) =>
+          onChange(
+            event.target.value,
+          )
+        }
         placeholder={placeholder}
         className={`${inputClassName} pl-10 pr-10`}
       />
@@ -780,7 +1263,11 @@ function PasswordInput({
       <button
         type="button"
         onClick={onToggle}
-        aria-label={visible ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
+        aria-label={
+          visible
+            ? "ซ่อนรหัสผ่าน"
+            : "แสดงรหัสผ่าน"
+        }
         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-emerald-700"
       >
         {visible ? (
@@ -790,31 +1277,6 @@ function PasswordInput({
         )}
       </button>
     </div>
-  );
-}
-
-function LanguageButton({
-  active,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex h-11 items-center justify-center gap-2 rounded-xl border text-xs font-bold transition ${
-        active
-          ? "border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-100"
-          : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-      }`}
-    >
-      <Languages className="h-4 w-4" />
-      {label}
-    </button>
   );
 }
 
@@ -829,7 +1291,9 @@ function SettingSwitch({
   description: string;
   checked: boolean;
   disabled?: boolean;
-  onChange: (checked: boolean) => void;
+  onChange: (
+    checked: boolean,
+  ) => void;
 }) {
   return (
     <label
@@ -840,7 +1304,10 @@ function SettingSwitch({
       }`}
     >
       <span>
-        <span className="block text-xs font-bold text-slate-700">{title}</span>
+        <span className="block text-xs font-bold text-slate-700">
+          {title}
+        </span>
+
         <span className="mt-1 block text-[10px] leading-4 text-slate-400">
           {description}
         </span>
@@ -851,7 +1318,11 @@ function SettingSwitch({
           type="checkbox"
           checked={checked}
           disabled={disabled}
-          onChange={(event) => onChange(event.target.checked)}
+          onChange={(event) =>
+            onChange(
+              event.target.checked,
+            )
+          }
           className="peer sr-only"
         />
 
@@ -869,7 +1340,9 @@ function ConsentCheckbox({
   children,
 }: {
   checked: boolean;
-  onChange: (checked: boolean) => void;
+  onChange: (
+    checked: boolean,
+  ) => void;
   children: ReactNode;
 }) {
   return (
@@ -877,11 +1350,17 @@ function ConsentCheckbox({
       <input
         type="checkbox"
         checked={checked}
-        onChange={(event) => onChange(event.target.checked)}
+        onChange={(event) =>
+          onChange(
+            event.target.checked,
+          )
+        }
         className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-300 accent-emerald-700"
       />
 
-      <span className="text-xs leading-5 text-slate-500">{children}</span>
+      <span className="text-xs leading-5 text-slate-500">
+        {children}
+      </span>
     </label>
   );
 }
