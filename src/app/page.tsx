@@ -229,22 +229,22 @@ export default function HomePage() {
                         {item.category}
                       </span>
                       {item.tag && (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600 announcement-content" data-no-translate="true" translate="no">
                           {item.tag}
                         </span>
                       )}
                     </div>
 
-                    <h3 className="text-sm font-extrabold text-slate-800 leading-snug line-clamp-2">
+                    <h3 className="text-sm font-extrabold text-slate-800 leading-snug line-clamp-2 announcement-content" data-no-translate="true" translate="no">
                       {item.title}
                     </h3>
 
-                    <p className="mt-2 text-xs text-slate-600 leading-relaxed line-clamp-3">
+                    <p className="mt-2 text-xs text-slate-600 leading-relaxed line-clamp-3 announcement-content" data-no-translate="true" translate="no">
                       {item.content}
                     </p>
 
                     <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-                      <span>{item.author}</span>
+                      <span className="announcement-content" data-no-translate="true" translate="no">{item.author}</span>
                       <span className="inline-flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
                         <span>{item.date}</span>

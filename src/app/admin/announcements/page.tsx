@@ -389,7 +389,11 @@ export default function AdminAnnouncementsPage() {
                             </span>
 
                             {item.tag && (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 font-medium text-slate-600">
+                              <span
+                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 font-medium text-slate-600 announcement-content"
+                                data-no-translate="true"
+                                translate="no"
+                              >
                                 <Tag className="h-2.5 w-2.5" />
                                 <span>{item.tag}</span>
                               </span>
@@ -401,18 +405,30 @@ export default function AdminAnnouncementsPage() {
                           </div>
 
                           {/* Title */}
-                          <h3 className="text-sm sm:text-base font-extrabold text-slate-800 leading-snug">
+                          <h3
+                            className="text-sm sm:text-base font-extrabold text-slate-800 leading-snug announcement-content"
+                            data-no-translate="true"
+                            translate="no"
+                          >
                             {item.title}
                           </h3>
 
                           {/* Content */}
-                          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed whitespace-pre-line">
+                          <p
+                            className="text-xs sm:text-sm text-slate-600 leading-relaxed whitespace-pre-line announcement-content"
+                            data-no-translate="true"
+                            translate="no"
+                          >
                             {item.content}
                           </p>
 
                           {/* Meta footer */}
                           <div className="pt-1 flex flex-wrap items-center gap-4 text-[11px] text-slate-400">
-                            <span className="inline-flex items-center gap-1.5">
+                            <span
+                              className="inline-flex items-center gap-1.5 announcement-content"
+                              data-no-translate="true"
+                              translate="no"
+                            >
                               <User className="h-3.5 w-3.5 text-slate-400" />
                               <span className="font-medium text-slate-600">
                                 {item.author}

@@ -563,9 +563,7 @@ export default function RegisterPage() {
             </h1>
 
             <p className="mt-4 max-w-md text-sm leading-7 text-emerald-50/85">
-              สร้างบัญชีสำหรับแจ้งปัญหา
-              ติดตามความคืบหน้า
-              รับข่าวสารและร่วมดูแลสภาพแวดล้อมภายในมหาวิทยาลัย
+              สร้างบัญชีสำหรับแจ้งปัญหา ติดตามความคืบหน้า รับข่าวสารและร่วมดูแลสภาพแวดล้อมภายในมหาวิทยาลัย
             </p>
 
             <div className="mt-7 space-y-3">
@@ -626,8 +624,7 @@ export default function RegisterPage() {
                 </h2>
 
                 <p className="mt-1 text-xs leading-5 text-slate-400">
-                  กรอกข้อมูลและตั้งค่าบัญชีสำหรับเข้าใช้งานระบบ
-                  UNICARE
+                  กรอกข้อมูลและตั้งค่าบัญชีสำหรับเข้าใช้งานระบบ UNICARE
                 </p>
               </div>
 

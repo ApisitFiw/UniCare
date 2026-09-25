@@ -36,8 +36,8 @@ const THAI_CHAR_REGEX = /[\u0E00-\u0E7F]/;
 const IGNORED_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "CODE", "PRE"]);
 
 /**
- * Checks whether a node or any of its ancestors is marked as user content / not to be translated.
- * Protects user-typed descriptions, names, comments, and custom inputs.
+ * Checks whether a node or any of its ancestors is marked not to be translated.
+ * Protects explicit non-translatable tokens or user real names.
  */
 function isUserContentNode(node: Node | null): boolean {
   if (!node) return false;
@@ -49,10 +49,10 @@ function isUserContentNode(node: Node | null): boolean {
   while (curr && curr !== document.documentElement) {
     if (
       curr.getAttribute("data-no-translate") === "true" ||
-      curr.getAttribute("data-user-content") === "true" ||
       curr.getAttribute("translate") === "no" ||
-      curr.classList?.contains("notranslate") ||
-      curr.classList?.contains("user-content") ||
+      curr.getAttribute("data-announcement") === "true" ||
+      curr.classList?.contains("announcement-content") ||
+      curr.classList?.contains("no-translate") ||
       curr.classList?.contains("user-name")
     ) {
       return true;
@@ -65,7 +65,7 @@ function isUserContentNode(node: Node | null): boolean {
 /**
  * Traverses a DOM subtree and translates Thai text to English (or restores original Thai).
  */
-function walkAndTranslate(node: Node, toEnglish: boolean) {
+export function walkAndTranslate(node: Node, toEnglish: boolean) {
   if (!node) return;
   if (isUserContentNode(node)) return;
 
@@ -90,7 +90,7 @@ function walkAndTranslate(node: Node, toEnglish: boolean) {
       const original = (textNode as any).__unicare_th;
       if (original !== undefined && textNode.nodeValue !== original) {
         textNode.nodeValue = original;
-      } else if (original === undefined && textNode.nodeValue) {
+      } else if (original === undefined && textNode.nodeValue && !THAI_CHAR_REGEX.test(textNode.nodeValue)) {
         const thai = translateEnToThai(textNode.nodeValue);
         if (thai !== textNode.nodeValue) {
           textNode.nodeValue = thai;
@@ -118,7 +118,7 @@ function walkAndTranslate(node: Node, toEnglish: boolean) {
           const original = (el as any).__unicare_th_ph;
           if (original !== undefined && el.placeholder !== original) {
             el.placeholder = original;
-          } else if (original === undefined && el.placeholder) {
+          } else if (original === undefined && el.placeholder && !THAI_CHAR_REGEX.test(el.placeholder)) {
             const thai = translateEnToThai(el.placeholder);
             if (thai !== el.placeholder) {
               el.placeholder = thai;
@@ -144,7 +144,7 @@ function walkAndTranslate(node: Node, toEnglish: boolean) {
         const original = (el as any).__unicare_th_title;
         if (original !== undefined && el.title !== original) {
           el.title = original;
-        } else if (original === undefined && el.title) {
+        } else if (original === undefined && el.title && !THAI_CHAR_REGEX.test(el.title)) {
           const thai = translateEnToThai(el.title);
           if (thai !== el.title) {
             el.title = thai;
@@ -170,7 +170,7 @@ function walkAndTranslate(node: Node, toEnglish: boolean) {
         const original = (el as any).__unicare_th_aria;
         if (original !== undefined && ariaLabel !== original) {
           el.setAttribute("aria-label", original);
-        } else if (original === undefined && ariaLabel) {
+        } else if (original === undefined && ariaLabel && !THAI_CHAR_REGEX.test(ariaLabel)) {
           const thai = translateEnToThai(ariaLabel);
           if (thai !== ariaLabel) {
             el.setAttribute("aria-label", thai);
@@ -236,6 +236,17 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       isTranslatingRef.current = true;
       try {
         walkAndTranslate(document.body, toEnglish);
+        if (toEnglish && document.title && THAI_CHAR_REGEX.test(document.title)) {
+          if ((document as any).__unicare_th_title === undefined) {
+            (document as any).__unicare_th_title = document.title;
+          }
+          const translatedTitle = translateThaiToEn(document.title);
+          if (translatedTitle !== document.title) {
+            document.title = translatedTitle;
+          }
+        } else if (!toEnglish && (document as any).__unicare_th_title) {
+          document.title = (document as any).__unicare_th_title;
+        }
       } finally {
         isTranslatingRef.current = false;
       }
@@ -323,7 +334,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       if (lang === "en") {
         return translateThaiToEn(keyOrText);
       }
-      // If switching back to TH, return original or translateEnToThai
+      // If switching back to TH, return original if already Thai
+      if (THAI_CHAR_REGEX.test(keyOrText)) {
+        return keyOrText;
+      }
       return translateEnToThai(keyOrText);
     },
     [lang]

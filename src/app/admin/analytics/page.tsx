@@ -23,6 +23,7 @@ import {
   type IssueItem,
   type LocationGroupedRiskArea,
 } from "@/lib/issuesData";
+import { useLanguage } from "@/context/LanguageContext";
 import {
   ArrowRight,
   MapPin,
@@ -68,6 +69,7 @@ interface HotspotDetail {
 }
 
 export default function AnalyticsDashboardPage() {
+  const { t, lang } = useLanguage();
   const [activeTab, setActiveTab] = useState<
     "reported" | "pending" | "resolved"
   >("reported");
@@ -141,7 +143,7 @@ export default function AnalyticsDashboardPage() {
 
   // ข้อมูล Doughnut Chart อิงจากสถิติจริง
   const donutData = useMemo(() => {
-    const labels = [
+    const rawCategories = [
       "เสียงรบกวน",
       "ขยะ / ของเสีย",
       "น้ำ / น้ำเสีย",
@@ -150,7 +152,8 @@ export default function AnalyticsDashboardPage() {
       "ต้นไม้ / พื้นที่สีเขียว",
       "อื่น ๆ",
     ];
-    const data = labels.map((k) => categoryBreakdown.percentages[k] || 0);
+    const labels = rawCategories.map((k) => t(k));
+    const data = rawCategories.map((k) => categoryBreakdown.percentages[k] || 0);
 
     return {
       labels,
@@ -171,7 +174,7 @@ export default function AnalyticsDashboardPage() {
         },
       ],
     };
-  }, [categoryBreakdown]);
+  }, [categoryBreakdown, lang, t]);
 
   const donutOptions = {
     responsive: true,
@@ -183,17 +186,20 @@ export default function AnalyticsDashboardPage() {
   };
 
   // ข้อมูลกราฟเส้นแนวโน้มรายเดือน อิงจากสถิติจริงในระบบ
-  const trendLabels = [
-    "ม.ค.",
-    "ก.พ.",
-    "มี.ค.",
-    "เม.ย.",
-    "พ.ค.",
-    "มิ.ย.",
-    "ก.ค.",
-    "ส.ค.",
-    "ก.ย. (ปัจจุบัน)",
-  ];
+  const trendLabels = useMemo(
+    () => [
+      t("ม.ค."),
+      t("ก.พ."),
+      t("มี.ค."),
+      t("เม.ย."),
+      t("พ.ค."),
+      t("มิ.ย."),
+      t("ก.ค."),
+      t("ส.ค."),
+      lang === "en" ? "Sep (Current)" : "ก.ย. (ปัจจุบัน)",
+    ],
+    [lang, t]
+  );
 
   const lineChartData = useMemo(() => {
     const currentTotal = stats.total;
@@ -218,7 +224,7 @@ export default function AnalyticsDashboardPage() {
         labels: trendLabels,
         datasets: [
           {
-            label: "รับแจ้งปัญหาทั้งหมด",
+            label: t("รับแจ้งปัญหาทั้งหมด"),
             data,
             borderColor: "#1b5e4a",
             backgroundColor: "rgba(27, 94, 74, 0.1)",
@@ -248,7 +254,7 @@ export default function AnalyticsDashboardPage() {
         labels: trendLabels,
         datasets: [
           {
-            label: "แก้ยังไม่สำเร็จ / รอดำเนินการ",
+            label: t("แก้ยังไม่สำเร็จ / รอดำเนินการ"),
             data,
             borderColor: "#f59e0b",
             backgroundColor: "rgba(245, 158, 11, 0.1)",
@@ -278,7 +284,7 @@ export default function AnalyticsDashboardPage() {
         labels: trendLabels,
         datasets: [
           {
-            label: "แก้ไขสำเร็จแล้ว",
+            label: t("แก้ไขสำเร็จแล้ว"),
             data,
             borderColor: "#10b981",
             backgroundColor: "rgba(16, 185, 129, 0.1)",
@@ -293,7 +299,7 @@ export default function AnalyticsDashboardPage() {
         ],
       };
     }
-  }, [activeTab, stats]);
+  }, [activeTab, stats, trendLabels, t]);
 
   const lineOptions = {
     responsive: true,

@@ -19,6 +19,8 @@ import {
   type LocationGroupedRiskArea,
   getGroupedRiskAreas,
 } from "@/lib/issuesData";
+import { useLanguage } from "@/context/LanguageContext";
+import { translateThaiToEn } from "@/lib/translationsDictionary";
 
 const universityIcon = L.icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -40,9 +42,9 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
-function createPopupContent(area: LocationGroupedRiskArea): string {
+function createPopupContent(area: LocationGroupedRiskArea, lang: "th" | "en" = "th"): string {
   if (area.issueCount === 0) {
-    return `
+    const rawEmpty = `
       <div style="min-width: 250px; max-width: 300px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
         <div style="border-bottom: 1.5px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 10px;">
           <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
@@ -91,6 +93,7 @@ function createPopupContent(area: LocationGroupedRiskArea): string {
         </div>
       </div>
     `;
+    return lang === "en" ? translateThaiToEn(rawEmpty) : rawEmpty;
   }
 
   const urgencyColor = area.highestUrgencyColor;
@@ -169,7 +172,7 @@ function createPopupContent(area: LocationGroupedRiskArea): string {
     })
     .join("");
 
-  return `
+  const rawContent = `
     <div style="min-width: 270px; max-width: 320px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
       <!-- Header -->
       <div style="border-bottom: 1.5px solid #f1f5f9; padding-bottom: 8px; margin-bottom: 10px;">
@@ -227,6 +230,7 @@ function createPopupContent(area: LocationGroupedRiskArea): string {
       </div>
     </div>
   `;
+  return lang === "en" ? translateThaiToEn(rawContent) : rawContent;
 }
 
 type Props = {
@@ -247,6 +251,7 @@ export default function RiskMap({
   onDeleteArea,
 }: Props) {
   const router = useRouter();
+  const { t, lang } = useLanguage();
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const onMapClickRef = useRef(onMapClick);
@@ -347,8 +352,8 @@ export default function RiskMap({
       const pinBgColor = area.issueCount > 0 ? area.highestUrgencyColor : "#0284c7";
       const pinTitle =
         area.issueCount > 0
-          ? `${escapeHtml(area.name)} (${area.highestUrgency}: ${area.issueCount} เรื่อง)`
-          : `${escapeHtml(area.name)} (จุดปักหมุดสถานที่)`;
+          ? `${escapeHtml(t(area.name))} (${escapeHtml(t(area.highestUrgency))}: ${area.issueCount} ${t("เรื่อง")})`
+          : `${escapeHtml(t(area.name))} (${t("จุดปักหมุด")})`;
 
       const customIcon = L.divIcon({
         className: "custom-risk-pin",
@@ -370,7 +375,7 @@ export default function RiskMap({
         riskAreaMarker: true,
       } as any);
 
-      marker.addTo(map).bindPopup(createPopupContent(area), {
+      marker.addTo(map).bindPopup(createPopupContent(area, lang), {
         maxWidth: 340,
         minWidth: 270,
         className: "risk-custom-popup",
@@ -414,7 +419,7 @@ export default function RiskMap({
         });
       });
     });
-  }, [areas]);
+  }, [areas, lang, t]);
 
   return (
     <div className="flex flex-col">

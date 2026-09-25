@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import Header from "@/components/Header";
+import { useLanguage } from "@/context/LanguageContext";
 
 type Category =
   | "ทั้งหมด"
@@ -230,6 +231,8 @@ const faqItems: FAQItem[] = [
 ];
 
 export default function HelpCenterPage() {
+  const { t, lang } = useLanguage();
+
   const [
     selectedCategory,
     setSelectedCategory,
@@ -350,16 +353,11 @@ export default function HelpCenterPage() {
 
                 <div className="min-w-0">
                   <h1 className="text-xl font-extrabold leading-tight sm:text-2xl">
-                    มีข้อสงสัยเกี่ยวกับ UniCare?
+                    {t("มีข้อสงสัยเกี่ยวกับ UniCare?")}
                   </h1>
 
                   <p className="mt-2 max-w-3xl text-xs leading-6 text-emerald-100">
-                    ค้นหาคำตอบเกี่ยวกับบัญชีผู้ใช้
-                    การแจ้งปัญหา หลักฐาน
-                    การติดตามสถานะ
-                    และความเป็นส่วนตัว
-                    หากยังไม่พบคำตอบ
-                    สามารถดูช่องทางติดต่อทีมงานได้ที่ด้านล่าง
+                    {t("ค้นหาคำตอบเกี่ยวกับบัญชีผู้ใช้ การแจ้งปัญหา หลักฐาน การติดตามสถานะ และความเป็นส่วนตัว หากยังไม่พบคำตอบ สามารถดูช่องทางติดต่อทีมงานได้ที่ด้านล่าง")}
                   </p>
                 </div>
               </div>
@@ -370,7 +368,7 @@ export default function HelpCenterPage() {
                 </p>
 
                 <p className="mt-0.5 text-[10px] text-emerald-100">
-                  คำถามทั้งหมด
+                  {t("คำถามทั้งหมด")}
                 </p>
               </div>
             </div>
@@ -381,26 +379,21 @@ export default function HelpCenterPage() {
             <div className="mb-4 flex items-end justify-between gap-4">
               <div>
                 <h2 className="text-base font-extrabold text-slate-800">
-                  หมวดหมู่คำถาม
+                  {t("หมวดหมู่คำถาม")}
                 </h2>
 
                 <p className="mt-1 text-xs text-slate-400">
-                  เลือกหมวดหมู่ที่ต้องการดู
+                  {t("เลือกหมวดหมู่ที่ต้องการดู")}
                 </p>
               </div>
 
-              {selectedCategory !==
-                "ทั้งหมด" && (
+              {selectedCategory !== "ทั้งหมด" && (
                 <button
                   type="button"
-                  onClick={() =>
-                    selectCategory(
-                      "ทั้งหมด",
-                    )
-                  }
+                  onClick={() => selectCategory("ทั้งหมด")}
                   className="shrink-0 text-xs font-semibold text-emerald-700 transition hover:text-emerald-900 hover:underline"
                 >
-                  แสดงทั้งหมด
+                  {t("แสดงทั้งหมด")}
                 </button>
               )}
             </div>
@@ -464,7 +457,7 @@ export default function HelpCenterPage() {
                       </div>
 
                       <p className="mt-3 truncate text-xs font-bold">
-                        {category.label}
+                        {t(category.label)}
                       </p>
                     </button>
                   );
@@ -484,15 +477,15 @@ export default function HelpCenterPage() {
           >
             <div className="mb-4">
               <h2 className="text-lg font-extrabold text-slate-800">
-                {selectedCategory ===
-                "ทั้งหมด"
-                  ? "คำถามทั้งหมด"
-                  : selectedCategory}
+                {selectedCategory === "ทั้งหมด"
+                  ? t("คำถามทั้งหมด")
+                  : t(selectedCategory)}
               </h2>
 
               <p className="mt-1 text-xs text-slate-400">
-                พบ {filteredFAQ.length}{" "}
-                คำถาม
+                {lang === "en"
+                  ? `Found ${filteredFAQ.length} questions`
+                  : `พบ ${filteredFAQ.length} คำถาม`}
               </p>
             </div>
 
@@ -589,12 +582,11 @@ export default function HelpCenterPage() {
 
                 <div>
                   <h2 className="text-lg font-extrabold sm:text-xl">
-                    ติดต่อทีมงาน UniCare
+                    {t("ติดต่อทีมงาน UniCare")}
                   </h2>
 
                   <p className="mt-2 max-w-3xl text-xs leading-6 text-emerald-100">
-                    หากไม่พบคำตอบที่ต้องการ
-                    สามารถติดต่อทีมงานผ่านช่องทางด้านล่างได้ในเวลาทำการ
+                    {t("หากไม่พบคำตอบที่ต้องการ สามารถติดต่อทีมงานผ่านช่องทางด้านล่างได้ในเวลาทำการ")}
                   </p>
                 </div>
               </div>
@@ -603,40 +595,38 @@ export default function HelpCenterPage() {
             <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <ContactInfo
                 icon={Mail}
-                title="อีเมล"
+                title={t("อีเมล")}
                 detail="unicare@wu.ac.th"
                 href="mailto:unicare@wu.ac.th"
               />
 
               <ContactInfo
                 icon={Phone}
-                title="โทรศัพท์"
+                title={t("โทรศัพท์")}
                 detail="075-673000"
                 href="tel:075673000"
               />
 
               <ContactInfo
                 icon={MapPin}
-                title="สถานที่ติดต่อ"
-                detail="มหาวิทยาลัยวลัยลักษณ์ จังหวัดนครศรีธรรมราช"
+                title={t("สถานที่ติดต่อ")}
+                detail={t("มหาวิทยาลัยวลัยลักษณ์ จังหวัดนครศรีธรรมราช")}
               />
 
               <ContactInfo
                 icon={Clock3}
-                title="เวลาทำการ"
-                detail="วันจันทร์–ศุกร์ เวลา 08:30–16:30 น."
+                title={t("เวลาทำการ")}
+                detail={t("วันจันทร์–ศุกร์ เวลา 08:30–16:30 น.")}
               />
             </div>
 
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
               <p className="text-xs font-extrabold text-amber-900">
-                กรณีเร่งด่วน
+                {t("กรณีเร่งด่วน")}
               </p>
 
               <p className="mt-1 text-xs leading-6 text-amber-800">
-                หากเป็นเหตุฉุกเฉินหรือมีอันตรายต่อชีวิตและทรัพย์สิน
-                กรุณาติดต่อหน่วยรักษาความปลอดภัย
-                หรือหมายเลขฉุกเฉินของมหาวิทยาลัยทันที
+                {t("หากเป็นเหตุฉุกเฉินหรือมีอันตรายต่อชีวิตและทรัพย์สิน กรุณาติดต่อหน่วยรักษาความปลอดภัย หรือหมายเลขฉุกเฉินของมหาวิทยาลัยทันที")}
               </p>
             </div>
           </section>
