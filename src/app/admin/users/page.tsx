@@ -5,6 +5,7 @@ import {
   Ban,
   Check,
   CheckCircle2,
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
   FolderOpen,
@@ -212,6 +213,16 @@ export default function AdminUserManagementPage() {
   const [loaded, setLoaded] = useState(false);
   const [adminName, setAdminName] = useState("นัฐกรณ์");
 
+  // Pagination State (10 users per page)
+  const ITEMS_PER_PAGE = 10;
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageInput, setPageInput] = useState<string>("");
+
+  // Reset to page 1 when search or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, roleFilter]);
+
   useEffect(() => {
     function syncUsers() {
       const synchronized = loadSynchronizedUsers();
@@ -312,6 +323,31 @@ export default function AdminUserManagementPage() {
       return true;
     });
   }, [users, statusFilter, roleFilter, searchQuery]);
+
+  // Pagination Logic (10 users per page)
+  const totalPages = Math.ceil(visibleUsers.length / ITEMS_PER_PAGE) || 1;
+  const safeCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
+
+  const paginatedUsers = useMemo(() => {
+    const start = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
+    return visibleUsers.slice(start, start + ITEMS_PER_PAGE);
+  }, [visibleUsers, safeCurrentPage]);
+
+  const startIndex = visibleUsers.length === 0 ? 0 : (safeCurrentPage - 1) * ITEMS_PER_PAGE + 1;
+  const endIndex = Math.min(safeCurrentPage * ITEMS_PER_PAGE, visibleUsers.length);
+
+  const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPageInput(e.target.value);
+  };
+
+  const handlePageInputSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetPage = parseInt(pageInput, 10);
+    if (!isNaN(targetPage) && targetPage >= 1 && targetPage <= totalPages) {
+      setCurrentPage(targetPage);
+      setPageInput("");
+    }
+  };
 
   function confirmStatusChange() {
     if (!pendingUser || pendingUser.role === "admin") return;
@@ -526,196 +562,278 @@ export default function AdminUserManagementPage() {
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] border-collapse text-left">
-                <thead className="bg-slate-50 text-xs font-bold text-slate-500 border-b border-slate-100">
-                  <tr>
-                    <th className="px-5 py-3.5">ผู้ใช้งาน</th>
-                    <th className="px-5 py-3.5">Email</th>
-                    <th className="px-5 py-3.5">เบอร์โทร</th>
-                    <th className="px-5 py-3.5 text-center">ประวัติแจ้งปัญหา</th>
-                    <th className="px-5 py-3.5">สถานะ</th>
-                    <th className="px-5 py-3.5 text-right">จัดการ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {visibleUsers.map((user) => {
-                    const isActive = user.status === "active";
-                    const isSuspended = user.status === "suspended";
-                    const isDeleted = user.status === "deleted";
-                    const userIssues = getIssuesForUser(user);
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[820px] border-collapse text-left">
+                  <thead className="bg-slate-50 text-xs font-bold text-slate-500 border-b border-slate-100">
+                    <tr>
+                      <th className="px-5 py-3.5">ผู้ใช้งาน</th>
+                      <th className="px-5 py-3.5">Email</th>
+                      <th className="px-5 py-3.5">เบอร์โทร</th>
+                      <th className="px-5 py-3.5 text-center">ประวัติแจ้งปัญหา</th>
+                      <th className="px-5 py-3.5">สถานะ</th>
+                      <th className="px-5 py-3.5 text-right">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {paginatedUsers.map((user) => {
+                      const isActive = user.status === "active";
+                      const isSuspended = user.status === "suspended";
+                      const isDeleted = user.status === "deleted";
+                      const userIssues = getIssuesForUser(user);
 
-                    return (
-                      <tr
-                        key={user.id}
-                        className={`transition hover:bg-slate-50/70 ${
-                          isDeleted ? "bg-rose-50/20 opacity-80" : ""
-                        }`}
-                      >
-                        {/* ผู้ใช้งาน */}
-                        <td className="px-5 py-4">
-                          <div className="flex items-center gap-3">
-                            <span
-                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold ${
-                                user.role === "admin"
-                                  ? "bg-amber-100 text-amber-800"
-                                  : isDeleted
-                                  ? "bg-slate-100 text-slate-400"
-                                  : "bg-emerald-50 text-emerald-700"
-                              }`}
-                            >
-                              {getInitials(user.name)}
-                            </span>
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <p
-                                  className={`text-xs font-bold ${
-                                    isDeleted
-                                      ? "text-slate-500 line-through"
-                                      : "text-slate-800"
-                                  }`}
-                                >
-                                  {user.name}
-                                </p>
-                                {user.role === "admin" ? (
-                                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-extrabold text-amber-800">
-                                    Admin
-                                  </span>
-                                ) : (
-                                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
-                                    User
-                                  </span>
-                                )}
-                              </div>
-                              <p className="mt-0.5 text-[10px] text-slate-400">
-                                ID: #{user.id}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Email */}
-                        <td className="px-5 py-4 text-xs text-slate-600 font-mono">
-                          {user.email}
-                        </td>
-
-                        {/* เบอร์โทร */}
-                        <td className="px-5 py-4 text-xs text-slate-600">
-                          {user.phone}
-                        </td>
-
-                        {/* ประวัติแจ้งปัญหา (ดูตรงรายชื่อได้ว่าคนนี้เคย report ปัญหาอะไรบ้าง) */}
-                        <td className="px-5 py-4 text-center">
-                          {user.role === "admin" ? (
-                            <span className="text-slate-300 text-xs">—</span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setViewingReportsUser(user)}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${
-                                userIssues.length > 0
-                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 hover:scale-[1.02]"
-                                  : "bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100"
-                              }`}
-                              title={`คลิกเพื่อดูปัญหาที่ ${user.name} เคยแจ้ง`}
-                            >
-                              <ClipboardList className="w-3.5 h-3.5 shrink-0" />
-                              <span>{userIssues.length} รายการ</span>
-                              {userIssues.length > 0 && (
-                                <span className="text-[9px] underline ml-0.5 text-emerald-800">
-                                  ดูเคส
-                                </span>
-                              )}
-                            </button>
-                          )}
-                        </td>
-
-                        {/* สถานะ */}
-                        <td className="px-5 py-4">
-                          {isDeleted ? (
-                            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200/80">
-                              <Trash2 className="h-3 w-3" />
-                              <span>ลบแล้ว (ถังขยะ)</span>
-                            </span>
-                          ) : isSuspended ? (
-                            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
-                              <UserX className="h-3 w-3" />
-                              <span>ถูกระงับ</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
-                              <CheckCircle2 className="h-3 w-3" />
-                              <span>ใช้งานอยู่</span>
-                            </span>
-                          )}
-                        </td>
-
-                        {/* จัดการ (ลบบัญชี, กู้คืนบัญชี, ระงับ/เปิดใช้งาน) */}
-                        <td className="px-5 py-4 text-right">
-                          {user.role === "admin" ? (
-                            <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-slate-400">
-                              บัญชีผู้ดูแลระบบ
-                            </span>
-                          ) : isDeleted ? (
-                            /* ปุ่มกู้คืนบัญชีสำหรับบัญชีที่ลบไปแล้ว */
-                            <button
-                              type="button"
-                              onClick={() => restoreUser(user.id)}
-                              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer shadow-2xs hover:scale-[1.02]"
-                              title="กู้คืนบัญชีนี้กลับมาใช้งานตามปกติ"
-                            >
-                              <RotateCcw className="h-3.5 w-3.5" />
-                              <span>กู้คืนบัญชี</span>
-                            </button>
-                          ) : (
-                            /* ปุ่มระงับ/เปิดใช้งาน และปุ่มลบบัญชี */
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => setPendingUser(user)}
-                                className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition cursor-pointer ${
-                                  isActive
-                                    ? "bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200/70"
-                                    : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/70"
+                      return (
+                        <tr
+                          key={user.id}
+                          className={`transition hover:bg-slate-50/70 ${
+                            isDeleted ? "bg-rose-50/20 opacity-80" : ""
+                          }`}
+                        >
+                          {/* ผู้ใช้งาน */}
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-3">
+                              <span
+                                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold ${
+                                  user.role === "admin"
+                                    ? "bg-amber-100 text-amber-800"
+                                    : isDeleted
+                                    ? "bg-slate-100 text-slate-400"
+                                    : "bg-emerald-50 text-emerald-700"
                                 }`}
-                                title={
-                                  isActive
-                                    ? "ระงับการใช้งานชั่วคราว"
-                                    : "เปิดใช้งานบัญชี"
-                                }
                               >
-                                {isActive ? (
-                                  <>
-                                    <Ban className="h-3 w-3" />
-                                    <span>ระงับ</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Check className="h-3 w-3" />
-                                    <span>เปิดใช้</span>
-                                  </>
-                                )}
-                              </button>
+                                {getInitials(user.name)}
+                              </span>
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <p
+                                    className={`text-xs font-bold ${
+                                      isDeleted
+                                        ? "text-slate-500 line-through"
+                                        : "text-slate-800"
+                                    }`}
+                                  >
+                                    {user.name}
+                                  </p>
+                                  {user.role === "admin" ? (
+                                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-extrabold text-amber-800">
+                                      Admin
+                                    </span>
+                                  ) : (
+                                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-500">
+                                      User
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="mt-0.5 text-[10px] text-slate-400">
+                                  ID: #{user.id}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
 
-                              {/* ปุ่มลบบัญชี */}
+                          {/* Email */}
+                          <td className="px-5 py-4 text-xs text-slate-600 font-mono">
+                            {user.email}
+                          </td>
+
+                          {/* เบอร์โทร */}
+                          <td className="px-5 py-4 text-xs text-slate-600">
+                            {user.phone}
+                          </td>
+
+                          {/* ประวัติแจ้งปัญหา (ดูตรงรายชื่อได้ว่าคนนี้เคย report ปัญหาอะไรบ้าง) */}
+                          <td className="px-5 py-4 text-center">
+                            {user.role === "admin" ? (
+                              <span className="text-slate-300 text-xs">—</span>
+                            ) : (
                               <button
                                 type="button"
-                                onClick={() => setDeletingUser(user)}
-                                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/70 transition cursor-pointer hover:scale-[1.02]"
-                                title="ลบบัญชีผู้ใช้นี้ (สามารถกู้คืนได้ภายหลัง)"
+                                onClick={() => setViewingReportsUser(user)}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${
+                                  userIssues.length > 0
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 hover:scale-[1.02]"
+                                    : "bg-slate-50 text-slate-400 border border-slate-200 hover:bg-slate-100"
+                                }`}
+                                title={`คลิกเพื่อดูปัญหาที่ ${user.name} เคยแจ้ง`}
                               >
-                                <Trash2 className="h-3 w-3" />
-                                <span>ลบ</span>
+                                <ClipboardList className="w-3.5 h-3.5 shrink-0" />
+                                <span>{userIssues.length} รายการ</span>
+                                {userIssues.length > 0 && (
+                                  <span className="text-[9px] underline ml-0.5 text-emerald-800">
+                                    ดูเคส
+                                  </span>
+                                )}
                               </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                            )}
+                          </td>
+
+                          {/* สถานะ */}
+                          <td className="px-5 py-4">
+                            {isDeleted ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold bg-rose-50 text-rose-600 border border-rose-200/80">
+                                <Trash2 className="h-3 w-3" />
+                                <span>ลบแล้ว (ถังขยะ)</span>
+                              </span>
+                            ) : isSuspended ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200/80">
+                                <UserX className="h-3 w-3" />
+                                <span>ถูกระงับ</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+                                <CheckCircle2 className="h-3 w-3" />
+                                <span>ใช้งานอยู่</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* จัดการ (ลบบัญชี, กู้คืนบัญชี, ระงับ/เปิดใช้งาน) */}
+                          <td className="px-5 py-4 text-right">
+                            {user.role === "admin" ? (
+                              <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-3 py-1.5 text-[11px] font-semibold text-slate-400">
+                                บัญชีผู้ดูแลระบบ
+                              </span>
+                            ) : isDeleted ? (
+                              /* ปุ่มกู้คืนบัญชีสำหรับบัญชีที่ลบไปแล้ว */
+                              <button
+                                type="button"
+                                onClick={() => restoreUser(user.id)}
+                                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer shadow-2xs hover:scale-[1.02]"
+                                title="กู้คืนบัญชีนี้กลับมาใช้งานตามปกติ"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                                <span>กู้คืนบัญชี</span>
+                              </button>
+                            ) : (
+                              /* ปุ่มระงับ/เปิดใช้งาน และปุ่มลบบัญชี */
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setPendingUser(user)}
+                                  className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition cursor-pointer ${
+                                    isActive
+                                      ? "bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200/70"
+                                      : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/70"
+                                  }`}
+                                  title={
+                                    isActive
+                                      ? "ระงับการใช้งานชั่วคราว"
+                                      : "เปิดใช้งานบัญชี"
+                                  }
+                                >
+                                  {isActive ? (
+                                    <>
+                                      <Ban className="h-3 w-3" />
+                                      <span>ระงับ</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Check className="h-3 w-3" />
+                                      <span>เปิดใช้</span>
+                                    </>
+                                  )}
+                                </button>
+
+                                {/* ปุ่มลบบัญชี */}
+                                <button
+                                  type="button"
+                                  onClick={() => setDeletingUser(user)}
+                                  className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200/70 transition cursor-pointer hover:scale-[1.02]"
+                                  title="ลบบัญชีผู้ใช้นี้ (สามารถกู้คืนได้ภายหลัง)"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                  <span>ลบ</span>
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls */}
+              {visibleUsers.length > 0 && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-100 text-xs text-slate-500 mt-4 px-2">
+                  <div className="text-[11px] text-slate-500">
+                    แสดง <span className="font-semibold text-slate-800">{startIndex} - {endIndex}</span> จากทั้งหมด{" "}
+                    <span className="font-semibold text-slate-800">{visibleUsers.length}</span> รายชื่อ
+                    {totalPages > 1 && (
+                      <span className="ml-1 text-slate-400">
+                        (หน้า <span className="font-semibold text-[#1b5e4a]">{safeCurrentPage}</span> / {totalPages})
+                      </span>
+                    )}
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="flex items-center flex-wrap gap-2">
+                      {/* Previous Button */}
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                        disabled={safeCurrentPage === 1}
+                        className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition"
+                        title="หน้าก่อนหน้า"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+
+                      {/* Page Number Buttons */}
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                          <button
+                            key={pageNum}
+                            type="button"
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`min-w-8 h-8 px-2 rounded-lg font-semibold text-xs transition cursor-pointer ${
+                              safeCurrentPage === pageNum
+                                ? "bg-[#1b5e4a] text-white shadow-xs"
+                                : "bg-white border border-slate-200 text-slate-700 hover:border-emerald-500 hover:text-emerald-700"
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Next Button */}
+                      <button
+                        type="button"
+                        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                        disabled={safeCurrentPage === totalPages}
+                        className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition"
+                        title="หน้าถัดไป"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+
+                      {/* Page Jump Input (ช่องให้กรอกจำนวนหน้า) */}
+                      <form onSubmit={handlePageInputSubmit} className="flex items-center gap-1.5 ml-2 pl-2 border-l border-slate-200">
+                        <span className="text-[11px] text-slate-500">ไปที่หน้า:</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={totalPages}
+                          value={pageInput}
+                          onChange={handlePageInputChange}
+                          placeholder={String(safeCurrentPage)}
+                          className="w-12 text-center py-1 px-1.5 border border-slate-200 bg-[#f8faf9] rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-emerald-600 text-slate-800 font-medium"
+                        />
+                        <span className="text-[11px] text-slate-400">/ {totalPages}</span>
+                        <button
+                          type="submit"
+                          className="px-2.5 py-1 bg-slate-100 hover:bg-[#1b5e4a] hover:text-white text-slate-700 rounded-lg text-[11px] font-medium transition cursor-pointer"
+                        >
+                          ไป
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </section>
       </main>
@@ -1018,10 +1136,10 @@ function SummaryCard({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block text-xs font-medium text-slate-500">
+        <span className="block text-xs font-semibold text-slate-500">
           {label}
         </span>
-        <span className="mt-1 block text-2xl font-extrabold text-slate-800">
+        <span className="mt-1 block text-2xl sm:text-3xl font-extrabold text-slate-800">
           {count}
         </span>
       </span>

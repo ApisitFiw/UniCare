@@ -17,6 +17,7 @@ import {
   Newspaper,
   CircleHelp,
   MessageCircle,
+  Star,
 } from "lucide-react";
 import { signOutDemo } from "@/lib/demoAuth";
 
@@ -40,6 +41,11 @@ const menu = [
     label: "รายการของฉัน",
     href: "/my-reports",
     icon: ClipboardList,
+  },
+  {
+    label: "ประเมินความพึงพอใจ",
+    href: "/user/feedback",
+    icon: Star,
   },
   {
     label: "ข่าวสาร / ประกาศ",

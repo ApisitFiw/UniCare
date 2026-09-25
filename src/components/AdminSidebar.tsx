@@ -20,7 +20,7 @@ const adminNavItems = [
   { label: "จัดการบัญชีผู้ใช้", href: "/admin/users", icon: User },
   { label: "จัดการคำร้อง", href: "/admin/reports", icon: ClipboardList },
   { label: "สถิติและรายงาน", href: "/admin/analytics", icon: BarChart3 },
-  { label: "ผลการประเมิน (CSAT)", href: "/admin/feedback", icon: Star },
+  { label: "ผลการประเมิน (CSAT)", href: "/admin/evaluation", icon: Star },
   {
     label: "ติดตามและจัดการสถานะ",
     href: "/admin/issues",

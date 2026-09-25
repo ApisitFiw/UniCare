@@ -702,7 +702,7 @@ function SummaryCard({
         <span className="block text-sm font-semibold text-slate-700">{label}</span>
         <span className="block text-[11px] text-slate-400">{description}</span>
       </span>
-      <span className="text-2xl font-bold text-slate-800">{count}</span>
+      <span className="text-2xl sm:text-3xl font-extrabold text-slate-800">{count}</span>
     </button>
   );
 }

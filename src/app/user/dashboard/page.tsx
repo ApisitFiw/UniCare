@@ -138,19 +138,19 @@ export default function UserDashboardPage() {
       </header>
 
       {/* เฉพาะเนื้อหา Dashboard */}
-      <main className="mx-auto max-w-6xl space-y-6 px-5 py-8">
+      <main className="mx-auto max-w-7xl space-y-6 px-5 py-8">
         
 
         <section className="rounded-2xl bg-gradient-to-r from-emerald-900 to-emerald-600 p-7 text-white shadow-md">
-          <h2 className="text-2xl font-bold">
+          <h2 className="text-xl sm:text-2xl font-bold">
             ร่วมกันดูแลมหาวิทยาลัยของเรา
           </h2>
-          <p className="mt-2 text-sm text-emerald-100">
+          <p className="mt-2 text-xs sm:text-sm text-emerald-100">
             แจ้งปัญหาและติดตามการดำเนินงานได้จากระบบ UniCare
           </p>
           <Link
             href="/user/report"
-            className="mt-5 inline-block rounded-lg bg-white px-5 py-3 text-sm font-bold text-emerald-900 hover:bg-emerald-50 transition"
+            className="mt-5 inline-block rounded-lg bg-white px-5 py-3 text-xs sm:text-sm font-bold text-emerald-900 hover:bg-emerald-50 transition"
           >
             📢 แจ้งปัญหาใหม่
           </Link>
@@ -158,7 +158,7 @@ export default function UserDashboardPage() {
 
         <section className="grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm transition hover:shadow-md">
-            <p className="text-sm font-semibold text-slate-600">📋 รายงานของฉัน</p>
+            <p className="text-xs sm:text-sm font-semibold text-slate-600">📋 รายงานของฉัน</p>
             <p className="mt-2 text-3xl font-extrabold text-emerald-950">{stats.total}</p>
             <p className="mt-1 text-xs text-slate-400">
               {stats.total > 0 ? "เรื่องร้องเรียนทั้งหมดที่คุณแจ้งไว้" : "ยังไม่มีข้อมูลรายงาน"}
@@ -166,29 +166,64 @@ export default function UserDashboardPage() {
           </div>
 
           <div className="rounded-xl border border-amber-100 bg-white p-5 shadow-sm transition hover:shadow-md">
-            <p className="text-sm font-semibold text-slate-600">⏳ กำลังดำเนินการ / รอรับเรื่อง</p>
+            <p className="text-xs sm:text-sm font-semibold text-slate-600">⏳ กำลังดำเนินการ / รอรับเรื่อง</p>
             <p className="mt-2 text-3xl font-extrabold text-amber-600">{stats.inProgress}</p>
             <p className="mt-1 text-xs text-slate-400">
               {stats.inProgress > 0 ? "เจ้าหน้าที่กำลังเร่งดำเนินการแก้ไข" : "ไม่มีเคสค้าง"}
             </p>
           </div>
 
-          <div className="rounded-xl border border-blue-100 bg-white p-5 shadow-sm transition hover:shadow-md">
-            <p className="text-sm font-semibold text-slate-600">✅ ดำเนินการแล้ว</p>
-            <p className="mt-2 text-3xl font-extrabold text-emerald-600">{stats.resolved}</p>
+          <div className="rounded-xl border border-blue-100 bg-white p-5 shadow-sm transition hover:shadow-md flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <p className="text-xs sm:text-sm font-semibold text-slate-600">✅ ดำเนินการแล้ว</p>
+                {stats.resolved > 0 && (
+                  <Link
+                    href="/user/feedback"
+                    className="text-[11px] font-semibold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1 transition"
+                  >
+                    ⭐ ประเมินผล
+                  </Link>
+                )}
+              </div>
+              <p className="mt-2 text-3xl font-extrabold text-emerald-600">{stats.resolved}</p>
+            </div>
             <p className="mt-1 text-xs text-slate-400">
               {stats.resolved > 0 ? "แก้ไขและดำเนินการสำเร็จแล้ว" : "ยังไม่มีเคสที่เสร็จสิ้น"}
             </p>
           </div>
         </section>
 
+        {stats.resolved > 0 && (
+          <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-emerald-50 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl p-2 bg-amber-100 rounded-xl">⭐</span>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800">
+                  มีปัญหาที่ได้รับการแก้ไขเสร็จสิ้นแล้ว ({stats.resolved} รายการ)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  ร่วมส่งผลประเมินความพึงพอใจ เพื่อให้เจ้าหน้าที่นำไปพัฒนาคุณภาพการบริการ
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/user/feedback"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[#1b5e4a] hover:bg-[#144738] text-white text-xs font-bold rounded-xl transition shadow-xs shrink-0"
+            >
+              <span>ทำแบบประเมินความพึงพอใจ</span>
+              <span>→</span>
+            </Link>
+          </div>
+        )}
+
         <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-emerald-950">
+            <h2 className="text-base sm:text-lg font-bold text-slate-800">
               ประเภทปัญหาที่แจ้งได้
             </h2>
             {disabledCategories.length > 0 && (
-              <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+              <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full font-medium">
                 ⚠️ มี {disabledCategories.length} หมวดหมู่ปิดรับแจ้งชั่วคราว
               </span>
             )}
@@ -201,7 +236,7 @@ export default function UserDashboardPage() {
                   <div
                     key={category}
                     title="หมวดหมู่นี้ปิดรับแจ้งชั่วคราว"
-                    className="cursor-not-allowed rounded-xl border border-dashed border-slate-300 bg-slate-100 p-4 text-center text-sm text-slate-400 select-none opacity-80"
+                    className="cursor-not-allowed rounded-xl border border-dashed border-slate-300 bg-slate-100 p-4 text-center text-xs sm:text-sm text-slate-400 select-none opacity-80"
                   >
                     <span className="line-through">🏷️ {category}</span>
                     <span className="mt-1 block text-xs font-semibold text-rose-500">
@@ -214,7 +249,7 @@ export default function UserDashboardPage() {
                 <Link
                   key={category}
                   href={`/user/report?category=${encodeURIComponent(category)}`}
-                  className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center text-sm font-medium hover:border-emerald-400 hover:bg-emerald-50 transition"
+                  className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center text-xs sm:text-sm font-semibold text-slate-700 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-900 transition"
                 >
                   🏷️ {category}
                 </Link>
@@ -224,7 +259,7 @@ export default function UserDashboardPage() {
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-bold text-emerald-950">
+          <h2 className="text-base sm:text-lg font-bold text-slate-800">
             ข่าวสารและประกาศ
           </h2>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -233,10 +268,10 @@ export default function UserDashboardPage() {
                 key={item.title}
                 className="rounded-xl border border-slate-100 bg-slate-50 p-4"
               >
-                <h3 className="font-semibold">
+                <h3 className="text-xs sm:text-sm font-bold text-slate-800">
                   {item.icon} {item.title}
                 </h3>
-                <p className="mt-2 text-sm text-slate-600">
+                <p className="mt-2 text-xs sm:text-sm font-normal text-slate-600">
                   {item.description}
                 </p>
               </article>

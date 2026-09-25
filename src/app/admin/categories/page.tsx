@@ -384,15 +384,15 @@ export default function CategoriesPage() {
             />
 
             {/* MAIN */}
-            <main className="p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full">
+            <main className="p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
 
                 {/* PAGE TITLE */}
-                <div className="page-title">
-                    <h1>
+                <div className="page-title space-y-1">
+                    <h1 className="text-xl sm:text-2xl font-bold text-slate-800">
                         ⚙️ ระบบหมวดหมู่และจัดการพื้นที่เสี่ยงสูง
                     </h1>
 
-                    <p>
+                    <p className="text-xs sm:text-sm font-normal text-slate-500">
                         จัดการประเภทของปัญหา และกำหนดพื้นที่เสี่ยงสูงภายในมหาวิทยาลัย
                         เพื่อการจัดการที่รวดเร็วและมีประสิทธิภาพ
                     </p>

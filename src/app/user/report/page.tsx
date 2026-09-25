@@ -1266,17 +1266,17 @@ export default function UserReportPage() {
       />
 
       <main className="px-4 py-6 sm:px-6">
-        <div className="mx-auto max-w-5xl space-y-5">
+        <div className="mx-auto max-w-7xl space-y-6">
           <header className="rounded-2xl bg-white border border-slate-200/90 p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-emerald-950">
                 แจ้งปัญหาใหม่ (Create Issue Report)
               </h1>
-              <p className="mt-1 text-xs sm:text-sm text-slate-600">
+              <p className="mt-1 text-xs sm:text-sm font-normal text-slate-600">
                 ผู้แจ้ง: <span className="font-semibold text-emerald-900">{reporter}</span>
               </p>
             </div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium w-fit">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold w-fit">
               <span>⚠️</span>
               <span>โหมดทดลอง: บันทึกในเบราว์เซอร์นี้</span>
             </div>
@@ -1290,15 +1290,15 @@ export default function UserReportPage() {
               className="text-center"
             >
               <span
-                className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ${
+                className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full text-xs sm:text-sm font-bold ${
                   step >= index + 1
                     ? "bg-emerald-700 text-white"
-                    : "bg-slate-100 text-slate-500"
+                    : "bg-slate-100 text-slate-500 font-semibold"
                 }`}
               >
                 {index + 1}
               </span>
-              <p className="mt-2 text-xs sm:text-sm">{label}</p>
+              <p className="mt-2 text-xs sm:text-sm font-semibold text-slate-700">{label}</p>
             </li>
           ))}
         </ol>
@@ -1312,7 +1312,7 @@ export default function UserReportPage() {
               <h2
                 ref={headingRef}
                 tabIndex={-1}
-                className="mb-6 text-xl font-bold text-emerald-950 outline-none"
+                className="mb-6 text-lg sm:text-xl font-bold text-emerald-950 outline-none"
               >
                 {STEPS[step - 1]}
               </h2>

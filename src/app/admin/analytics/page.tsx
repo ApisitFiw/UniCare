@@ -99,8 +99,8 @@ export default function AnalyticsDashboardPage() {
       "น้ำ / น้ำเสีย": 0,
       "อากาศ / มลพิษ": 0,
       "แสงสว่าง": 0,
-      "ต้นไม้ / สีเขียว": 0,
-      "อื่นๆ": 0,
+      "ต้นไม้ / พื้นที่สีเขียว": 0,
+      "อื่น ๆ": 0,
     };
 
     issues.forEach((issue) => {
@@ -110,8 +110,8 @@ export default function AnalyticsDashboardPage() {
       else if (cat.includes("น้ำ")) counts["น้ำ / น้ำเสีย"]++;
       else if (cat.includes("อากาศ") || cat.includes("กลิ่น") || cat.includes("ควัน")) counts["อากาศ / มลพิษ"]++;
       else if (cat.includes("แสง") || cat.includes("ไฟ")) counts["แสงสว่าง"]++;
-      else if (cat.includes("ต้นไม้") || cat.includes("กิ่งไม้") || cat.includes("เขียว")) counts["ต้นไม้ / สีเขียว"]++;
-      else counts["อื่นๆ"]++;
+      else if (cat.includes("ต้นไม้") || cat.includes("กิ่งไม้") || cat.includes("เขียว")) counts["ต้นไม้ / พื้นที่สีเขียว"]++;
+      else counts["อื่น ๆ"]++;
     });
 
     const totalCount = issues.length || 1;
@@ -131,8 +131,8 @@ export default function AnalyticsDashboardPage() {
       "น้ำ / น้ำเสีย",
       "อากาศ / มลพิษ",
       "แสงสว่าง",
-      "ต้นไม้ / สีเขียว",
-      "อื่นๆ",
+      "ต้นไม้ / พื้นที่สีเขียว",
+      "อื่น ๆ",
     ];
     const data = labels.map((k) => categoryBreakdown.percentages[k] || 0);
 
@@ -342,7 +342,7 @@ export default function AnalyticsDashboardPage() {
           role="ADMIN"
         />
 
-        <main className="p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full">
+        <main className="p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
           {/* 1. Hero Banner */}
           <section
             className="rounded-2xl p-6 text-white space-y-3 shadow-xs"
@@ -353,10 +353,10 @@ export default function AnalyticsDashboardPage() {
           >
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
-                <h2 className="text-2xl font-bold drop-shadow-xs">
+                <h2 className="text-xl sm:text-2xl font-bold drop-shadow-xs">
                   📊 แดชบอร์ดสถิติและรายงานภาพรวม
                 </h2>
-                <p className="text-emerald-100 text-sm mt-1">
+                <p className="text-emerald-100 text-xs sm:text-sm font-normal mt-1">
                   คำนวณและอัปเดตแบบเรียลไทม์จากระบบติดตามและจัดการสถานะ (Status Tracking & Action Log)
                 </p>
               </div>
@@ -636,16 +636,16 @@ export default function AnalyticsDashboardPage() {
                 </div>
                 <div className="flex items-center gap-2 p-2.5 bg-[#f9fafb] rounded-lg">
                   <span className="w-3 h-3 rounded-full bg-[#86efac] shrink-0"></span>
-                  <span className="font-semibold text-slate-700">ต้นไม้ / สีเขียว</span>
+                  <span className="font-semibold text-slate-700">ต้นไม้ / พื้นที่สีเขียว</span>
                   <span className="ml-auto font-bold text-slate-800">
-                    {categoryBreakdown.percentages["ต้นไม้ / สีเขียว"]}% ({categoryBreakdown.counts["ต้นไม้ / สีเขียว"]} เรื่อง)
+                    {categoryBreakdown.percentages["ต้นไม้ / พื้นที่สีเขียว"]}% ({categoryBreakdown.counts["ต้นไม้ / พื้นที่สีเขียว"]} เรื่อง)
                   </span>
                 </div>
                 <div className="flex items-center gap-2 p-2.5 bg-[#f9fafb] rounded-lg">
                   <span className="w-3 h-3 rounded-full bg-[#8b5cf6] shrink-0"></span>
-                  <span className="font-semibold text-slate-700">อื่นๆ</span>
+                  <span className="font-semibold text-slate-700">อื่น ๆ</span>
                   <span className="ml-auto font-bold text-slate-800">
-                    {categoryBreakdown.percentages["อื่นๆ"]}% ({categoryBreakdown.counts["อื่นๆ"]} เรื่อง)
+                    {categoryBreakdown.percentages["อื่น ๆ"]}% ({categoryBreakdown.counts["อื่น ๆ"]} เรื่อง)
                   </span>
                 </div>
               </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 import {
   DEFAULT_CATEGORY_METADATA,
   getDefaultCategoryCounts,
@@ -206,12 +207,19 @@ export default function CategoryManager() {
                       </div>
                     </td>
                     <td>
-                      <b
-                        suppressHydrationWarning
-                        style={{ fontSize: "14px", color: category.count > 0 ? "#1b5e4a" : "#64748b" }}
+                      <Link
+                        href={`/admin/issues?category=${encodeURIComponent(category.name)}`}
+                        className="inline-flex items-center gap-1 hover:underline"
+                        style={{
+                          fontSize: "14px",
+                          color: category.count > 0 ? "#1b5e4a" : "#64748b",
+                          textDecoration: "none",
+                        }}
+                        title={`คลิกเพื่อดูเคสปัญหาหมวดหมู่ "${category.name}" ในระบบติดตามสถานะ`}
                       >
-                        {category.count}
-                      </b>
+                        <b suppressHydrationWarning>{category.count}</b>
+                        <span style={{ fontSize: "11px", fontWeight: "normal", color: "#64748b" }}>เรื่อง ↗</span>
+                      </Link>
                     </td>
                     <td>
                       <span
@@ -228,6 +236,20 @@ export default function CategoryManager() {
                     </td>
                     <td>
                       <div className="actions">
+                        <Link
+                          href={`/admin/issues?category=${encodeURIComponent(category.name)}`}
+                          className="action-btn"
+                          title={`เปิดดูเรื่องร้องเรียนหมวดหมู่ "${category.name}" ในระบบติดตามสถานะ`}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            textDecoration: "none",
+                            fontSize: "13px",
+                          }}
+                        >
+                          📋
+                        </Link>
                         <button
                           type="button"
                           className="action-btn edit"
