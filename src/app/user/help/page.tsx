@@ -240,64 +240,67 @@ export default function HelpCenterPage() {
     setOpenItemId,
   ] = useState<number | null>(1);
 
+  const [
+    highlightedSection,
+    setHighlightedSection,
+  ] = useState<string | null>(null);
+
   /*
-   * เลื่อนไปยังตำแหน่งที่ระบุใน URL
-   * เช่น /user/help#contact
-   *
-   * รอ 250ms ก่อนเลื่อน เพื่อให้หน้า
-   * และส่วนประกอบต่าง ๆ แสดงเสร็จก่อน
+   * เลื่อนไปยังตำแหน่งที่ระบุใน URL เช่น #faq หรือ #contact
+   * พร้อมแสดงกรอบไฮไลท์อย่างชัดเจน
    */
   useEffect(() => {
-    let scrollTimer: ReturnType<
-      typeof setTimeout
-    > | null = null;
+    let scrollTimer: ReturnType<typeof setTimeout> | null = null;
+    let highlightTimer: ReturnType<typeof setTimeout> | null = null;
 
-    function scrollToCurrentHash() {
-      const hash =
-        window.location.hash;
+    function handleTarget(elementId: string) {
+      if (!elementId) return;
 
-      if (!hash) return;
-
-      const elementId =
-        decodeURIComponent(
-          hash.substring(1),
-        );
-
-      if (scrollTimer) {
-        clearTimeout(scrollTimer);
-      }
+      if (scrollTimer) clearTimeout(scrollTimer);
+      if (highlightTimer) clearTimeout(highlightTimer);
 
       scrollTimer = setTimeout(() => {
-        const target =
-          document.getElementById(
-            elementId,
-          );
-
+        const target = document.getElementById(elementId);
         if (!target) return;
 
         target.scrollIntoView({
           behavior: "smooth",
           block: "start",
         });
-      }, 250);
+
+        setHighlightedSection(elementId);
+        highlightTimer = setTimeout(() => {
+          setHighlightedSection(null);
+        }, 4000);
+      }, 150);
     }
+
+    function scrollToCurrentHash() {
+      const hash = window.location.hash;
+      if (!hash) return;
+
+      const elementId = decodeURIComponent(hash.substring(1));
+      handleTarget(elementId);
+    }
+
+    const handleCustomHighlight = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.target) {
+        handleTarget(detail.target);
+      }
+    };
 
     scrollToCurrentHash();
 
-    window.addEventListener(
-      "hashchange",
-      scrollToCurrentHash,
-    );
+    window.addEventListener("hashchange", scrollToCurrentHash);
+    window.addEventListener("unicare-highlight-section", handleCustomHighlight);
 
     return () => {
-      window.removeEventListener(
-        "hashchange",
-        scrollToCurrentHash,
-      );
+      window.removeEventListener("hashchange", scrollToCurrentHash);
+      window.removeEventListener("unicare-highlight-section", handleCustomHighlight);
 
-      if (scrollTimer) {
-        clearTimeout(scrollTimer);
-      }
+      if (scrollTimer) clearTimeout(scrollTimer);
+      if (highlightTimer) clearTimeout(highlightTimer);
     };
   }, []);
 
@@ -471,7 +474,14 @@ export default function HelpCenterPage() {
           </section>
 
           {/* รายการคำถาม */}
-          <section className="mt-8">
+          <section
+            id="faq"
+            className={`mt-8 scroll-mt-24 rounded-3xl p-5 sm:p-6 transition-all duration-500 ${
+              highlightedSection === "faq"
+                ? "bg-white/95 border-2 border-emerald-500 ring-4 ring-emerald-500/80 shadow-[0_0_35px_rgba(16,185,129,0.35)] scale-[1.008]"
+                : "border border-transparent"
+            }`}
+          >
             <div className="mb-4">
               <h2 className="text-lg font-extrabold text-slate-800">
                 {selectedCategory ===
@@ -563,7 +573,11 @@ export default function HelpCenterPage() {
           {/* ข้อมูลติดต่อ */}
           <section
             id="contact"
-            className="mb-6 mt-10 scroll-mt-24"
+            className={`mb-6 mt-10 scroll-mt-24 rounded-3xl p-3 sm:p-4 transition-all duration-500 ${
+              highlightedSection === "contact"
+                ? "bg-white/95 border-2 border-emerald-500 ring-4 ring-emerald-500/80 shadow-[0_0_35px_rgba(16,185,129,0.35)] scale-[1.008]"
+                : "border border-transparent"
+            }`}
           >
             <div className="relative overflow-hidden rounded-3xl bg-[#123f34] px-5 py-6 text-white sm:px-7">
               <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-emerald-300/10" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   usePathname,
@@ -18,8 +18,12 @@ import {
   CircleHelp,
   MessageCircle,
   Star,
+  Sprout,
+  Leaf,
 } from "lucide-react";
-import { signOutDemo } from "@/lib/demoAuth";
+import { signOutDemo, getDemoSession } from "@/lib/authService";
+import UniCareLogo from "@/components/UniCareLogo";
+import { useLanguage } from "@/context/LanguageContext";
 
 const menu = [
   {
@@ -54,7 +58,7 @@ const menu = [
   },
   {
     label: "คำถามที่พบบ่อย",
-    href: "/user/help",
+    href: "/user/help#faq",
     icon: CircleHelp,
   },
   {
@@ -65,12 +69,47 @@ const menu = [
 ];
 
 export default function DashboardSidebar() {
+  const { t } = useLanguage();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [currentHash, setCurrentHash] = useState("");
+
+  useEffect(() => {
+    const updateHash = () => {
+      if (typeof window !== "undefined") {
+        setCurrentHash(window.location.hash.replace(/^#/, ""));
+      }
+    };
+    updateHash();
+    window.addEventListener("hashchange", updateHash);
+    window.addEventListener("popstate", updateHash);
+    return () => {
+      window.removeEventListener("hashchange", updateHash);
+      window.removeEventListener("popstate", updateHash);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleToggle = () => setMobileOpen((prev) => !prev);
+    const handleClose = () => setMobileOpen(false);
+
+    window.addEventListener("unicare-toggle-sidebar", handleToggle);
+    window.addEventListener("resize", handleClose);
+
+    return () => {
+      window.removeEventListener("unicare-toggle-sidebar", handleToggle);
+      window.removeEventListener("resize", handleClose);
+    };
+  }, []);
+
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
 
   function handleLogout() {
     setShowLogoutModal(true);
@@ -94,28 +133,131 @@ export default function DashboardSidebar() {
     }
   }
 
+  function handleMenuClick(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
+    const [pathWithHash] = href.split("?");
+    const [targetPath, hash] = pathWithHash.split("#");
+
+    if (mobileOpen) {
+      setMobileOpen(false);
+    }
+
+    if (hash) {
+      if (pathname === targetPath) {
+        e.preventDefault();
+        window.history.pushState(null, "", href);
+        setCurrentHash(hash);
+
+        const element = document.getElementById(hash);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        window.dispatchEvent(
+          new CustomEvent("unicare-highlight-section", { detail: { target: hash } })
+        );
+      }
+    }
+  }
+
   function isMenuActive(href: string) {
-    const [menuPath, queryString] = href.split("?");
+    const [menuPathWithHash, queryString] = href.split("?");
+    const [menuPath, menuHash] = menuPathWithHash.split("#");
 
     if (pathname !== menuPath) {
       return false;
     }
 
-    if (!queryString) {
-      // หน้า Dashboard หลักจะ Active เมื่อไม่มี tab
-      if (menuPath === "/user/dashboard") {
-        return !searchParams.get("tab");
-      }
+    if (menuHash) {
+      return currentHash === menuHash;
+    }
 
+    if (queryString) {
+      const menuParams = new URLSearchParams(queryString);
+      const menuTab = menuParams.get("tab");
+      const currentTab = searchParams.get("tab");
+      return menuTab === currentTab;
+    }
+
+    // Main dashboard without tabs and without hash
+    if (menuPath === "/user/dashboard") {
+      if (currentHash === "news") return false;
+      return !searchParams.get("tab");
+    }
+
+    // Help without hash
+    if (menuPath === "/user/help") {
+      if (currentHash === "faq" || currentHash === "contact") return false;
       return true;
     }
 
-    const menuParams = new URLSearchParams(queryString);
-    const menuTab = menuParams.get("tab");
-    const currentTab = searchParams.get("tab");
-
-    return menuTab === currentTab;
+    return true;
   }
+
+  const renderNavContent = () => (
+    <>
+      <div className="space-y-6">
+        {/* โลโก้ */}
+        <Link
+          href="/user/dashboard"
+          className="group flex items-center space-x-3 border-b border-white/15 pb-4"
+        >
+          <UniCareLogo variant="dark" className="w-10 h-10 transition-transform group-hover:scale-105" />
+
+          <div>
+            <h1 className="text-xl font-extrabold uppercase leading-none tracking-wider text-white">
+              UniCare
+            </h1>
+
+            <p className="mt-1 text-[10px] font-medium text-emerald-100">
+              {t("มหาวิทยาลัยวลัยลักษณ์")}
+            </p>
+          </div>
+        </Link>
+
+        {/* เมนู User */}
+        <nav className="space-y-1.5 text-xs font-medium">
+          {menu.map((item) => {
+            const Icon = item.icon;
+            const active = isMenuActive(item.href);
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={(e) => handleMenuClick(e, item.href)}
+                aria-current={active ? "page" : undefined}
+                className={`flex items-center space-x-3 rounded-xl px-3.5 py-2.5 transition ${
+                  active
+                    ? "bg-[#c5e8d5] font-bold text-[#0d3b2e] shadow-sm"
+                    : "text-emerald-100 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span>{t(item.label)}</span>
+              </Link>
+            );
+          })}
+
+          {/* ปุ่มออกจากระบบ */}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mt-4 flex w-full items-center space-x-3 rounded-2xl border border-white/15 bg-white/5 px-4 py-2.5 text-left text-xs font-semibold text-rose-100 shadow-sm transition hover:bg-white/10 hover:text-white"
+          >
+            <LogOut className="h-4 w-4 shrink-0" />
+            <span>{t("ออกจากระบบ")}</span>
+          </button>
+        </nav>
+      </div>
+
+      {/* ข้อความด้านล่าง */}
+      <div className="rounded-2xl border border-white/10 bg-black/15 p-3.5 text-center mt-6">
+        <p className="flex items-center justify-center gap-1.5 text-xs font-medium leading-relaxed text-emerald-100">
+          <span>{t("ร่วมสร้างมหาวิทยาลัยน่าอยู่ไปด้วยกัน")}</span>
+          <Leaf className="h-3.5 w-3.5 text-emerald-300" />
+        </p>
+      </div>
+    </>
+  );
 
   return (
     <>
@@ -126,69 +268,37 @@ export default function DashboardSidebar() {
             "linear-gradient(180deg, #2b8273 0%, #1c5e52 40%, #15453b 70%, #0f3028 100%)",
         }}
       >
-        <div className="space-y-6">
-          {/* โลโก้ */}
-          <Link
-            href="/user/dashboard"
-            className="group flex items-center space-x-3 border-b border-white/15 pb-4"
-          >
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/30 bg-white/20 text-xl font-bold transition-transform group-hover:scale-105">
-              🌱
-            </div>
-
-            <div>
-              <h1 className="text-xl font-extrabold uppercase leading-none tracking-wider text-white">
-                UniCare
-              </h1>
-
-              <p className="mt-1 text-[10px] font-medium text-emerald-100">
-                มหาวิทยาลัยวลัยลักษณ์
-              </p>
-            </div>
-          </Link>
-
-          {/* เมนู User */}
-          <nav className="space-y-1.5 text-xs font-medium">
-            {menu.map((item) => {
-              const Icon = item.icon;
-              const active = isMenuActive(item.href);
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={active ? "page" : undefined}
-                  className={`flex items-center space-x-3 rounded-xl px-3.5 py-2.5 transition ${
-                    active
-                      ? "bg-[#c5e8d5] font-bold text-[#0d3b2e] shadow-sm"
-                      : "text-emerald-100 hover:bg-white/10 hover:text-white"
-                  }`}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-
-            {/* ปุ่มออกจากระบบ */}
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="mt-4 flex w-full items-center space-x-3 rounded-2xl border border-white/15 bg-white/5 px-4 py-2.5 text-left text-xs font-semibold text-rose-100 shadow-sm transition hover:bg-white/10 hover:text-white"
-            >
-              <LogOut className="h-4 w-4 shrink-0" />
-              <span>ออกจากระบบ</span>
-            </button>
-          </nav>
-        </div>
-
-        {/* ข้อความด้านล่าง */}
-        <div className="rounded-2xl border border-white/10 bg-black/15 p-3.5 text-center">
-          <p className="text-xs font-medium leading-relaxed text-emerald-100">
-            ร่วมสร้างมหาวิทยาลัยน่าอยู่ไปด้วยกัน 🌱
-          </p>
-        </div>
+        {renderNavContent()}
       </aside>
+
+      {/* Mobile Slide Bar Drawer */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs md:hidden"
+          onClick={() => setMobileOpen(false)}
+        >
+          <aside
+            className="fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col justify-between overflow-y-auto p-5 text-white shadow-2xl transition-transform duration-300"
+            style={{
+              background:
+                "linear-gradient(180deg, #2b8273 0%, #1c5e52 40%, #15453b 70%, #0f3028 100%)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-end pb-2">
+              <button
+                type="button"
+                onClick={() => setMobileOpen(false)}
+                className="rounded-full bg-white/10 p-1.5 text-white/80 hover:bg-white/20 transition"
+                aria-label={t("ปิด")}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {renderNavContent()}
+          </aside>
+        </div>
+      )}
 
       {/* Modal ยืนยันออกจากระบบ */}
       {showLogoutModal && (
@@ -207,7 +317,7 @@ export default function DashboardSidebar() {
 
             <button
               type="button"
-              aria-label="ปิดหน้าต่าง"
+              aria-label={t("ปิดหน้าต่าง")}
               disabled={isLoggingOut}
               onClick={closeLogoutModal}
               className="absolute right-4 top-5 rounded-full bg-slate-100 p-2 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600 disabled:opacity-50"
@@ -224,15 +334,15 @@ export default function DashboardSidebar() {
                 id="logout-modal-title"
                 className="mt-6 text-xl font-extrabold text-slate-800"
               >
-                ยืนยันการออกจากระบบ
+                {t("ยืนยันการออกจากระบบ")}
               </h2>
 
               <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-slate-500">
-                คุณต้องการออกจากระบบ UniCare หรือไม่?
+                {t("คุณต้องการออกจากระบบ UniCare หรือไม่?")}
               </p>
 
               <p className="mt-2 text-xs text-slate-400">
-                คุณจะต้องเข้าสู่ระบบอีกครั้งเพื่อใช้งานระบบ
+                {t("คุณจะต้องเข้าสู่ระบบอีกครั้งเพื่อใช้งานระบบ")}
               </p>
 
               <div className="mt-7 grid grid-cols-2 gap-3">
@@ -242,7 +352,7 @@ export default function DashboardSidebar() {
                   onClick={closeLogoutModal}
                   className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-600 transition hover:bg-slate-50 disabled:opacity-50"
                 >
-                  ยกเลิก
+                  {t("ยกเลิก")}
                 </button>
 
                 <button
@@ -254,8 +364,8 @@ export default function DashboardSidebar() {
                   <LogOut className="h-4 w-4" />
 
                   {isLoggingOut
-                    ? "กำลังออก..."
-                    : "ออกจากระบบ"}
+                    ? t("กำลังออก...")
+                    : t("ออกจากระบบ")}
                 </button>
               </div>
             </div>

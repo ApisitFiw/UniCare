@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import Header from '@/components/Header'
 import CaseClarificationDrawer from '@/components/CaseClarificationDrawer'
 import { supabase } from '@/lib/supabaseClient'
-import { getDemoSession } from '@/lib/demoAuth'
+import { getDemoSession } from '@/lib/authService'
 import {
   FolderOpen,
   Clock,
@@ -22,6 +22,9 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
+  Tag,
+  Megaphone,
 } from 'lucide-react'
 
 import {
@@ -44,6 +47,11 @@ import {
   matchCategory,
 } from '@/lib/issuesData'
 import { addNotification } from '@/lib/notifications'
+import {
+  updateIssueStatusInSupabase,
+  createIssueInSupabase,
+  fetchIssuesFromSupabase,
+} from '@/lib/supabaseService'
 
 function IssuesUrlWatcher({
   onSelectIssue,
@@ -266,22 +274,21 @@ export default function StatusTrackingPage() {
                 }
               })
 
-            setIssues(() => {
-              const existingIds = new Set(mappedFromLocal.map((i) => i.id))
-              const combined = [
-                ...mappedFromLocal,
-                ...initialMockIssues
-                  .filter((p) => !existingIds.has(p.id))
-                  .map((p, idx) => {
-                    const normalized = normalizeIssueAdminName(p.adminName, idx)
-                    return {
-                      ...p,
-                      adminName: normalized.adminName,
-                      adminInitial: normalized.adminInitial,
-                    }
-                  }),
-              ]
-              return sortIssuesLatestFirst(combined)
+            setIssues((prev) => {
+              const map = new Map<string, IssueItem>()
+              // 1. Initial mock issues
+              for (const m of initialMockIssues) {
+                map.set(m.id.replace(/^#/, "").trim(), m)
+              }
+              // 2. Previous items in state (preserving remote Supabase issues)
+              for (const p of prev) {
+                map.set(p.id.replace(/^#/, "").trim(), p)
+              }
+              // 3. Local mapped items
+              for (const l of mappedFromLocal) {
+                map.set(l.id.replace(/^#/, "").trim(), l)
+              }
+              return sortIssuesLatestFirst(Array.from(map.values()))
             })
           }
         }
@@ -290,25 +297,92 @@ export default function StatusTrackingPage() {
       }
     }
 
-    loadData()
+    const syncWithSupabase = async () => {
+      try {
+        const remote = await fetchIssuesFromSupabase()
+        if (remote && remote.length > 0) {
+          setIssues((prev) => {
+            const map = new Map<string, IssueItem>()
+            for (const item of prev) {
+              const cleanId = item.id.replace(/^#/, "").trim()
+              map.set(cleanId, item)
+            }
+            // Supabase remote issues take precedence
+            for (const r of remote) {
+              const cleanId = r.id.replace(/^#/, "").trim()
+              map.set(cleanId, r)
+            }
+            return sortIssuesLatestFirst(Array.from(map.values()))
+          })
+        }
+      } catch (err) {
+        console.warn("Supabase issues sync error:", err)
+      }
+    }
 
-    window.addEventListener('storage', loadData)
-    window.addEventListener('unicare-demo-reports-updated', loadData)
-    window.addEventListener('unicare-profile-updated', loadData)
-    window.addEventListener('unicare-demo-users-updated', loadData)
+    const syncAll = async () => {
+      loadData()
+      await syncWithSupabase()
+    }
+
+    syncAll()
+
+    const channel = supabase
+      .channel("unicare-issues-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "issues" }, () => {
+        syncAll()
+      })
+      .subscribe()
+
+    window.addEventListener("storage", syncAll)
+    window.addEventListener("unicare-demo-reports-updated", syncAll)
+    window.addEventListener("unicare-issues-sync", syncAll)
+    window.addEventListener("unicare-profile-updated", syncAll)
+    window.addEventListener("unicare-demo-users-updated", syncAll)
+    window.addEventListener("focus", syncAll)
 
     return () => {
-      window.removeEventListener('storage', loadData)
-      window.removeEventListener('unicare-demo-reports-updated', loadData)
-      window.removeEventListener('unicare-profile-updated', loadData)
-      window.removeEventListener('unicare-demo-users-updated', loadData)
+      supabase.removeChannel(channel)
+      window.removeEventListener("storage", syncAll)
+      window.removeEventListener("unicare-demo-reports-updated", syncAll)
+      window.removeEventListener("unicare-issues-sync", syncAll)
+      window.removeEventListener("unicare-profile-updated", syncAll)
+      window.removeEventListener("unicare-demo-users-updated", syncAll)
+      window.removeEventListener("focus", syncAll)
     }
   }, [])
+
+  const [isSyncing, setIsSyncing] = useState<boolean>(false)
+
+  const handleManualRefresh = async () => {
+    setIsSyncing(true)
+    try {
+      const savedReports = window.localStorage.getItem("unicare_demo_issue_reports")
+      if (savedReports) {
+        // trigger storage reload
+        window.dispatchEvent(new Event("storage"))
+      }
+      const remote = await fetchIssuesFromSupabase()
+      if (remote && remote.length > 0) {
+        setIssues((prev) => {
+          const map = new Map<string, IssueItem>()
+          for (const item of prev) map.set(item.id.replace(/^#/, "").trim(), item)
+          for (const r of remote) map.set(r.id.replace(/^#/, "").trim(), r)
+          return sortIssuesLatestFirst(Array.from(map.values()))
+        })
+      }
+      setToastMessage("ดึงข้อมูลล่าสุดจาก Supabase สำเร็จแล้ว")
+    } catch {
+      // Ignore
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   // Open Quick Timeline Modal from Banner Button
   const handleOpenQuickTimelineModal = () => {
     setIsQuickTimelineModal(true)
-    setModalMode('create')
+    setModalMode("create")
     const target = issues.length > 0 ? issues[0] : initialMockIssues[0]
     setActiveModalIssue(target)
     setNewStatus(target.statusLabel)
@@ -545,14 +619,16 @@ export default function StatusTrackingPage() {
       // Ignore
     }
 
-    // 4. Sync to Supabase if possible
+    // 4. Sync to Supabase
     try {
-      await supabase.from('issue_reports').insert({
-        issue_id: numericId,
+      await createIssueInSupabase({
+        ticketNumber: nextId,
         title: createCategory,
         description: createDescription.trim(),
-        status: statusKey === 'in_progress' ? 'In_Progress' : 'Pending',
-        date_created: now.toISOString(),
+        categoryName: createCategory,
+        areaName: createArea,
+        urgency: 'เร่งด่วน',
+        reporterName: authorName,
       })
     } catch {
       // Ignore
@@ -720,15 +796,13 @@ export default function StatusTrackingPage() {
       // Ignore
     }
 
-    // 4. Sync to Supabase if numeric issue_id
+    // 4. Sync to Supabase
     try {
-      const numericId = parseInt(activeModalIssue.id.split('-').pop() || '', 10)
-      if (!isNaN(numericId) && numericId > 0) {
-        let dbStatus = 'In_Progress'
-        if (statusKey === 'pending') dbStatus = 'Pending'
-        if (statusKey === 'resolved') dbStatus = 'Resolved'
-        await supabase.from('issue_reports').update({ status: dbStatus }).eq('issue_id', numericId)
-      }
+      await updateIssueStatusInSupabase(
+        activeModalIssue.id,
+        statusKey,
+        assignedAdmin
+      )
     } catch {
       // Ignored
     }
@@ -833,8 +907,8 @@ export default function StatusTrackingPage() {
           {/* 2. Metric Cards 4 ช่อง */}
           <section className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
             <div className="bg-white border border-slate-200/70 rounded-2xl p-4 flex items-center space-x-3.5 shadow-xs">
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-800 flex items-center justify-center text-2xl shrink-0">
-                📢
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                <ClipboardList className="w-6 h-6" />
               </div>
               <div>
                 <p className="text-[11px] text-slate-500 font-semibold">เรื่องทั้งหมด</p>
@@ -845,8 +919,8 @@ export default function StatusTrackingPage() {
             </div>
 
             <div className="bg-white border border-slate-200/70 rounded-2xl p-4 flex items-center space-x-3.5 shadow-xs">
-              <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center text-2xl shrink-0">
-                ⏳
+              <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                <Clock className="w-6 h-6" />
               </div>
               <div>
                 <p className="text-[11px] text-amber-600 font-semibold">รอดำเนินการ</p>
@@ -858,8 +932,8 @@ export default function StatusTrackingPage() {
             </div>
 
             <div className="bg-white border border-slate-200/70 rounded-2xl p-4 flex items-center space-x-3.5 shadow-xs">
-              <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center text-2xl shrink-0">
-                🔄
+              <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                <RotateCw className="w-6 h-6" />
               </div>
               <div>
                 <p className="text-[11px] text-blue-600 font-semibold">กำลังดำเนินการ</p>
@@ -871,8 +945,8 @@ export default function StatusTrackingPage() {
             </div>
 
             <div className="bg-white border border-slate-200/70 rounded-2xl p-4 flex items-center space-x-3.5 shadow-xs">
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center text-2xl shrink-0">
-                ✅
+              <div className="w-12 h-12 rounded-xl bg-green-50 border border-green-100 text-green-600 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="w-6 h-6" />
               </div>
               <div>
                 <p className="text-[11px] text-emerald-600 font-semibold">แก้ไขสำเร็จ</p>
@@ -889,8 +963,10 @@ export default function StatusTrackingPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-                    <span className="text-base">📋</span>
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-100">
+                      <ClipboardList className="w-3.5 h-3.5" />
+                    </div>
                     <span>รายการเรื่องร้องเรียนและประวัติสถานะ (Issue Reports)</span>
                   </h3>
                   <span className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
@@ -920,10 +996,10 @@ export default function StatusTrackingPage() {
                   className="border border-slate-200 bg-[#f8faf9] px-3 py-2 rounded-xl text-xs text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-emerald-600 cursor-pointer"
                   title="กรองตามหมวดหมู่ปัญหา"
                 >
-                  <option value="all">📂 ทุกหมวดหมู่</option>
+                  <option value="all">ทุกหมวดหมู่</option>
                   {STANDARD_CATEGORIES.map((cat) => (
                     <option key={cat} value={cat}>
-                      {getCategoryIcon(cat)} {cat}
+                      {cat}
                     </option>
                   ))}
                 </select>
@@ -935,11 +1011,23 @@ export default function StatusTrackingPage() {
                   className="border border-slate-200 bg-[#f8faf9] px-3 py-2 rounded-xl text-xs text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-emerald-600 cursor-pointer"
                   title="กรองตามสถานะการแก้ไข"
                 >
-                  <option value="all">📋 ทุกสถานะ</option>
-                  <option value="pending">⏳ รอดำเนินการ</option>
-                  <option value="in_progress">🔄 กำลังดำเนินการ</option>
-                  <option value="resolved">✅ แก้ไขสำเร็จ</option>
+                  <option value="all">ทุกสถานะ</option>
+                  <option value="pending">รอดำเนินการ</option>
+                  <option value="in_progress">กำลังดำเนินการ</option>
+                  <option value="resolved">แก้ไขสำเร็จ</option>
                 </select>
+
+                {/* Refresh Supabase Button */}
+                <button
+                  type="button"
+                  onClick={handleManualRefresh}
+                  disabled={isSyncing}
+                  title="รีเฟรชข้อมูลจาก Supabase"
+                  className="flex items-center gap-1.5 border border-slate-200 bg-[#f8faf9] px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:text-emerald-700 hover:bg-emerald-50 active:scale-95 transition cursor-pointer disabled:opacity-60"
+                >
+                  <RotateCw className={`w-3.5 h-3.5 text-emerald-600 ${isSyncing ? "animate-spin" : ""}`} />
+                  <span className="hidden sm:inline">รีเฟรช</span>
+                </button>
               </div>
             </div>
 
@@ -947,15 +1035,15 @@ export default function StatusTrackingPage() {
               <div className="flex items-center gap-2 text-xs text-slate-600 bg-emerald-50/60 p-2.5 rounded-xl border border-emerald-100">
                 <span className="font-semibold text-slate-700">กำลังกรองตามหมวดหมู่:</span>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
-                  <span>{getCategoryIcon(categoryFilter)}</span>
+                  <Tag className="w-3.5 h-3.5 text-emerald-700" />
                   <span>{categoryFilter}</span>
                   <button
                     type="button"
                     onClick={() => setCategoryFilter('all')}
-                    className="ml-1 text-emerald-600 hover:text-rose-600 cursor-pointer font-bold"
+                    className="ml-1 text-emerald-600 hover:text-rose-600 cursor-pointer font-bold inline-flex items-center"
                     title="ล้างตัวกรองหมวดหมู่"
                   >
-                    ✕
+                    <X className="w-3 h-3" />
                   </button>
                 </span>
                 <span className="text-[11px] text-slate-500">พบ {filteredIssues.length} เคส</span>
@@ -996,8 +1084,8 @@ export default function StatusTrackingPage() {
                           <div className="text-[10px] text-slate-400">{item.date}</div>
                         </td>
                         <td className="py-3.5 px-4">
-                          <div className="font-medium text-slate-800 flex items-center gap-1.5">
-                            <span className="text-sm">{getCategoryIcon(item.category)}</span>
+                          <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+                            <Tag className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                             <span>{item.category}</span>
                           </div>
                           <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
@@ -1005,7 +1093,7 @@ export default function StatusTrackingPage() {
                             <span>{item.area}</span>
                           </div>
                         </td>
-                        <td className="py-3.5 px-4 text-slate-600 truncate max-w-xs">
+                        <td className="py-3.5 px-4 text-slate-600 truncate max-w-xs notranslate" data-user-content="true">
                           {item.description}
                         </td>
                         <td className="py-3.5 px-4">
@@ -1013,7 +1101,7 @@ export default function StatusTrackingPage() {
                             <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold flex items-center justify-center shrink-0">
                               {item.adminInitial}
                             </div>
-                            <span className="text-xs font-medium text-slate-700">{item.adminName}</span>
+                            <span className="text-xs font-medium text-slate-700 notranslate" data-user-content="true">{item.adminName}</span>
                           </div>
                         </td>
                         <td className="py-3.5 px-4">
@@ -1228,7 +1316,7 @@ export default function StatusTrackingPage() {
                     >
                       {(activeCategories.length > 0 ? activeCategories : STANDARD_CATEGORIES).map((cat) => (
                         <option key={cat} value={cat}>
-                          {getCategoryIcon(cat)} {cat}
+                          {cat}
                         </option>
                       ))}
                     </select>
@@ -1252,7 +1340,7 @@ export default function StatusTrackingPage() {
                         }}
                         className="text-[11px] text-emerald-700 hover:text-emerald-800 font-medium underline flex items-center gap-1 cursor-pointer"
                       >
-                        {isCustomArea ? '📋 เลือกจากรายการสถานที่' : '✏️ พิมพ์ระบุสถานที่เอง'}
+                        {isCustomArea ? 'เลือกจากรายการสถานที่' : 'พิมพ์ระบุสถานที่เอง'}
                       </button>
                     </div>
 
@@ -1274,18 +1362,18 @@ export default function StatusTrackingPage() {
                         >
                           <option value="" disabled>-- เลือกสถานที่ / อาคารที่เกิดเหตุ --</option>
                           {Object.entries(groupedLocations).map(([cat, places]) => (
-                            <optgroup key={cat} label={`📂 ${cat}`}>
+                            <optgroup key={cat} label={cat}>
                               {places.map((place) => (
                                 <option key={place.name} value={place.name}>
-                                  {place.isPinned ? `📍 ${place.name} (ปักหมุดแล้ว)` : place.name}
+                                  {place.isPinned ? `${place.name} (ปักหมุดแล้ว)` : place.name}
                                 </option>
                               ))}
                             </optgroup>
                           ))}
-                          <option value="__custom__">✨ ระบุสถานที่อื่น ๆ ด้วยตนเอง...</option>
+                          <option value="__custom__">ระบุสถานที่อื่น ๆ ด้วยตนเอง...</option>
                         </select>
                         <p className="text-[11px] text-slate-500">
-                          สถานที่ทั้งหมดอ้างอิงตามหน้าหมวดหมู่และพื้นที่เสี่ยง (สัญลักษณ์ 📍 คือจุดที่มีการปักหมุดบนแผนที่แล้ว)
+                          สถานที่ทั้งหมดอ้างอิงตามหน้าหมวดหมู่และพื้นที่เสี่ยง (จุดที่มีการปักหมุดบนแผนที่แล้ว)
                         </p>
                       </div>
                     ) : (
@@ -1318,8 +1406,8 @@ export default function StatusTrackingPage() {
                       onChange={(e) => setCreateStatus(e.target.value)}
                       className="w-full border border-slate-200 bg-[#f8faf9] px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-600 text-slate-700 font-medium cursor-pointer"
                     >
-                      <option value="รอดำเนินการ">⏳ รอดำเนินการ (Pending)</option>
-                      <option value="กำลังดำเนินการ">🔄 กำลังดำเนินการ (In Progress)</option>
+                      <option value="รอดำเนินการ">รอดำเนินการ (Pending)</option>
+                      <option value="กำลังดำเนินการ">กำลังดำเนินการ (In Progress)</option>
                     </select>
                   </div>
 
@@ -1436,7 +1524,7 @@ export default function StatusTrackingPage() {
                     >
                       {issues.map((i) => (
                         <option key={i.id} value={i.id}>
-                          #{i.id} : {getCategoryIcon(i.category)} {i.category} - {i.area} ({i.statusLabel})
+                          #{i.id} : {i.category} - {i.area} ({i.statusLabel})
                         </option>
                       ))}
                     </select>
@@ -1451,10 +1539,10 @@ export default function StatusTrackingPage() {
                           <span className="text-[10px] text-slate-400">({activeModalIssue.date})</span>
                         </div>
                         <div className="font-semibold text-slate-800 text-xs mt-0.5 truncate flex items-center gap-1.5">
-                          <span>{getCategoryIcon(activeModalIssue.category)}</span>
+                          <Tag className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                           <span>{activeModalIssue.category} — {activeModalIssue.area}</span>
                         </div>
-                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1 notranslate" data-user-content="true">
                           {activeModalIssue.description}
                         </p>
                       </div>
@@ -1478,7 +1566,7 @@ export default function StatusTrackingPage() {
                       <span className="text-slate-600 font-medium">เจ้าหน้าที่ผู้รับผิดชอบเคส:</span>
                       <span className="font-bold text-emerald-800 flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-                        {modalAdmin || activeModalIssue?.adminName || ''}
+                        <span className="notranslate" data-user-content="true">{modalAdmin || activeModalIssue?.adminName || ''}</span>
                       </span>
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t border-emerald-200/60">
@@ -1507,10 +1595,10 @@ export default function StatusTrackingPage() {
                       onChange={(e) => setNewStatus(e.target.value)}
                       className="w-full border border-slate-200 bg-[#f8faf9] px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-600 text-slate-700 font-medium cursor-pointer"
                     >
-                      <option value="รอดำเนินการ">⏳ รอดำเนินการ (Pending)</option>
-                      <option value="กำลังดำเนินการ">🔄 กำลังดำเนินการ (In Progress)</option>
-                      <option value="แก้ไขสำเร็จ">✅ แก้ไขสำเร็จ (Resolved)</option>
-                      <option value="ยกเลิก / ไม่สามารถดำเนินการได้">❌ ยกเลิก / ไม่สามารถดำเนินการได้</option>
+                      <option value="รอดำเนินการ">รอดำเนินการ (Pending)</option>
+                      <option value="กำลังดำเนินการ">กำลังดำเนินการ (In Progress)</option>
+                      <option value="แก้ไขสำเร็จ">แก้ไขสำเร็จ (Resolved)</option>
+                      <option value="ยกเลิก / ไม่สามารถดำเนินการได้">ยกเลิก / ไม่สามารถดำเนินการได้</option>
                     </select>
                   </div>
 
@@ -1587,9 +1675,9 @@ export default function StatusTrackingPage() {
                                   <span className="truncate">{t.statusText}</span>
                                   <span className="text-slate-400 font-normal shrink-0 text-[10px] ml-2">{t.time}</span>
                                 </div>
-                                <p className="text-slate-500 mt-0.5 leading-relaxed">{t.note}</p>
+                                <p className="text-slate-500 mt-0.5 leading-relaxed notranslate" data-user-content="true">{t.note}</p>
                                 <div className="text-[10px] text-[#1b5e4a] mt-1 font-medium">
-                                  - บันทึกโดย: {t.author}
+                                  - บันทึกโดย: <span className="notranslate" data-user-content="true">{t.author}</span>
                                 </div>
                               </div>
                             </div>
@@ -1639,7 +1727,7 @@ export default function StatusTrackingPage() {
         reportId={activeChatIssue ? activeChatIssue.id : null}
         reportTitle={
           activeChatIssue
-            ? `${getCategoryIcon(activeChatIssue.category)} ${activeChatIssue.category} - ${activeChatIssue.area}`
+            ? `${activeChatIssue.category} - ${activeChatIssue.area}`
             : undefined
         }
         onClose={() => setActiveChatIssue(null)}

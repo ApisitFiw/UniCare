@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import { supabase } from "@/lib/supabaseClient";
-import { getDemoSession } from "@/lib/demoAuth";
+import { getDemoSession } from "@/lib/authService";
 import { getAllCurrentIssues, getCategoryIcon, type IssueItem } from "@/lib/issuesData";
 import {
   saveFeedback,
@@ -13,6 +13,7 @@ import {
   getFeedbackByIssueId,
   type FeedbackItem,
 } from "@/lib/feedbackData";
+import { createFeedbackInSupabase } from "@/lib/supabaseService";
 import {
   Star,
   CheckCircle2,
@@ -25,15 +26,18 @@ import {
   Lock,
   Sparkles,
   AlertOctagon,
+  XCircle,
+  Zap,
+  Megaphone,
 } from "lucide-react";
 
 const starDescriptions = [
   "",
-  "★ ควรปรับปรุงเร่งด่วน (1 ดาว)",
-  "★★ พอใช้ แต่ยังมีข้อบกพร่อง (2 ดาว)",
-  "★★★ ปานกลาง เป็นไปตามมาตรฐาน (3 ดาว)",
-  "★★★★ ดีมาก แก้ปัญหาได้เรียบร้อย (4 ดาว)",
-  "★★★★★ ยอดเยี่ยม ประทับใจมาก (5 ดาว)",
+  "ควรปรับปรุงเร่งด่วน (1 ดาว)",
+  "พอใช้ แต่ยังมีข้อบกพร่อง (2 ดาว)",
+  "ปานกลาง เป็นไปตามมาตรฐาน (3 ดาว)",
+  "ดีมาก แก้ปัญหาได้เรียบร้อย (4 ดาว)",
+  "ยอดเยี่ยม ประทับใจมาก (5 ดาว)",
 ];
 
 const criteriaList = [
@@ -341,22 +345,11 @@ function FeedbackContent() {
         return;
       }
 
-      // 2. ถ้ามี Supabase table issue_feedback
+      // 2. บันทึกลง Supabase table feedbacks
       try {
-        const numId = parseInt(reportIdStr.replace(/[^0-9]/g, ""), 10);
-        if (!isNaN(numId)) {
-          await supabase.from("issue_feedback").insert([
-            {
-              issue_id: numId,
-              rating: overallRating,
-              is_solved: isSolved === "yes",
-              comment: feedbackText,
-              criteria_scores: criteriaScores,
-            },
-          ]);
-        }
-      } catch {
-        // Ignore Supabase if not configured
+        await createFeedbackInSupabase(newFeedback);
+      } catch (err) {
+        console.warn("Supabase feedback direct insert failed:", err);
       }
 
       setShowToast(true);
@@ -374,7 +367,6 @@ function FeedbackContent() {
     }
   };
 
-  const caseCategoryIcon = selectedIssue ? getCategoryIcon(selectedIssue.category) : "📢";
   const caseCode = selectedIssue?.id
     ? selectedIssue.id.startsWith("#")
       ? selectedIssue.id
@@ -410,8 +402,8 @@ function FeedbackContent() {
               ความคิดเห็นของคุณมีความสำคัญยิ่งต่อการปรับปรุงการทำงานของทีมสวัสดิการมหาวิทยาลัยวลัยลักษณ์
             </p>
           </div>
-          <div className="hidden sm:flex text-4xl p-3 bg-white/10 rounded-2xl border border-white/20">
-            ⭐
+          <div className="hidden sm:flex p-3 bg-white/10 rounded-2xl border border-white/20 text-amber-300">
+            <Star className="w-8 h-8 fill-amber-300" />
           </div>
         </section>
 
@@ -420,9 +412,11 @@ function FeedbackContent() {
           {/* แถวที่ 1: บรรทัดชื่อเคส และสถานะ (ไม่มีปุ่มเลือกเคสมาปนในบรรทัดนี้) */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
             <div className="flex items-center space-x-2.5">
-              <span className="text-2xl">{caseCategoryIcon}</span>
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100/80 shadow-2xs shrink-0">
+                <Megaphone className="w-5 h-5" />
+              </span>
               <div>
-                <h3 className="text-sm sm:text-base font-bold text-slate-800">
+                <h3 className="text-sm sm:text-base font-bold text-slate-800 notranslate" data-user-content="true">
                   {caseTitle}
                 </h3>
                 <p className="text-[11px] text-slate-400 font-mono mt-0.5">
@@ -475,7 +469,7 @@ function FeedbackContent() {
                     return (
                       <option key={issue.id} value={issue.id}>
                         #{issue.id} - {issue.category} ({issue.area}){" "}
-                        {evaluated ? "✓ [ประเมินแล้ว]" : "⭐ [รอประเมิน]"}
+                        {evaluated ? "[ประเมินแล้ว]" : "[รอประเมิน]"}
                       </option>
                     );
                   })}
@@ -578,15 +572,17 @@ function FeedbackContent() {
                   onMouseLeave={() => !isEvaluated && setHoverRating(0)}
                   onClick={() => !isEvaluated && setOverallRating(star)}
                   className={`transition-transform p-1 ${
-                    isEvaluated ? "cursor-default" : "cursor-pointer hover:scale-125"
-                  } ${
-                    (hoverRating || overallRating) >= star
-                      ? "text-amber-400 scale-105"
-                      : "text-slate-200"
+                    isEvaluated ? "cursor-default" : "cursor-pointer hover:scale-110"
                   }`}
                   aria-label={`${star} ดาว`}
                 >
-                  ★
+                  <Star
+                    className={`w-8 h-8 transition-colors ${
+                      (hoverRating || overallRating) >= star
+                        ? "fill-amber-400 text-amber-400 scale-105"
+                        : "fill-slate-100 text-slate-300"
+                    }`}
+                  />
                 </button>
               ))}
             </div>
@@ -608,8 +604,9 @@ function FeedbackContent() {
                   คะแนนเฉลี่ย: <span className="text-emerald-700 font-bold">{criteriaAvg}</span> / 5.0
                 </span>
                 {ratingConflict?.isSevere && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200">
-                    ⚠️ ขัดแย้งกับดาวภาพรวม ({overallRating} ดาว)
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 text-rose-600" />
+                    <span>ขัดแย้งกับดาวภาพรวม ({overallRating} ดาว)</span>
                   </span>
                 )}
                 <span className="text-[11px] text-slate-400 hidden sm:inline">
@@ -673,8 +670,9 @@ function FeedbackContent() {
                   onChange={() => !isEvaluated && setIsSolved("yes")}
                   className="text-emerald-700 focus:ring-0 cursor-pointer disabled:cursor-default"
                 />
-                <span className="font-medium">
-                  ✅ ปัญหาหมดสิ้นแล้ว ไม่ถูกรบกวนอีก
+                <span className="font-medium flex items-center gap-1.5 text-emerald-800">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>ปัญหาหมดสิ้นแล้ว ไม่ถูกรบกวนอีก</span>
                 </span>
               </label>
               <label
@@ -691,8 +689,9 @@ function FeedbackContent() {
                   onChange={() => !isEvaluated && setIsSolved("no")}
                   className="text-rose-600 focus:ring-0 cursor-pointer disabled:cursor-default"
                 />
-                <span className="font-medium text-rose-700">
-                  ❌ ยังพบปัญหาเดิมอยู่ (ต้องการให้เข้าตรวจซ้ำ)
+                <span className="font-medium text-rose-700 flex items-center gap-1.5">
+                  <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>ยังพบปัญหาเดิมอยู่ (ต้องการให้เข้าตรวจซ้ำ)</span>
                 </span>
               </label>
             </div>
@@ -777,16 +776,18 @@ function FeedbackContent() {
                     <button
                       type="button"
                       onClick={handleHarmonizeOverallStar}
-                      className="px-3.5 py-2 bg-white text-emerald-800 font-bold text-xs border border-emerald-300 hover:bg-emerald-50 rounded-xl transition shadow-2xs cursor-pointer flex items-center gap-1"
+                      className="px-3.5 py-2 bg-white text-emerald-800 font-bold text-xs border border-emerald-300 hover:bg-emerald-50 rounded-xl transition shadow-2xs cursor-pointer flex items-center gap-1.5"
                     >
-                      <span>⚡ ปรับดาวภาพรวมเป็น {ratingConflict.suggestedStar} ดาว</span>
+                      <Zap className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <span>ปรับดาวภาพรวมเป็น {ratingConflict.suggestedStar} ดาว</span>
                     </button>
                     <button
                       type="button"
                       onClick={handleHarmonizeCriteriaScores}
-                      className="px-3.5 py-2 bg-[#1b5e4a] text-white font-bold text-xs hover:bg-[#154c3c] rounded-xl transition shadow-2xs cursor-pointer flex items-center gap-1"
+                      className="px-3.5 py-2 bg-[#1b5e4a] text-white font-bold text-xs hover:bg-[#154c3c] rounded-xl transition shadow-2xs cursor-pointer flex items-center gap-1.5"
                     >
-                      <span>⚡ ปรับ 10 ข้อเป็น {ratingConflict.suggestedCriteriaScore} ดาว</span>
+                      <Zap className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                      <span>ปรับ 10 ข้อเป็น {ratingConflict.suggestedCriteriaScore} ดาว</span>
                     </button>
                   </div>
                 </div>
@@ -831,7 +832,9 @@ function FeedbackContent() {
 
       {showToast && (
         <div className="fixed bottom-6 right-6 bg-[#0f382c] text-white px-5 py-3.5 rounded-2xl shadow-xl border border-emerald-500/30 flex items-center space-x-3 z-50 animate-bounce">
-          <span className="text-2xl">🎉</span>
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+          </div>
           <div>
             <p className="text-xs font-bold">บันทึกผลการประเมินสำเร็จ!</p>
             <p className="text-[11px] text-emerald-200">

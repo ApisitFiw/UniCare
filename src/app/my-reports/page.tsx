@@ -4,11 +4,12 @@ import React, { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { getDemoSession } from "@/lib/demoAuth";
+import { getDemoSession } from "@/lib/authService";
 import Header from "@/components/Header";
 import CaseClarificationDrawer from "@/components/CaseClarificationDrawer";
 import UserSidebar from "@/components/UserSidebar";
 import { getAllCurrentIssues } from "@/lib/issuesData";
+import { fetchIssuesFromSupabase } from "@/lib/supabaseService";
 import {
   MapPin,
   Clock,
@@ -36,7 +37,7 @@ interface UserReportItem {
 
 export default function MyReportsPage() {
   const router = useRouter();
-  const [userName, setUserName] = useState<string>("กิตติภูมิ");
+  const [userName, setUserName] = useState<string>("สมชาย ใจดี");
   const [activeChatReport, setActiveChatReport] = useState<UserReportItem | null>(null);
   const [reports, setReports] = useState<UserReportItem[]>([]);
 
@@ -57,8 +58,16 @@ export default function MyReportsPage() {
 
       // Check email match
       if (currentEmail && repEmail && currentEmail === repEmail) return true;
-      // Check alias user@unicare.local for Kittipoom
-      if (currentEmail === "user@unicare.local" && (repEmail === "kittipoom@example.com" || repName.includes("กิตติภูมิ"))) return true;
+      // Check alias user@unicare.local
+      if (
+        currentEmail === "user@unicare.local" &&
+        (repEmail === "somchai@example.com" ||
+          repName.includes("สมชาย") ||
+          repEmail === "kittipoom@example.com" ||
+          repName.includes("กิตติภูมิ"))
+      ) {
+        return true;
+      }
       // Check name match
       if (currentName && repName && currentName === repName) return true;
 
@@ -111,13 +120,62 @@ export default function MyReportsPage() {
       loadReports();
     };
 
-    // 3. Listen to real-time updates from admin actions and user reports
+    // 3. Sync latest issues from Supabase
+    fetchIssuesFromSupabase().then((issues) => {
+      if (issues && issues.length > 0) {
+        try {
+          const saved = window.localStorage.getItem("unicare_demo_issue_reports");
+          const current = saved ? JSON.parse(saved) : [];
+          issues.forEach((remote) => {
+            const idx = current.findIndex(
+              (l: any) => String(l.id) === remote.id || String(l.issue_id) === remote.id
+            );
+            if (idx >= 0) {
+              current[idx].status = remote.status;
+            }
+          });
+          window.localStorage.setItem("unicare_demo_issue_reports", JSON.stringify(current));
+          handleUpdate();
+        } catch {
+          // ignore
+        }
+      }
+    });
+
+    const channel = supabase
+      .channel("unicare-user-issues-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "issues" }, () => {
+        fetchIssuesFromSupabase().then((issues) => {
+          if (issues && issues.length > 0) {
+            try {
+              const saved = window.localStorage.getItem("unicare_demo_issue_reports");
+              const current = saved ? JSON.parse(saved) : [];
+              issues.forEach((remote) => {
+                const idx = current.findIndex(
+                  (l: any) => String(l.id) === remote.id || String(l.issue_id) === remote.id
+                );
+                if (idx >= 0) {
+                  current[idx].status = remote.status;
+                }
+              });
+              window.localStorage.setItem("unicare_demo_issue_reports", JSON.stringify(current));
+              handleUpdate();
+            } catch {
+              // ignore
+            }
+          }
+        });
+      })
+      .subscribe();
+
+    // 4. Listen to real-time updates from admin actions and user reports
     window.addEventListener("storage", handleUpdate);
     window.addEventListener("unicare-demo-reports-updated", handleUpdate);
     window.addEventListener("unicare-profile-updated", handleUpdate);
     window.addEventListener("unicare-feedbacks-updated", handleUpdate);
 
     return () => {
+      channel.unsubscribe();
       window.removeEventListener("storage", handleUpdate);
       window.removeEventListener("unicare-demo-reports-updated", handleUpdate);
       window.removeEventListener("unicare-profile-updated", handleUpdate);
@@ -246,7 +304,7 @@ export default function MyReportsPage() {
                       </div>
                     </div>
 
-                    <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                    <p className="text-xs text-slate-700 leading-relaxed font-medium notranslate" data-user-content="true">
                       {report.description}
                     </p>
 
@@ -269,7 +327,7 @@ export default function MyReportsPage() {
                                 title="คลิกเพื่อดูผลการประเมินที่ส่งไปแล้ว"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                                <span>ประเมินแล้ว ({fb?.rating || 5} ★)</span>
+                                <span>ประเมินแล้ว ({fb?.rating || 5} ดาว)</span>
                               </Link>
                             );
                           }
@@ -280,7 +338,7 @@ export default function MyReportsPage() {
                               title="คลิกเพื่อประเมินความพึงพอใจ (ประเมินได้ 1 ครั้ง)"
                             >
                               <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
-                              <span>⭐ ประเมินความพึงพอใจ</span>
+                              <span>ประเมินความพึงพอใจ</span>
                             </Link>
                           );
                         })()}

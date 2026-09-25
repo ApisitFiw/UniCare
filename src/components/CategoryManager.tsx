@@ -6,9 +6,36 @@ import {
   DEFAULT_CATEGORY_METADATA,
   getDefaultCategoryCounts,
   getCategoryCounts,
-  getCategoryIcon,
   type CategoryMetadata,
 } from "@/lib/issuesData";
+import { fetchCategoriesFromSupabase, saveCategoryToSupabase } from "@/lib/supabaseService";
+import {
+  ClipboardList,
+  Search,
+  Edit3,
+  Volume2,
+  Trash2,
+  Droplets,
+  Wind,
+  Lightbulb,
+  Trees,
+  Sparkles,
+  Megaphone,
+  Tag,
+  ArrowUpRight,
+} from "lucide-react";
+
+function renderCategoryIcon(name: string) {
+  if (name.includes("ขยะ")) return <Trash2 className="w-4 h-4 text-emerald-700" />;
+  if (name.includes("น้ำ")) return <Droplets className="w-4 h-4 text-emerald-700" />;
+  if (name.includes("อากาศ") || name.includes("มลพิษ")) return <Wind className="w-4 h-4 text-emerald-700" />;
+  if (name.includes("แสง") || name.includes("ไฟ")) return <Lightbulb className="w-4 h-4 text-emerald-700" />;
+  if (name.includes("ต้นไม้")) return <Trees className="w-4 h-4 text-emerald-700" />;
+  if (name.includes("เสียง")) return <Volume2 className="w-4 h-4 text-emerald-700" />;
+  if (name.includes("กิจกรรม")) return <Sparkles className="w-4 h-4 text-emerald-700" />;
+  if (name.includes("มาตรการ")) return <Megaphone className="w-4 h-4 text-emerald-700" />;
+  return <Tag className="w-4 h-4 text-emerald-700" />;
+}
 
 type CategoryWithCount = CategoryMetadata & {
   count: number;
@@ -26,8 +53,10 @@ export default function CategoryManager() {
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState("เปิดใช้งาน");
 
-  // Sync category metadata & counts from localStorage after hydration
+  // Sync category metadata & counts from Supabase / localStorage after hydration
   useEffect(() => {
+    let isMounted = true;
+
     const syncMeta = () => {
       try {
         const saved = window.localStorage.getItem("unicare_category_metadata");
@@ -44,6 +73,25 @@ export default function CategoryManager() {
 
     syncMeta();
 
+    // Fetch from Supabase
+    fetchCategoriesFromSupabase()
+      .then((supaCats) => {
+        if (!isMounted) return;
+        if (supaCats && supaCats.length > 0) {
+          const mapped: CategoryMetadata[] = supaCats.map((sc, idx) => ({
+            id: idx + 1,
+            name: sc.name as any,
+            description: sc.description || "",
+            status: sc.is_active ? "เปิดใช้งาน" : "ปิดใช้งาน",
+          }));
+          setCategoryMeta(mapped);
+          try {
+            window.localStorage.setItem("unicare_category_metadata", JSON.stringify(mapped));
+          } catch {}
+        }
+      })
+      .catch((err) => console.warn("Supabase categories load failed:", err));
+
     const updateCounts = () => {
       setCounts(getCategoryCounts());
     };
@@ -57,6 +105,7 @@ export default function CategoryManager() {
     window.addEventListener("focus", updateCounts);
 
     return () => {
+      isMounted = false;
       window.removeEventListener("storage", syncMeta);
       window.removeEventListener("unicare-category-metadata-updated", syncMeta);
       window.removeEventListener("storage", updateCounts);
@@ -132,6 +181,15 @@ export default function CategoryManager() {
       // ignore
     }
 
+    // Persist to Supabase
+    saveCategoryToSupabase({
+      name: editingCategory.name,
+      description: description.trim(),
+      is_active: status === "เปิดใช้งาน",
+    }).catch((err) => {
+      console.warn("Supabase category update failed:", err);
+    });
+
     closeModal();
   }
 
@@ -150,7 +208,9 @@ export default function CategoryManager() {
       <div className="card">
         <div className="card-header">
           <div className="card-title">
-            <div className="card-title-icon">📋</div>
+            <div className="card-title-icon">
+              <ClipboardList className="w-5 h-5 text-emerald-700" />
+            </div>
             <div>
               <h2>จัดการหมวดหมู่ปัญหา</h2>
               <p>
@@ -163,7 +223,9 @@ export default function CategoryManager() {
 
         {/* SEARCH */}
         <div className="search">
-          <span className="search-icon">🔍</span>
+          <span className="search-icon">
+            <Search className="w-4 h-4 text-slate-400" />
+          </span>
           <input
             type="text"
             placeholder="ค้นหาหมวดหมู่..."
@@ -197,8 +259,8 @@ export default function CategoryManager() {
                     <td>{index + 1}</td>
                     <td>
                       <div className="category">
-                        <div className="category-icon green">
-                          {getCategoryIcon(category.name)}
+                        <div className="category-icon green flex items-center justify-center">
+                          {renderCategoryIcon(category.name)}
                         </div>
                         <div>
                           <div className="category-name">{category.name}</div>
@@ -218,7 +280,9 @@ export default function CategoryManager() {
                         title={`คลิกเพื่อดูเคสปัญหาหมวดหมู่ "${category.name}" ในระบบติดตามสถานะ`}
                       >
                         <b suppressHydrationWarning>{category.count}</b>
-                        <span style={{ fontSize: "11px", fontWeight: "normal", color: "#64748b" }}>เรื่อง ↗</span>
+                        <span style={{ fontSize: "11px", fontWeight: "normal", color: "#64748b" }} className="inline-flex items-center gap-0.5">
+                          เรื่อง <ArrowUpRight className="w-3 h-3 text-slate-400" />
+                        </span>
                       </Link>
                     </td>
                     <td>
@@ -245,18 +309,22 @@ export default function CategoryManager() {
                             alignItems: "center",
                             justifyContent: "center",
                             textDecoration: "none",
-                            fontSize: "13px",
                           }}
                         >
-                          📋
+                          <ClipboardList className="w-3.5 h-3.5 text-emerald-700" />
                         </Link>
                         <button
                           type="button"
                           className="action-btn edit"
                           title="แก้ไขคำอธิบายและสถานะ"
                           onClick={() => editCategory(category)}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
                         >
-                          ✏️
+                          <Edit3 className="w-3.5 h-3.5 text-slate-600" />
                         </button>
                         {/* Note: Delete button removed per user request */}
                       </div>

@@ -5,11 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import Header from "@/components/Header";
-import { getDemoSession } from "@/lib/demoAuth";
+import { getDemoSession } from "@/lib/authService";
 import {
   getAllFeedbacks,
   updateFeedbackReinspected,
   calculateDimensionsFromFeedbacks,
+  syncFeedbacksWithSupabase,
   type FeedbackItem,
   type DimensionStat,
 } from "@/lib/feedbackData";
@@ -26,6 +27,10 @@ import {
   ArrowRight,
   X,
   MessageSquareQuote,
+  AlertCircle,
+  Tag,
+  Pin,
+  FileText,
 } from "lucide-react";
 
 export default function AdminEvaluationPage() {
@@ -79,12 +84,25 @@ export default function AdminEvaluationPage() {
 
     // 2. Load Feedbacks
     loadData();
+    syncFeedbacksWithSupabase().then(() => loadData());
+
+    const channel = supabase
+      .channel("unicare-feedbacks-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "feedbacks" },
+        () => {
+          syncFeedbacksWithSupabase().then(() => loadData());
+        }
+      )
+      .subscribe();
 
     window.addEventListener("unicare-feedbacks-updated", loadData);
     window.addEventListener("storage", loadData);
     window.addEventListener("focus", loadData);
 
     return () => {
+      supabase.removeChannel(channel);
       window.removeEventListener("unicare-feedbacks-updated", loadData);
       window.removeEventListener("storage", loadData);
       window.removeEventListener("focus", loadData);
@@ -289,7 +307,7 @@ export default function AdminEvaluationPage() {
       {/* Toast Alert */}
       {toastMessage && (
         <div className="fixed top-5 right-5 z-50 bg-[#103e31] text-white px-5 py-3 rounded-2xl shadow-xl flex items-center space-x-2.5 border border-emerald-400/30 animate-fade-in">
-          <span className="text-lg">🚨</span>
+          <AlertCircle className="w-5 h-5 text-emerald-300" />
           <span className="text-xs font-semibold">{toastMessage}</span>
         </div>
       )}
@@ -342,13 +360,24 @@ export default function AdminEvaluationPage() {
                   / 5.0
                 </span>
               </h3>
-              <div className="text-[11px] text-amber-500 font-semibold mt-0.5 flex items-center gap-1">
-                <span>{"★".repeat(Math.round(Number(kpis.avgRating)) || 5)}</span>
+              <div className="text-[11px] text-amber-500 font-semibold mt-0.5 flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-0.5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star
+                      key={i}
+                      className={`w-3.5 h-3.5 ${
+                        i < (Math.round(Number(kpis.avgRating)) || 5)
+                          ? "fill-amber-400 text-amber-400"
+                          : "text-slate-200 fill-slate-100"
+                      }`}
+                    />
+                  ))}
+                </span>
                 <span className="text-slate-400 font-normal">({feedbacks.length} ผู้ประเมิน)</span>
               </div>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center text-2xl">
-              ⭐
+            <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center">
+              <Star className="w-6 h-6 fill-amber-400 text-amber-500" />
             </div>
           </div>
 
@@ -364,8 +393,8 @@ export default function AdminEvaluationPage() {
                 {kpis.resolvedCount} เคสระบุว่าเหตุการณ์สงบ
               </span>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center text-2xl">
-              ✅
+            <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6" />
             </div>
           </div>
 
@@ -381,8 +410,8 @@ export default function AdminEvaluationPage() {
                 ประเมิน 4-5 ดาวรวมกัน
               </span>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center text-2xl">
-              📝
+            <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center">
+              <FileText className="w-6 h-6" />
             </div>
           </div>
 
@@ -397,12 +426,13 @@ export default function AdminEvaluationPage() {
                   เคส
                 </span>
               </h3>
-              <span className="text-[10px] text-rose-600 font-semibold">
-                ⚠️ ต้องการเข้าตรวจซ้ำ
+              <span className="text-[10px] text-rose-600 font-semibold inline-flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 text-rose-500" />
+                <span>ต้องการเข้าตรวจซ้ำ</span>
               </span>
             </div>
-            <div className="w-12 h-12 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center text-2xl">
-              🚨
+            <div className="w-12 h-12 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center">
+              <AlertCircle className="w-6 h-6" />
             </div>
           </div>
         </section>
@@ -518,7 +548,8 @@ export default function AdminEvaluationPage() {
 
             <div className="mt-3 p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-xl text-xs space-y-1.5">
               <div className="flex items-center space-x-1.5 text-amber-900 font-bold flex-wrap">
-                <span>📌 มิติที่ควรเฝ้าระวังและปรับปรุง (คำนวณจากคะแนนจริง):</span>
+                <Pin className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                <span>มิติที่ควรเฝ้าระวังและปรับปรุง (คำนวณจากคะแนนจริง):</span>
                 {urgentDimensions.map((dim, idx) => (
                   <React.Fragment key={dim.id}>
                     {idx > 0 && <span className="text-amber-800 font-normal">และ</span>}
@@ -596,45 +627,55 @@ export default function AdminEvaluationPage() {
                         <span className="font-bold text-slate-800 block">
                           {row.reportCode}
                         </span>
-                        <span className="text-[10px] text-slate-400">
+                        <span className="text-[10px] text-slate-400 notranslate" data-user-content="true">
                           {row.userName}
                         </span>
                       </td>
                       <td className="py-3.5 px-3">
-                        <span className="font-medium text-slate-800">
-                          {row.categoryIcon} {row.category}
+                        <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                          <Tag className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>{row.category}</span>
                         </span>
                         <span className="text-[11px] text-slate-500 block">
                           {row.location}
                         </span>
                       </td>
                       <td className="py-3.5 px-3">
-                        <span className="text-amber-500 font-bold text-sm">
-                          {"★".repeat(row.rating) + "☆".repeat(5 - row.rating)}
-                        </span>
-                        <span className="text-[10px] text-slate-400 block">
+                        <div className="flex items-center gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`w-3.5 h-3.5 ${
+                                i < row.rating
+                                  ? "fill-amber-400 text-amber-400"
+                                  : "text-slate-200 fill-slate-100"
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-[10px] text-slate-400 block mt-0.5 font-medium">
                           ({row.rating}.0 ดาว)
                         </span>
                       </td>
                       <td className="py-3.5 px-3">
                         {row.reinspected ? (
                           <span className="px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-semibold flex items-center w-max gap-1">
-                            <RotateCw className="w-3 h-3 animate-spin" />
+                            <RotateCw className="w-3.5 h-3.5 animate-spin" />
                             <span>สั่งตรวจซ้ำแล้ว</span>
                           </span>
                         ) : row.isSolved ? (
                           <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-semibold inline-flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" />
+                            <CheckCircle2 className="w-3.5 h-3.5" />
                             <span>ปัญหาหมดไปแล้ว</span>
                           </span>
                         ) : (
                           <span className="px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-semibold flex items-center w-max gap-1">
-                            <AlertTriangle className="w-3 h-3 text-rose-500" />
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
                             <span>ยังมีปัญหาเดิม</span>
                           </span>
                         )}
                       </td>
-                      <td className="py-3.5 px-3 max-w-xs text-slate-600 line-clamp-2">
+                      <td className="py-3.5 px-3 max-w-xs text-slate-600 line-clamp-2 notranslate" data-user-content="true">
                         {row.comment}
                       </td>
                       <td className="py-3.5 px-3 text-center">
@@ -672,8 +713,10 @@ export default function AdminEvaluationPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-scale-up">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center space-x-2">
-                <span className="text-xl">{selectedCase.categoryIcon}</span>
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-100 shrink-0">
+                  <Tag className="w-4 h-4" />
+                </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-800">
                     รายละเอียดเคส {selectedCase.reportCode}
@@ -698,7 +741,7 @@ export default function AdminEvaluationPage() {
                   <span className="text-[11px] text-slate-400 block">
                     ผู้ประเมิน:
                   </span>
-                  <span className="font-semibold text-slate-800">
+                  <span className="font-semibold text-slate-800 notranslate" data-user-content="true">
                     {selectedCase.userName}
                   </span>
                 </div>
@@ -714,22 +757,45 @@ export default function AdminEvaluationPage() {
                   <span className="text-[11px] text-slate-400 block">
                     คะแนนความพึงพอใจ:
                   </span>
-                  <span className="font-bold text-amber-500">
-                    {"★".repeat(selectedCase.rating) +
-                      "☆".repeat(5 - selectedCase.rating)}{" "}
-                    ({selectedCase.rating}.0 ดาว)
-                  </span>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <div className="flex items-center gap-0.5">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-3.5 h-3.5 ${
+                            i < selectedCase.rating
+                              ? "fill-amber-400 text-amber-400"
+                              : "text-slate-200 fill-slate-100"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <span className="font-semibold text-xs text-amber-600">
+                      ({selectedCase.rating}.0 ดาว)
+                    </span>
+                  </div>
                 </div>
                 <div className="mt-2">
                   <span className="text-[11px] text-slate-400 block">
                     สถานะผลลัพธ์:
                   </span>
                   <span className="font-semibold text-slate-800">
-                    {selectedCase.reinspected
-                      ? "🔄 ส่งตรวจซ้ำแล้ว"
-                      : selectedCase.isSolved
-                        ? "✅ แก้ไขเรียบร้อย"
-                        : "❌ ยังไม่หมดสิ้น"}
+                    {selectedCase.reinspected ? (
+                      <span className="text-blue-600 inline-flex items-center gap-1">
+                        <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                        <span>ส่งตรวจซ้ำแล้ว</span>
+                      </span>
+                    ) : selectedCase.isSolved ? (
+                      <span className="text-emerald-600 inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>แก้ไขเรียบร้อย</span>
+                      </span>
+                    ) : (
+                      <span className="text-rose-600 inline-flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                        <span>ยังไม่หมดสิ้น</span>
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>
@@ -738,7 +804,7 @@ export default function AdminEvaluationPage() {
                 <span className="font-bold text-slate-700 block mb-1">
                   ความคิดเห็น / ข้อเสนอแนะ:
                 </span>
-                <div className="p-3 bg-[#f8faf9] rounded-xl border border-slate-200 text-slate-700 leading-relaxed">
+                <div className="p-3 bg-[#f8faf9] rounded-xl border border-slate-200 text-slate-700 leading-relaxed notranslate" data-user-content="true">
                   &quot;{selectedCase.comment}&quot;
                 </div>
               </div>
@@ -769,8 +835,8 @@ export default function AdminEvaluationPage() {
       {isReinspectModalOpen && selectedCase && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scale-up">
-            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center text-2xl mx-auto">
-              🚨
+            <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto border border-rose-100">
+              <AlertCircle className="w-6 h-6" />
             </div>
 
             <div className="text-center space-y-1">

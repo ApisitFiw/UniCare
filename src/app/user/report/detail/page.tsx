@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { getDemoSession } from "@/lib/demoAuth";
+import { getDemoSession } from "@/lib/authService";
 import {
   getIssueReport,
   type IssueReport,
@@ -60,7 +60,7 @@ function Attachment({ file }: { file: File }) {
         </a>
       )}
 
-      <p className="break-all text-sm font-medium">{file.name}</p>
+      <p className="break-all text-sm font-medium notranslate" data-user-content="true">{file.name}</p>
 
       <p className="mt-1 text-xs text-slate-500">
         {(file.size / 1024 / 1024).toFixed(2)} MB
@@ -281,7 +281,7 @@ export default function ReportDetailPage() {
             </span>
           </div>
 
-          <h1 className="mt-3 break-words text-xl sm:text-2xl font-bold text-emerald-950">
+          <h1 className="mt-3 break-words text-xl sm:text-2xl font-bold text-emerald-950 notranslate" data-user-content="true">
             {report.title}
           </h1>
 
@@ -292,17 +292,23 @@ export default function ReportDetailPage() {
         </header>
 
         <dl className="divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white px-6 shadow-sm">
-          {rows.map(([label, value], index) => (
-            <div
-              key={`${label}-${index}`}
-              className="grid gap-2 py-4 text-xs sm:text-sm sm:grid-cols-[210px_1fr]"
-            >
-              <dt className="text-slate-500 font-semibold">{label}</dt>
-              <dd className="min-w-0 whitespace-pre-wrap break-words font-normal text-slate-800">
-                {value}
-              </dd>
-            </div>
-          ))}
+          {rows.map(([label, value], index) => {
+            const isUserValue = label === "ผู้แจ้ง" || label === "รายละเอียดเพิ่มเติม" || label === "จุดสังเกตเพิ่มเติม";
+            return (
+              <div
+                key={`${label}-${index}`}
+                className="grid gap-2 py-4 text-xs sm:text-sm sm:grid-cols-[210px_1fr]"
+              >
+                <dt className="text-slate-500 font-semibold">{label}</dt>
+                <dd
+                  className={`min-w-0 whitespace-pre-wrap break-words font-normal text-slate-800 ${isUserValue ? "notranslate" : ""}`}
+                  {...(isUserValue ? { "data-user-content": "true" } : {})}
+                >
+                  {value}
+                </dd>
+              </div>
+            );
+          })}
         </dl>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

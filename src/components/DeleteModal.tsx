@@ -1,5 +1,7 @@
 "use client";
 
+import { AlertTriangle } from "lucide-react";
+
 type DeleteModalProps = {
     show: boolean;
     title?: string;
@@ -41,7 +43,7 @@ export default function DeleteModal({
             <div className="delete-modal">
 
                 <div className="delete-icon">
-                    ⚠️
+                    <AlertTriangle className="w-8 h-8 text-rose-500 inline-block" />
                 </div>
 
                 <h3>

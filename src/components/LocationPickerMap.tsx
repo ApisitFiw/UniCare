@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { MousePointerClick } from "lucide-react";
 
 type Props = {
   lat: number;
@@ -49,8 +50,8 @@ export default function LocationPickerMap({
       html: `
         <div style="position: relative; width: 36px; height: 36px; transform: translate(-50%, -50%);">
           <div style="position: absolute; inset: -4px; border-radius: 9999px; background: rgba(16, 185, 129, 0.35); animation: ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;"></div>
-          <div style="width: 36px; height: 36px; border-radius: 9999px; background: #10b981; color: white; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: bold; border: 2.5px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.35); cursor: grab;">
-            📍
+          <div style="width: 36px; height: 36px; border-radius: 9999px; background: #10b981; color: white; display: flex; align-items: center; justify-content: center; border: 2.5px solid white; box-shadow: 0 4px 12px rgba(0,0,0,0.35); cursor: grab;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
           </div>
         </div>
       `,
@@ -123,8 +124,9 @@ export default function LocationPickerMap({
           <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           พิกัด: {Number(lat).toFixed(4)}, {Number(lng).toFixed(4)}
         </span>
-        <span className="text-emerald-700 font-medium">
-          👆 คลิกบนแผนที่หรือลากหมุดเพื่อเปลี่ยนจุด
+        <span className="text-emerald-700 font-medium inline-flex items-center gap-1">
+          <MousePointerClick className="w-3.5 h-3.5 shrink-0" />
+          <span>คลิกบนแผนที่หรือลากหมุดเพื่อเปลี่ยนจุด</span>
         </span>
       </div>
     </div>

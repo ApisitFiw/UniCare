@@ -433,13 +433,7 @@ export const DEFAULT_CATEGORY_METADATA: CategoryMetadata[] = [
 ]
 
 export function getCategoryIcon(name: string): string {
-  if (name.includes('ขยะ')) return '🗑️'
-  if (name.includes('น้ำ')) return '💧'
-  if (name.includes('อากาศ') || name.includes('มลพิษ')) return '🌫️'
-  if (name.includes('แสง') || name.includes('ไฟ')) return '💡'
-  if (name.includes('ต้นไม้')) return '🌳'
-  if (name.includes('เสียง')) return '🔊'
-  return '📋'
+  return ''
 }
 
 export function matchCategory(issueCategory: string, targetCategory: string): boolean {

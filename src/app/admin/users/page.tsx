@@ -22,10 +22,13 @@ import {
   X,
   Clock,
   RotateCw,
+  Tag,
 } from "lucide-react";
 import Header from "@/components/Header";
-import { ADMIN_ACCOUNTS, USER_ACCOUNTS, getDemoSession } from "@/lib/demoAuth";
+import { ADMIN_ACCOUNTS, USER_ACCOUNTS, getDemoSession } from "@/lib/authService";
 import { getAllCurrentIssues, type IssueItem } from "@/lib/issuesData";
+import { supabase } from "@/lib/supabaseClient";
+import { fetchProfilesFromSupabase, upsertProfileInSupabase } from "@/lib/supabaseService";
 
 type UserStatus = "active" | "suspended" | "deleted";
 type Filter = "all" | UserStatus;
@@ -75,12 +78,19 @@ function loadSynchronizedUsers(): SystemUser[] {
   if (userList.length === 0) {
     userList = [...initialUsers];
   } else {
-    // Remove obsolete single generic admin
+    // Remove obsolete single generic admin and duplicate kittipoom user
     userList = userList.filter(
       (u) =>
         u.email !== "nattakorn@example.com" &&
         u.email !== "admin@unicare.local" &&
-        u.id !== 0,
+        u.id !== 0 &&
+        u.id !== 1 &&
+        u.name !== "กิตติภูมิ" &&
+        !(
+          u.role !== "admin" &&
+          (u.name?.toLowerCase() === "kittipoom" ||
+            u.email?.toLowerCase() === "kittipoom@example.com")
+        ),
     );
 
     // Ensure all 7 admin accounts exist
@@ -111,7 +121,7 @@ function loadSynchronizedUsers(): SystemUser[] {
       }
     });
 
-    // Ensure all 6 user accounts exist
+    // Ensure all 5 user accounts exist (without duplicate Kittipoom)
     USER_ACCOUNTS.forEach((userAcc) => {
       const existingIdx = userList.findIndex(
         (u) =>
@@ -183,12 +193,20 @@ function loadSynchronizedUsers(): SystemUser[] {
     // ignore
   }
 
-  // Clean any old legacy name variants for user 1 if not customized
-  userList = userList.map((u) =>
-    u.id === 1 && (u.name === "กิตติภูมิ ปราชญากร" || u.name === "กิตติภูมิ ปราชญนคร")
-      ? { ...u, name: "กิตติภูมิ" }
-      : u,
-  );
+  // Deduplicate users (ensure unique id and unique email)
+  const seenIds = new Set<number>();
+  const seenEmails = new Set<string>();
+  const dedupedUsers: SystemUser[] = [];
+
+  for (const u of userList) {
+    const emailKey = u.email?.trim().toLowerCase();
+    if (seenIds.has(u.id)) continue;
+    if (emailKey && seenEmails.has(emailKey)) continue;
+    seenIds.add(u.id);
+    if (emailKey) seenEmails.add(emailKey);
+    dedupedUsers.push(u);
+  }
+  userList = dedupedUsers;
 
   // Sort admins first (by ID 101..107), then normal users
   userList.sort((a, b) => {
@@ -224,23 +242,72 @@ export default function AdminUserManagementPage() {
   }, [searchQuery, statusFilter, roleFilter]);
 
   useEffect(() => {
-    function syncUsers() {
-      const synchronized = loadSynchronizedUsers();
-      setUsers(synchronized);
+    let isSubscribed = true;
 
-      const session = getDemoSession();
-      if (session?.name && session.role === "admin") {
-        setAdminName(session.name);
-      } else {
-        const currentAdmin = synchronized.find((u) => u.role === "admin");
-        if (currentAdmin?.name) {
-          setAdminName(currentAdmin.name);
+    async function syncUsers() {
+      const synchronized = loadSynchronizedUsers();
+      if (isSubscribed) {
+        setUsers(synchronized);
+
+        const session = getDemoSession();
+        if (session?.name && session.role === "admin") {
+          setAdminName(session.name);
+        } else {
+          const currentAdmin = synchronized.find((u) => u.role === "admin");
+          if (currentAdmin?.name) {
+            setAdminName(currentAdmin.name);
+          }
         }
+        setLoaded(true);
       }
-      setLoaded(true);
+
+      // Merge profiles from Supabase
+      try {
+        const profiles = await fetchProfilesFromSupabase();
+        if (isSubscribed && profiles && profiles.length > 0) {
+          setUsers((currentList) => {
+            const updated = [...currentList];
+            profiles.forEach((p, idx) => {
+              const matchedIdx = updated.findIndex(
+                (u) => u.email?.toLowerCase() === p.email?.toLowerCase()
+              );
+              if (matchedIdx >= 0) {
+                updated[matchedIdx] = {
+                  ...updated[matchedIdx],
+                  name: p.full_name || updated[matchedIdx].name,
+                  role: p.role || updated[matchedIdx].role,
+                };
+              } else {
+                updated.push({
+                  id: 1000 + idx,
+                  name: p.full_name || p.email.split("@")[0],
+                  email: p.email,
+                  phone: "-",
+                  status: "active",
+                  role: p.role || "user",
+                });
+              }
+            });
+            return updated;
+          });
+        }
+      } catch (err) {
+        console.warn("Supabase profiles sync failed:", err);
+      }
     }
 
     syncUsers();
+
+    const channel = supabase
+      .channel("unicare-profiles-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        () => {
+          syncUsers();
+        }
+      )
+      .subscribe();
 
     window.addEventListener("unicare-demo-users-updated", syncUsers);
     window.addEventListener("unicare-profile-updated", syncUsers);
@@ -248,6 +315,8 @@ export default function AdminUserManagementPage() {
     window.addEventListener("focus", syncUsers);
 
     return () => {
+      isSubscribed = false;
+      channel.unsubscribe();
       window.removeEventListener("unicare-demo-users-updated", syncUsers);
       window.removeEventListener("unicare-profile-updated", syncUsers);
       window.removeEventListener("storage", syncUsers);
@@ -367,6 +436,14 @@ export default function AdminUserManagementPage() {
     setUsers(nextUsers);
     window.localStorage.setItem(USERS_KEY, JSON.stringify(nextUsers));
     window.dispatchEvent(new Event("unicare-demo-users-updated"));
+
+    // Sync to Supabase
+    upsertProfileInSupabase({
+      email: pendingUser.email,
+      full_name: pendingUser.name,
+      role: pendingUser.role,
+    }).catch((err) => console.warn("Supabase profile sync error:", err));
+
     setPendingUser(null);
   }
 
@@ -382,10 +459,19 @@ export default function AdminUserManagementPage() {
     setUsers(nextUsers);
     window.localStorage.setItem(USERS_KEY, JSON.stringify(nextUsers));
     window.dispatchEvent(new Event("unicare-demo-users-updated"));
+
+    // Sync to Supabase
+    upsertProfileInSupabase({
+      email: deletingUser.email,
+      full_name: deletingUser.name,
+      role: deletingUser.role,
+    }).catch((err) => console.warn("Supabase profile sync error:", err));
+
     setDeletingUser(null);
   }
 
   function restoreUser(userId: number) {
+    const targetUser = users.find((u) => u.id === userId);
     const nextUsers = users.map((user) =>
       user.id === userId
         ? { ...user, status: "active" as const }
@@ -395,6 +481,14 @@ export default function AdminUserManagementPage() {
     setUsers(nextUsers);
     window.localStorage.setItem(USERS_KEY, JSON.stringify(nextUsers));
     window.dispatchEvent(new Event("unicare-demo-users-updated"));
+
+    if (targetUser) {
+      upsertProfileInSupabase({
+        email: targetUser.email,
+        full_name: targetUser.name,
+        role: targetUser.role,
+      }).catch((err) => console.warn("Supabase profile sync error:", err));
+    }
   }
 
   const isSuspending = pendingUser?.status === "active";
@@ -612,7 +706,7 @@ export default function AdminUserManagementPage() {
                                         : "text-slate-800"
                                     }`}
                                   >
-                                    {user.name}
+                                    <span className="notranslate" data-user-content="true">{user.name}</span>
                                   </p>
                                   {user.role === "admin" ? (
                                     <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-extrabold text-amber-800">
@@ -888,7 +982,7 @@ export default function AdminUserManagementPage() {
                 : "คุณต้องการเปิดใช้งานบัญชีผู้ใช้นี้อีกครั้งหรือไม่? ผู้ใช้จะสามารถเข้าสู่ระบบและใช้งานได้ตามปกติ"}
             </p>
             <span className="mt-4 inline-flex rounded-full bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700">
-              {pendingUser.name} ({pendingUser.email})
+              <span className="notranslate" data-user-content="true">{pendingUser.name}</span> ({pendingUser.email})
             </span>
 
             <div className="mt-7 flex justify-center gap-3">
@@ -944,11 +1038,11 @@ export default function AdminUserManagementPage() {
               ยืนยันการลบบัญชีผู้ใช้
             </h2>
             <p className="mt-2 text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
-              คุณต้องการลบบัญชีของ <strong>{deletingUser.name}</strong> หรือไม่? บัญชีนี้จะถูกย้ายไปยังถังขยะและไม่สามารถเข้าใช้งานระบบได้ชั่วคราว (คุณสามารถกดกู้คืนบัญชีได้ตลอดเวลาในหมวดถังขยะ)
+              คุณต้องการลบบัญชีของ <strong className="notranslate" data-user-content="true">{deletingUser.name}</strong> หรือไม่? บัญชีนี้จะถูกย้ายไปยังถังขยะและไม่สามารถเข้าใช้งานระบบได้ชั่วคราว (คุณสามารถกดกู้คืนบัญชีได้ตลอดเวลาในหมวดถังขยะ)
             </p>
 
             <div className="mt-4 rounded-xl bg-slate-50 border border-slate-200 p-3 text-left text-xs space-y-1">
-              <p className="text-slate-700 font-semibold">{deletingUser.name}</p>
+              <p className="text-slate-700 font-semibold notranslate" data-user-content="true">{deletingUser.name}</p>
               <p className="text-slate-400 font-mono text-[11px]">{deletingUser.email}</p>
               <p className="text-slate-400 text-[11px]">เบอร์โทร: {deletingUser.phone}</p>
             </div>
@@ -994,7 +1088,7 @@ export default function AdminUserManagementPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-base font-bold text-slate-800">
-                      ประวัติการแจ้งปัญหา: {viewingReportsUser.name}
+                      ประวัติการแจ้งปัญหา: <span className="notranslate" data-user-content="true">{viewingReportsUser.name}</span>
                     </h3>
                     <span className="rounded bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
                       {getIssuesForUser(viewingReportsUser).length} เรื่อง
@@ -1038,8 +1132,9 @@ export default function AdminUserManagementPage() {
                         <span className="font-extrabold text-[#154c3c] text-xs">
                           #{issue.id}
                         </span>
-                        <span className="text-[11px] font-semibold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200">
-                          🏷️ {issue.category}
+                        <span className="text-[11px] font-semibold text-slate-700 bg-white px-2 py-0.5 rounded-md border border-slate-200 inline-flex items-center gap-1">
+                          <Tag className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <span>{issue.category}</span>
                         </span>
                         <span className="text-[10px] text-slate-400 flex items-center gap-1">
                           <Clock className="w-3 h-3" />

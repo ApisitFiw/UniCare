@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   getDemoSession,
   type DemoSession,
-} from "@/lib/demoAuth";
+} from "@/lib/authService";
 import Header from "@/components/Header";
 import {
   getAllCurrentIssues,
@@ -21,17 +21,27 @@ import {
   RotateCw,
   AlertTriangle,
   FolderOpen,
+  Volume2,
+  Trash2,
+  Droplets,
+  Wind,
+  Lightbulb,
+  Trees,
+  ShieldCheck,
+  Tag,
+  ClipboardList,
+  BarChart3,
 } from "lucide-react";
 
-function getCategoryIcon(category: string): string {
-  if (category.includes("เสียง")) return "🔊";
-  if (category.includes("ขยะ")) return "🗑️";
-  if (category.includes("น้ำ")) return "🚰";
-  if (category.includes("อากาศ") || category.includes("กลิ่น") || category.includes("ควัน")) return "💨";
-  if (category.includes("แสง") || category.includes("ไฟ")) return "💡";
-  if (category.includes("ต้นไม้") || category.includes("กิ่งไม้") || category.includes("เขียว")) return "🌳";
-  if (category.includes("ปลอดภัย") || category.includes("จราจร")) return "🛡️";
-  return "📢";
+function getCategoryIcon(category: string): ReactNode {
+  if (category.includes("เสียง")) return <Volume2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+  if (category.includes("ขยะ")) return <Trash2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+  if (category.includes("น้ำ")) return <Droplets className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+  if (category.includes("อากาศ") || category.includes("กลิ่น") || category.includes("ควัน")) return <Wind className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+  if (category.includes("แสง") || category.includes("ไฟ")) return <Lightbulb className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+  if (category.includes("ต้นไม้") || category.includes("กิ่งไม้") || category.includes("เขียว")) return <Trees className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+  if (category.includes("ปลอดภัย") || category.includes("จราจร")) return <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
+  return <Tag className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
 }
 
 function parseIssueDateTime(rawDate: string): { date: string; time: string } {
@@ -133,7 +143,7 @@ export default function AdminDashboardPage() {
       label: "เรื่องร้องเรียนทั้งหมด",
       value: totalCount.toString(),
       note: "อัปเดตเรียลไทม์จากระบบติดตามสถานะ",
-      icon: "📢",
+      icon: <ClipboardList className="h-6 w-6 text-emerald-700" />,
       valueColor: "text-slate-900",
       noteColor: "text-emerald-700",
       iconColor: "border-emerald-100 bg-emerald-50",
@@ -142,7 +152,7 @@ export default function AdminDashboardPage() {
       label: "รอดำเนินการ / รอรับเรื่อง",
       value: pendingCount.toString(),
       note: pendingCount > 0 ? "• ต้องการการตรวจสอบและมอบหมาย" : "ไม่มีเคสค้าง",
-      icon: "⌛",
+      icon: <Clock className="h-6 w-6 text-rose-600" />,
       valueColor: "text-rose-600",
       noteColor: "text-rose-600",
       iconColor: "border-rose-100 bg-rose-50",
@@ -151,7 +161,7 @@ export default function AdminDashboardPage() {
       label: "กำลังดำเนินการ (In Progress)",
       value: inProgressCount.toString(),
       note: "อยู่ระหว่างการปฏิบัติงานของเจ้าหน้าที่",
-      icon: "🛠️",
+      icon: <RotateCw className="h-6 w-6 text-amber-600" />,
       valueColor: "text-amber-600",
       noteColor: "text-amber-600",
       iconColor: "border-amber-100 bg-amber-50",
@@ -160,7 +170,7 @@ export default function AdminDashboardPage() {
       label: "แก้ไขเสร็จสิ้น (Resolved)",
       value: resolvedCount.toString(),
       note: `คิดเป็นความสำเร็จ ${resolvedRate}%`,
-      icon: "✅",
+      icon: <CheckCircle2 className="h-6 w-6 text-emerald-600" />,
       valueColor: "text-emerald-700",
       noteColor: "text-emerald-700",
       iconColor: "border-emerald-100 bg-emerald-50",
@@ -223,15 +233,17 @@ export default function AdminDashboardPage() {
                 href="/admin/issues"
                 className="rounded-xl bg-white px-4 py-3 text-xs font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 flex items-center gap-1.5"
               >
-                <span>📋 ไปที่ระบบติดตามและจัดการสถานะ</span>
+                <ClipboardList className="w-3.5 h-3.5 text-emerald-900 shrink-0" />
+                <span>ไปที่ระบบติดตามและจัดการสถานะ</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
 
               <Link
                 href="/admin/analytics"
-                className="rounded-xl border border-white/20 px-4 py-3 text-xs font-semibold text-white transition hover:bg-white/10"
+                className="rounded-xl border border-white/20 px-4 py-3 text-xs font-semibold text-white transition hover:bg-white/10 flex items-center gap-1.5"
               >
-                📊 ดูสถิติรายงานภาพรวม
+                <BarChart3 className="w-3.5 h-3.5 text-white shrink-0" />
+                <span>ดูสถิติรายงานภาพรวม</span>
               </Link>
             </div>
           </div>
@@ -395,7 +407,7 @@ export default function AdminDashboardPage() {
                           <span>{getCategoryIcon(report.category)}</span>
                           <span>{report.category}</span>
                         </p>
-                        <p className="mt-1 text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
+                        <p className="mt-1 text-[11px] text-slate-500 line-clamp-2 leading-relaxed notranslate" data-user-content="true">
                           {report.description}
                         </p>
                       </td>

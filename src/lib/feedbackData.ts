@@ -1,3 +1,9 @@
+import {
+  createFeedbackInSupabase,
+  fetchFeedbacksFromSupabase,
+  updateIssueStatusInSupabase,
+} from "@/lib/supabaseService";
+
 export interface FeedbackItem {
   id: string;
   issueId: string | number;
@@ -41,7 +47,7 @@ export const INITIAL_MOCK_FEEDBACKS: FeedbackItem[] = [
     reportCode: "#ISS-2026-101",
     userName: "กิตติภูมิ ปราชญนคร",
     category: "เสียงรบกวน",
-    categoryIcon: "🔊",
+    categoryIcon: "",
     location: "หอพักนักศึกษาชาย 3",
     rating: 5,
     isSolved: true,
@@ -68,7 +74,7 @@ export const INITIAL_MOCK_FEEDBACKS: FeedbackItem[] = [
     reportCode: "#ISS-2026-102",
     userName: "นศ. สุภัทรา (สงวนนามสกุล)",
     category: "ขยะ / ของเสีย",
-    categoryIcon: "🗑️",
+    categoryIcon: "",
     location: "โรงอาหารกลาง",
     rating: 2,
     isSolved: false,
@@ -95,7 +101,7 @@ export const INITIAL_MOCK_FEEDBACKS: FeedbackItem[] = [
     reportCode: "#ISS-2026-105",
     userName: "อาจารย์ สันติสุข",
     category: "ต้นไม้ / พื้นที่สีเขียว",
-    categoryIcon: "🌳",
+    categoryIcon: "",
     location: "ลานกิจกรรมหน้าอาคารสถาปัตยกรรมศาสตร์",
     rating: 4,
     isSolved: true,
@@ -222,6 +228,30 @@ export function getFeedbackByIssueId(issueId: string | number): FeedbackItem | u
 }
 
 /**
+ * ซิงค์ข้อมูล Feedbacks กับ Supabase
+ */
+export async function syncFeedbacksWithSupabase(): Promise<FeedbackItem[]> {
+  if (typeof window === "undefined") return INITIAL_MOCK_FEEDBACKS;
+  try {
+    const remote = await fetchFeedbacksFromSupabase();
+    if (remote && remote.length > 0) {
+      const current = getAllFeedbacks();
+      const map = new Map<string, FeedbackItem>();
+      for (const f of current) map.set(String(f.id), f);
+      for (const r of remote) map.set(String(r.id), r);
+      const merged = Array.from(map.values());
+      window.localStorage.setItem(FEEDBACKS_STORAGE_KEY, JSON.stringify(merged));
+      window.dispatchEvent(new Event("unicare-feedbacks-updated"));
+      window.dispatchEvent(new Event("storage"));
+      return merged;
+    }
+  } catch (err) {
+    console.warn("syncFeedbacksWithSupabase error:", err);
+  }
+  return getAllFeedbacks();
+}
+
+/**
  * บันทึกผลการประเมิน โดยอนุญาตให้ประเมินได้เพียงครั้งเดียวต่อ 1 เคส
  */
 export function saveFeedback(feedback: FeedbackItem): { success: boolean; message?: string } {
@@ -247,6 +277,12 @@ export function saveFeedback(feedback: FeedbackItem): { success: boolean; messag
     window.localStorage.setItem(FEEDBACKS_STORAGE_KEY, JSON.stringify(updated));
     window.dispatchEvent(new Event("unicare-feedbacks-updated"));
     window.dispatchEvent(new Event("storage"));
+
+    // Sync to Supabase in background
+    createFeedbackInSupabase(feedback).catch((err) =>
+      console.warn("createFeedbackInSupabase error:", err)
+    );
+
     return { success: true };
   } catch (e) {
     console.error("Failed to save feedback to localStorage:", e);
@@ -269,6 +305,9 @@ export function updateFeedbackReinspected(feedbackId: string, note?: string): vo
     if (targetFeedback) {
       const issueIdStr = String(targetFeedback.issueId).replace(/^#/, "");
       
+      // Update in Supabase
+      updateIssueStatusInSupabase(issueIdStr, "in_progress").catch(console.warn);
+
       const savedReportsRaw = window.localStorage.getItem("unicare_demo_issue_reports");
       const currentReports = savedReportsRaw ? JSON.parse(savedReportsRaw) : [];
       const reportIdx = currentReports.findIndex(

@@ -107,11 +107,6 @@ export async function saveIssueReport(
       transaction.onabort = () => {
         const error = writeError ?? transaction.error;
 
-        if (error?.name === "ConstraintError") {
-          reject(new Error("รหัสรายงานนี้ถูกบันทึกแล้ว"));
-          return;
-        }
-
         if (error?.name === "QuotaExceededError") {
           reject(
             new Error("พื้นที่เก็บข้อมูลไม่เพียงพอ กรุณาลดขนาดไฟล์แนบ"),
@@ -122,7 +117,7 @@ export async function saveIssueReport(
         reject(error ?? new Error("บันทึกรายงานไม่สำเร็จ"));
       };
 
-      const request = transaction.objectStore(STORE_NAME).add(report);
+      const request = transaction.objectStore(STORE_NAME).put(report);
 
       request.onerror = () => {
         writeError = request.error;
@@ -130,6 +125,31 @@ export async function saveIssueReport(
     });
   } finally {
     db.close();
+  }
+}
+
+export async function getAllIssueReports(): Promise<IssueReport[]> {
+  try {
+    const db = await openDatabase();
+    try {
+      return await new Promise<IssueReport[]>((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, "readonly");
+        let list: IssueReport[] = [];
+        const request = transaction.objectStore(STORE_NAME).getAll();
+
+        request.onsuccess = () => {
+          list = (request.result as IssueReport[]) || [];
+        };
+
+        transaction.oncomplete = () => resolve(list);
+        transaction.onabort = () => resolve(list);
+        transaction.onerror = () => resolve(list);
+      });
+    } finally {
+      db.close();
+    }
+  } catch {
+    return [];
   }
 }
 
@@ -170,6 +190,60 @@ export async function getIssueReport(
     );
   } finally {
     db.close();
+  }
+}
+
+export async function findIssueReport(
+  identifier: string,
+): Promise<IssueReport | undefined> {
+  if (!identifier?.trim()) return undefined;
+  const clean = identifier.trim();
+
+  // 1. Direct get attempt
+  try {
+    const direct = await getIssueReport(clean);
+    if (direct) return direct;
+  } catch {}
+
+  // 2. Scan all stored reports
+  const all = await getAllIssueReports();
+  if (!all.length) return undefined;
+
+  const lower = clean.toLowerCase();
+  const digits = clean.replace(/\D/g, "");
+
+  // Match by id or code
+  const matched = all.find((r) => {
+    if (r.id === clean || r.id.toLowerCase() === lower) return true;
+    if (r.code && (r.code === clean || r.code.toLowerCase() === lower)) return true;
+    if (digits && (r.id.includes(digits) || (r.code && r.code.includes(digits)))) return true;
+    return false;
+  });
+
+  if (matched) return matched;
+
+  // Fallback: match by title similarity
+  return all.find((r) => clean.includes(r.title) || r.title.includes(clean));
+}
+
+export async function getEvidenceFileBlob(
+  reportIdOrIdentifier: string,
+  fileName?: string,
+): Promise<{ file: File; url: string } | null> {
+  const report = await findIssueReport(reportIdOrIdentifier);
+  if (!report || !report.files || report.files.length === 0) return null;
+
+  const matched = fileName
+    ? report.files.find((f) => f.name === fileName) || report.files[0]
+    : report.files[0];
+
+  if (!matched) return null;
+
+  try {
+    const url = URL.createObjectURL(matched);
+    return { file: matched, url };
+  } catch {
+    return null;
   }
 }
 

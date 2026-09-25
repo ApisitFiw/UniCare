@@ -23,7 +23,23 @@ import {
   type IssueItem,
   type LocationGroupedRiskArea,
 } from "@/lib/issuesData";
-import { ArrowRight, MapPin, CheckCircle2 } from "lucide-react";
+import {
+  ArrowRight,
+  MapPin,
+  CheckCircle2,
+  BarChart3,
+  ClipboardList,
+  Download,
+  Clock,
+  Search,
+  TrendingUp,
+  FileText,
+  PieChart,
+  Lightbulb,
+  Check,
+  X,
+  Tag,
+} from "lucide-react";
 
 // ลงทะเบียนโมดูล Chart.js
 ChartJS.register(
@@ -319,7 +335,7 @@ export default function AnalyticsDashboardPage() {
         cases: item.issueCount,
         severity: isHigh ? "High" : isMedium ? "Medium" : "Low",
         avgTime: isHigh ? "45 นาที" : isMedium ? "2 ชั่วโมง" : "4 ชั่วโมง",
-        riskText: isHigh ? "🔴 สูงมาก" : isMedium ? "🟠 ปานกลาง" : "🟢 ปกติ",
+        riskText: isHigh ? "สูงมาก" : isMedium ? "ปานกลาง" : "ปกติ",
         riskColor: isHigh ? "text-rose-600" : isMedium ? "text-amber-600" : "text-emerald-600",
         note: `${item.issueCount} เรื่องในระบบติดตาม`,
         topIssueId: topIssue?.id || "",
@@ -353,8 +369,9 @@ export default function AnalyticsDashboardPage() {
           >
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div>
-                <h2 className="text-xl sm:text-2xl font-bold drop-shadow-xs">
-                  📊 แดชบอร์ดสถิติและรายงานภาพรวม
+                <h2 className="text-xl sm:text-2xl font-bold drop-shadow-xs flex items-center gap-2">
+                  <BarChart3 className="w-6 h-6 text-emerald-300" />
+                  <span>แดชบอร์ดสถิติและรายงานภาพรวม</span>
                 </h2>
                 <p className="text-emerald-100 text-xs sm:text-sm font-normal mt-1">
                   คำนวณและอัปเดตแบบเรียลไทม์จากระบบติดตามและจัดการสถานะ (Status Tracking & Action Log)
@@ -365,7 +382,8 @@ export default function AnalyticsDashboardPage() {
                   href="/admin/issues"
                   className="px-4 py-2 bg-emerald-500/30 hover:bg-emerald-500/40 text-white rounded-full font-semibold text-xs border border-white/20 transition flex items-center gap-1.5"
                 >
-                  <span>📋 ไปที่ระบบติดตามสถานะ</span>
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  <span>ไปที่ระบบติดตามสถานะ</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
                 <button
@@ -373,9 +391,10 @@ export default function AnalyticsDashboardPage() {
                   onClick={() =>
                     alert(`ส่งออกข้อมูลรายงานสถิติสำเร็จ (${stats.total} รายการ)`)
                   }
-                  className="px-4 py-2 bg-white text-emerald-800 rounded-full font-semibold text-xs hover:bg-emerald-50 transition shadow-xs cursor-pointer"
+                  className="px-4 py-2 bg-white text-emerald-800 rounded-full font-semibold text-xs hover:bg-emerald-50 transition shadow-xs cursor-pointer inline-flex items-center gap-1.5"
                 >
-                  📥 ส่งออกข้อมูล (Excel / CSV)
+                  <Download className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>ส่งออกข้อมูล (Excel / CSV)</span>
                 </button>
               </div>
             </div>
@@ -437,8 +456,8 @@ export default function AnalyticsDashboardPage() {
                   </span>
                   <span className="text-xs text-slate-400 mt-1">เรื่อง</span>
                 </div>
-                <div className="w-12 h-12 rounded-lg bg-red-100 flex items-center justify-center text-xl">
-                  📊
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700">
+                  <BarChart3 className="w-6 h-6" />
                 </div>
               </div>
               <div className="flex items-center gap-1 text-xs">
@@ -458,8 +477,8 @@ export default function AnalyticsDashboardPage() {
                   </span>
                   <span className="text-xs text-slate-400 mt-1">เรื่อง</span>
                 </div>
-                <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center text-xl">
-                  ⏳
+                <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
+                  <Clock className="w-6 h-6" />
                 </div>
               </div>
               <div className="flex items-center gap-1 text-xs">
@@ -482,8 +501,8 @@ export default function AnalyticsDashboardPage() {
                     อัตราสำเร็จ {stats.resolvedRate}%
                   </span>
                 </div>
-                <div className="w-12 h-12 rounded-lg bg-emerald-100 flex items-center justify-center text-xl">
-                  ✅
+                <div className="w-12 h-12 rounded-xl bg-green-50 border border-green-100 flex items-center justify-center text-green-600">
+                  <CheckCircle2 className="w-6 h-6" />
                 </div>
               </div>
               <div className="flex items-center gap-1 text-xs">
@@ -505,8 +524,8 @@ export default function AnalyticsDashboardPage() {
                     เรื่องปัญหา
                   </span>
                 </div>
-                <div className="w-12 h-12 rounded-lg bg-amber-100 flex items-center justify-center text-xl">
-                  🔍
+                <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
+                  <Search className="w-6 h-6" />
                 </div>
               </div>
               <div className="flex items-center gap-1 text-xs">
@@ -522,8 +541,9 @@ export default function AnalyticsDashboardPage() {
           <section className="bg-white rounded-2xl p-6 border border-slate-200/70 shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-sm font-bold text-slate-800">
-                  📊 กราฟแนวโน้มการแจ้งปัญหารายเดือน
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-emerald-600" />
+                  <span>กราฟแนวโน้มการแจ้งปัญหารายเดือน</span>
                 </h3>
                 <p className="text-[11px] text-slate-400">
                   เปรียบเทียบแนวโน้มระหว่างเรื่องที่รับแจ้ง และสถานะการแก้ไข (อิงสถิติ ณ ปัจจุบัน: {stats.total} เรื่อง)
@@ -536,35 +556,38 @@ export default function AnalyticsDashboardPage() {
               <button
                 type="button"
                 onClick={() => setActiveTab("reported")}
-                className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all cursor-pointer ${
+                className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all cursor-pointer inline-flex items-center gap-1.5 ${
                   activeTab === "reported"
                     ? "text-emerald-700 bg-emerald-50 border-t border-x border-emerald-500 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                📝 รับแจ้งปัญหาทั้งหมด ({stats.total})
+                <FileText className="w-3.5 h-3.5" />
+                <span>รับแจ้งปัญหาทั้งหมด ({stats.total})</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("pending")}
-                className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all cursor-pointer ${
+                className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all cursor-pointer inline-flex items-center gap-1.5 ${
                   activeTab === "pending"
                     ? "text-amber-700 bg-amber-50 border-t border-x border-amber-500 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                ⏳ แก้ยังไม่สำเร็จ / รอดำเนินการ ({stats.pending + stats.inProgress})
+                <Clock className="w-3.5 h-3.5" />
+                <span>แก้ยังไม่สำเร็จ / รอดำเนินการ ({stats.pending + stats.inProgress})</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("resolved")}
-                className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all cursor-pointer ${
+                className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-t-lg transition-all cursor-pointer inline-flex items-center gap-1.5 ${
                   activeTab === "resolved"
                     ? "text-emerald-700 bg-emerald-50 border-t border-x border-emerald-500 shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                ✅ แก้ไขสำเร็จแล้ว ({stats.resolved})
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>แก้ไขสำเร็จแล้ว ({stats.resolved})</span>
               </button>
             </div>
 
@@ -578,8 +601,9 @@ export default function AnalyticsDashboardPage() {
           <div className="grid lg:grid-cols-3 gap-6">
             <section className="lg:col-span-1 bg-white rounded-2xl p-6 border border-slate-200/70 shadow-xs space-y-4">
               <div className="border-b border-slate-100 pb-3">
-                <h3 className="text-sm font-bold text-slate-800">
-                  🏷️ สัดส่วนประเภทปัญหาจริง
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <PieChart className="w-4 h-4 text-emerald-600" />
+                  <span>สัดส่วนประเภทปัญหาจริง</span>
                 </h3>
                 <p className="text-[11px] text-slate-400">จำแนกตามประเภท (ทั้งหมด {stats.total} เรื่อง)</p>
               </div>
@@ -590,8 +614,9 @@ export default function AnalyticsDashboardPage() {
 
             <section className="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200/70 shadow-xs space-y-4">
               <div className="border-b border-slate-100 pb-3">
-                <h3 className="text-sm font-bold text-slate-800">
-                  📋 รายละเอียดจำนวนและสัดส่วนประเภทปัญหา
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-emerald-600" />
+                  <span>รายละเอียดจำนวนและสัดส่วนประเภทปัญหา</span>
                 </h3>
                 <p className="text-[11px] text-slate-400">
                   การจำแนกตามหมวดหมู่ 7 ประเภทตามข้อมูลจริงในระบบติดตาม
@@ -656,8 +681,9 @@ export default function AnalyticsDashboardPage() {
           <section className="bg-white rounded-2xl p-6 border border-slate-200/70 shadow-xs space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
               <div>
-                <h3 className="text-sm font-bold text-slate-800">
-                  🔴 อันดับพื้นที่จุดเสี่ยงที่พบบ่อย (Campus Hotspots)
+                <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                  <MapPin className="w-4 h-4 text-rose-600" />
+                  <span>อันดับพื้นที่จุดเสี่ยงที่พบบ่อย (Campus Hotspots)</span>
                 </h3>
                 <p className="text-[11px] text-slate-400">
                   สถิติความถี่สะสมตามสถานที่เกิดเหตุจริง สำหรับจัดเวรตรวจและวางแผนแก้ไข
@@ -714,8 +740,15 @@ export default function AnalyticsDashboardPage() {
                       </td>
                       <td className="py-3 px-3">{item.avgTime}</td>
                       <td className="py-3 px-3">
-                        <span className={`font-semibold ${item.riskColor}`}>
-                          {item.riskText}
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                          item.severity === "High"
+                            ? "bg-rose-50 text-rose-700 border-rose-200"
+                            : item.severity === "Medium"
+                              ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${item.severity === "High" ? "bg-rose-500" : item.severity === "Medium" ? "bg-amber-500" : "bg-emerald-500"}`}></span>
+                          <span>{item.riskText}</span>
                         </span>
                       </td>
                       <td className="py-3 px-3 text-center">
@@ -759,8 +792,9 @@ export default function AnalyticsDashboardPage() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between z-10">
               <div>
-                <h2 className="text-lg font-bold text-slate-800">
-                  🔴 รายละเอียดพื้นที่จุดเสี่ยงจริง (Campus Hotspots)
+                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-rose-600" />
+                  <span>รายละเอียดพื้นที่จุดเสี่ยงจริง (Campus Hotspots)</span>
                 </h2>
                 <p className="text-xs text-slate-400 mt-1">
                   สถิติความถี่สะสมทั้งหมด {hotspotList.length} พื้นที่ จากระบบติดตามและจัดการสถานะ
@@ -769,9 +803,9 @@ export default function AnalyticsDashboardPage() {
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 text-2xl transition cursor-pointer"
+                className="text-slate-400 hover:text-slate-600 transition cursor-pointer p-1 rounded-lg hover:bg-slate-100"
               >
-                ✕
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -812,8 +846,9 @@ export default function AnalyticsDashboardPage() {
               </div>
 
               <div className="space-y-3">
-                <h3 className="font-semibold text-slate-800 text-sm">
-                  📋 รายการพื้นที่จุดเสี่ยงทั้งหมด ({hotspotList.length} แห่ง)
+                <h3 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                  <ClipboardList className="w-4 h-4 text-emerald-600" />
+                  <span>รายการพื้นที่จุดเสี่ยงทั้งหมด ({hotspotList.length} แห่ง)</span>
                 </h3>
                 <div className="overflow-x-auto border border-slate-200 rounded-xl">
                   <table className="w-full text-left text-xs">
@@ -860,8 +895,15 @@ export default function AnalyticsDashboardPage() {
                           </td>
                           <td className="py-3 px-4 text-slate-500">{row.avgTime}</td>
                           <td className="py-3 px-4">
-                            <span className={`font-semibold ${row.riskColor}`}>
-                              {row.riskText}
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                              row.severity === "High"
+                                ? "bg-rose-50 text-rose-700 border-rose-200"
+                                : row.severity === "Medium"
+                                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${row.severity === "High" ? "bg-rose-500" : row.severity === "Medium" ? "bg-amber-500" : "bg-emerald-500"}`}></span>
+                              <span>{row.riskText}</span>
                             </span>
                           </td>
                           <td className="py-3 px-4 text-center">
@@ -891,15 +933,23 @@ export default function AnalyticsDashboardPage() {
               </div>
 
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2">
-                <h3 className="font-semibold text-emerald-900 text-sm">
-                  💡 ข้อเสนอแนะเชิงรุกตามข้อมูลจริง
+                <h3 className="font-semibold text-emerald-900 text-sm flex items-center gap-2">
+                  <Lightbulb className="w-4 h-4 text-emerald-700" />
+                  <span>ข้อเสนอแนะเชิงรุกตามข้อมูลจริง</span>
                 </h3>
                 <ul className="text-xs text-emerald-800 space-y-1.5 leading-relaxed">
-                  <li>
-                    ✓ พื้นที่ที่มีเคสสะสมสูงสุด ({hotspotList[0]?.area || "หอพักนักศึกษา"}) ควรจัดเวรตรวจสอบความเรียบร้อยเป็นลำดับแรก
+                  <li className="flex items-start gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>พื้นที่ที่มีเคสสะสมสูงสุด ({hotspotList[0]?.area || "หอพักนักศึกษา"}) ควรจัดเวรตรวจสอบความเรียบร้อยเป็นลำดับแรก</span>
                   </li>
-                  <li>✓ เรื่องที่มีความเร่งด่วนระดับ &ldquo;เร่งด่วนมาก&rdquo; มีทั้งหมด {highRiskCount} จุด ควรเร่งประสานเจ้าหน้าที่เข้าแก้ไขทันที</li>
-                  <li>✓ สามารถคลิกปุ่ม &ldquo;จัดการสถานะ&rdquo; ในตารางด้านบนเพื่อเปิดหน้าจัดการเคสและบันทึกไทม์ไลน์ได้โดยตรง</li>
+                  <li className="flex items-start gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>เรื่องที่มีความเร่งด่วนระดับ &ldquo;เร่งด่วนมาก&rdquo; มีทั้งหมด {highRiskCount} จุด ควรเร่งประสานเจ้าหน้าที่เข้าแก้ไขทันที</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>สามารถคลิกปุ่ม &ldquo;จัดการสถานะ&rdquo; ในตารางด้านบนเพื่อเปิดหน้าจัดการเคสและบันทึกไทม์ไลน์ได้โดยตรง</span>
+                  </li>
                 </ul>
               </div>
             </div>
@@ -915,9 +965,10 @@ export default function AnalyticsDashboardPage() {
               <button
                 type="button"
                 onClick={() => alert(`ดาวน์โหลดรายงานฉบับเต็ม (${hotspotList.length} พื้นที่) เรียบร้อยแล้ว`)}
-                className="px-4 py-2 rounded-xl bg-[#1b5e4a] text-white text-xs font-semibold hover:bg-[#144737] transition shadow-xs cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-[#1b5e4a] text-white text-xs font-semibold hover:bg-[#144737] transition shadow-xs cursor-pointer inline-flex items-center gap-1.5"
               >
-                📥 ส่งออกเป็น Excel
+                <Download className="w-3.5 h-3.5" />
+                <span>ส่งออกเป็น Excel</span>
               </button>
             </div>
           </div>
