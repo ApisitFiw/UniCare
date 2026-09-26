@@ -8,11 +8,11 @@ import {
   Shield,
   FileText,
   Loader2,
-  Wifi,
   WifiOff,
   MessageSquare,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { addNotification } from '@/lib/notifications'
 
 export interface TicketMessage {
   id: string
@@ -34,6 +34,53 @@ export interface CaseClarificationDrawerProps {
   currentUserName?: string
   currentUserRole?: 'admin' | 'user' | 'ADMIN' | 'USER'
   currentUserId?: string
+  reporterName?: string
+  reporterEmail?: string
+  assignedAdminName?: string
+}
+
+/**
+ * Extracts sender metadata if stored inside message as <!--sender:{...}-->
+ * and falls back to context defaults (reporterName or assignedAdminName)
+ */
+export function parseTicketMessage(
+  raw: TicketMessage,
+  defaults?: { reporterName?: string; assignedAdminName?: string }
+): TicketMessage {
+  let cleanMessage = raw.message || ''
+  let senderName = raw.sender_name
+  let senderId = raw.sender_id
+
+  if (cleanMessage.startsWith('<!--sender:')) {
+    const endIdx = cleanMessage.indexOf('-->')
+    if (endIdx !== -1) {
+      try {
+        const jsonStr = cleanMessage.substring('<!--sender:'.length, endIdx)
+        const meta = JSON.parse(jsonStr)
+        if (meta.name) senderName = meta.name
+        if (meta.id) senderId = meta.id
+        cleanMessage = cleanMessage.substring(endIdx + 3)
+      } catch {
+        // ignore parse error
+      }
+    }
+  }
+
+  // Fallbacks if senderName is still not set
+  if (!senderName) {
+    if (raw.sender_role === 'admin') {
+      senderName = defaults?.assignedAdminName || 'เจ้าหน้าที่ / Admin'
+    } else {
+      senderName = defaults?.reporterName || 'ผู้แจ้งเรื่อง (User)'
+    }
+  }
+
+  return {
+    ...raw,
+    message: cleanMessage,
+    sender_name: senderName,
+    sender_id: senderId,
+  }
 }
 
 export default function CaseClarificationDrawer({
@@ -46,6 +93,9 @@ export default function CaseClarificationDrawer({
   currentUserName,
   currentUserRole = 'user',
   currentUserId,
+  reporterName,
+  reporterEmail,
+  assignedAdminName,
 }: CaseClarificationDrawerProps) {
   // Normalize role and ID
   const normalizedRole: 'admin' | 'user' =
@@ -82,7 +132,10 @@ export default function CaseClarificationDrawer({
           .order('created_at', { ascending: true })
 
         if (!error && data && isMounted) {
-          setMessages(data as TicketMessage[])
+          const parsed = (data as TicketMessage[]).map((m) =>
+            parseTicketMessage(m, { reporterName, assignedAdminName })
+          )
+          setMessages(parsed)
         }
       } catch (err) {
         console.error('Error fetching ticket messages:', err)
@@ -107,8 +160,11 @@ export default function CaseClarificationDrawer({
           filter: `report_id=eq.${currentId}`,
         },
         (payload) => {
-          const newRow = payload.new as TicketMessage
           if (!isMounted) return
+          const newRow = parseTicketMessage(payload.new as TicketMessage, {
+            reporterName,
+            assignedAdminName,
+          })
 
           setMessages((prev) => {
             // Deduplicate if already present (e.g. from optimistic UI)
@@ -130,7 +186,8 @@ export default function CaseClarificationDrawer({
       isMounted = false
       supabase.removeChannel(channel)
     }
-  }, [isOpen, activeReportId])
+  }, [isOpen, activeReportId, reporterName, assignedAdminName])
+
   // Scroll to bottom function
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
     if (messagesEndRef.current) {
@@ -176,6 +233,9 @@ export default function CaseClarificationDrawer({
     const currentId = String(activeReportId)
     const tempId = `temp-${Date.now()}`
     const tempCreatedAt = new Date().toISOString()
+    const senderDisplayName =
+      currentUserName ||
+      (normalizedRole === 'admin' ? 'เจ้าหน้าที่ (Admin)' : 'ผู้แจ้งเรื่อง (User)')
 
     // Optimistic message to display instantly
     const optimisticMsg: TicketMessage = {
@@ -183,7 +243,7 @@ export default function CaseClarificationDrawer({
       report_id: currentId,
       sender_role: normalizedRole,
       sender_id: currentUserId,
-      sender_name: currentUserName,
+      sender_name: senderDisplayName,
       message: trimmed,
       created_at: tempCreatedAt,
     }
@@ -196,13 +256,19 @@ export default function CaseClarificationDrawer({
     setTimeout(() => scrollToBottom('smooth'), 10)
 
     try {
+      // Embed metadata into message string so all clients get real sender info
+      const meta = JSON.stringify({
+        name: senderDisplayName,
+        id: currentUserId || '',
+        role: normalizedRole,
+      })
+      const encodedMessage = `<!--sender:${meta}-->${trimmed}`
+
       const payload: Record<string, unknown> = {
         report_id: currentId,
         sender_role: normalizedRole,
-        message: trimmed,
+        message: encodedMessage,
       }
-      if (currentUserId) payload.sender_id = currentUserId
-      if (currentUserName) payload.sender_name = currentUserName
 
       const { data, error } = await supabase
         .from('ticket_messages')
@@ -211,33 +277,54 @@ export default function CaseClarificationDrawer({
         .single()
 
       if (!error && data) {
-        // Replace temporary optimistic message with real saved message
+        // Replace temporary optimistic message with parsed real saved message
+        const parsed = parseTicketMessage(data as TicketMessage, {
+          reporterName,
+          assignedAdminName,
+        })
         setMessages((prev) =>
-          prev.map((m) => (m.id === tempId ? (data as TicketMessage) : m))
+          prev.map((m) => (m.id === tempId ? parsed : m))
         )
       } else if (error) {
-        // Fallback if sender_id or sender_name column does not exist
-        if (payload.sender_id || payload.sender_name) {
-          const fallback = await supabase
-            .from('ticket_messages')
-            .insert([
-              {
-                report_id: currentId,
-                sender_role: normalizedRole,
-                message: trimmed,
-              },
-            ])
-            .select()
-            .single()
-
-          if (!fallback.error && fallback.data) {
-            setMessages((prev) =>
-              prev.map((m) => (m.id === tempId ? (fallback.data as TicketMessage) : m))
-            )
-            return
-          }
-        }
         console.warn('Could not insert to ticket_messages table:', error.message)
+      }
+
+      // If Admin is sending, trigger notification for User
+      if (normalizedRole === 'admin') {
+        const notifTitle = 'เจ้าหน้าที่ตอบกลับข้อความแล้ว'
+        const shortMsg = trimmed.length > 60 ? `${trimmed.slice(0, 60)}...` : trimmed
+        const notifDesc = `เคส #${currentId}${activeTitle ? ` "${activeTitle}"` : ''}: ${shortMsg}`
+
+        // Save locally and trigger window events for instant UI update
+        addNotification({
+          title: notifTitle,
+          description: notifDesc,
+          type: 'status',
+          link: `/my-reports?chat=${currentId}`,
+          targetRole: 'user',
+          targetName: reporterName,
+          targetEmail: reporterEmail,
+          issueId: currentId,
+          isRead: false,
+        })
+
+        // Also insert into Supabase notifications table
+        supabase
+          .from('notifications')
+          .insert([
+            {
+              title: notifTitle,
+              message: notifDesc,
+              type: 'status',
+              reference_id: currentId,
+              is_read: false,
+            },
+          ])
+          .then(({ error: notifErr }) => {
+            if (notifErr) {
+              console.warn('Could not record notification in Supabase:', notifErr.message)
+            }
+          })
       }
     } catch (err) {
       console.error('Error inserting ticket message:', err)
@@ -273,13 +360,13 @@ export default function CaseClarificationDrawer({
                   ระบบสนทนาเรื่องแจ้ง
                 </h3>
                 <span
-                  className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+                  className={`text-[9px] font-bold px-2.5 py-0.5 rounded-full border ${
                     normalizedRole === 'admin'
                       ? 'bg-[#1b5e4a] text-white border-[#144737]'
                       : 'bg-emerald-100 text-emerald-800 border-emerald-200'
                   }`}
                 >
-                  มุมมอง: {normalizedRole === 'admin' ? 'เจ้าหน้าที่ (Admin)' : 'ผู้แจ้งเรื่อง (User)'}
+                  {normalizedRole === 'admin' ? 'เจ้าหน้าที่ (Admin)' : 'ผู้แจ้งเรื่อง (User)'}
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-0.5">
@@ -344,11 +431,20 @@ export default function CaseClarificationDrawer({
               // Perspective-based alignment:
               // ข้อความที่ส่งโดยผู้ใช้งานปัจจุบัน (ตัวเอง): จัดชิดขวาเสมอ (Right-aligned)
               // ข้อความที่ส่งโดยอีกฝ่าย (คู่สนทนา): จัดชิดซ้ายเสมอ (Left-aligned)
-              const isSelf =
-                currentUserId && msg.sender_id
-                  ? msg.sender_id === currentUserId
-                  : msg.sender_role === normalizedRole
               const isSenderAdmin = msg.sender_role === 'admin'
+              const isSelf = (() => {
+                if (currentUserId && msg.sender_id) {
+                  return msg.sender_id === currentUserId
+                }
+                if (currentUserName && msg.sender_name) {
+                  return msg.sender_name === currentUserName
+                }
+                return msg.sender_role === normalizedRole
+              })()
+
+              const displaySenderName = isSenderAdmin
+                ? msg.sender_name || assignedAdminName || 'เจ้าหน้าที่ / Admin'
+                : msg.sender_name || reporterName || 'ผู้แจ้งเรื่อง (User)'
 
               return (
                 <div
@@ -404,26 +500,22 @@ export default function CaseClarificationDrawer({
                           </span>
                         </>
                       ) : (
-                        /* ข้อความของอีกฝ่าย (จัดชิดซ้ายเสมอ พร้อมแสดงชื่อหรือบทบาทกำกับ) */
+                        /* ข้อความของอีกฝ่าย (จัดชิดซ้ายเสมอ พร้อมแสดงชื่อเฉพาะของแต่ละคน) */
                         <>
                           <span className="font-bold flex items-center gap-1">
                             {isSenderAdmin ? (
                               <span className="px-2 py-0.5 text-[10px] font-bold bg-[#1b5e4a] text-white rounded-md shadow-2xs flex items-center gap-1">
                                 <Shield className="w-2.5 h-2.5 text-emerald-300" />
-                                {msg.sender_name ? (
-                                  <span className="notranslate" data-user-content="true">{msg.sender_name}</span>
-                                ) : (
-                                  'เจ้าหน้าที่ / Admin'
-                                )}
+                                <span className="notranslate" data-user-content="true">
+                                  {displaySenderName}
+                                </span>
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-md border border-emerald-200 flex items-center gap-1">
                                 <User className="w-2.5 h-2.5 text-emerald-700" />
-                                {msg.sender_name ? (
-                                  <span className="notranslate" data-user-content="true">{msg.sender_name}</span>
-                                ) : (
-                                  'ผู้แจ้งเรื่อง (User)'
-                                )}
+                                <span className="notranslate" data-user-content="true">
+                                  {displaySenderName}
+                                </span>
                               </span>
                             )}
                           </span>
@@ -435,8 +527,6 @@ export default function CaseClarificationDrawer({
                     </div>
 
                     {/* Chat Bubble */}
-                    {/* ตัวเอง: ชิดขวา สีเขียวเข้มเด่นชัด rounded-tr-none */}
-                    {/* อีกฝ่าย: ชิดซ้าย กล่องการ์ดสีขาวสะอาดตา rounded-tl-none */}
                     <div
                       className={`p-3 rounded-2xl border shadow-xs leading-relaxed text-xs break-words max-w-full ${
                         isSelf

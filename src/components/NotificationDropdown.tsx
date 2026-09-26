@@ -9,10 +9,12 @@ import {
   getUserNotifications,
   markAllNotificationsAsRead,
   markNotificationAsRead,
+  addNotification,
 } from "@/lib/notifications";
-import { Bell, ClipboardList, Megaphone, AlertTriangle } from "lucide-react";
+import { Bell, ClipboardList, Megaphone, AlertTriangle, MessageSquare } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { getDemoSession } from "@/lib/authService";
+import { supabase } from "@/lib/supabaseClient";
 
 interface NotificationDropdownProps {
   role?: "ADMIN" | "USER";
@@ -71,7 +73,54 @@ export default function NotificationDropdown({
     window.addEventListener("unicare-profile-updated", update);
     window.addEventListener("focus", update);
 
+    // Supabase Realtime for instant notification when Admin replies in chat
+    const channelName = `notif_realtime_chat_${Date.now()}`;
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "ticket_messages",
+        },
+        (payload) => {
+          const row = payload.new as any;
+          if (row?.sender_role === "admin") {
+            const user = getCurrentUser();
+            if (user.role === "user") {
+              const rawMsg = row.message || "";
+              let cleanText = rawMsg;
+              let senderName = "เจ้าหน้าที่ (Admin)";
+              if (rawMsg.startsWith("<!--sender:")) {
+                const endIdx = rawMsg.indexOf("-->");
+                if (endIdx !== -1) {
+                  try {
+                    const meta = JSON.parse(rawMsg.substring("<!--sender:".length, endIdx));
+                    if (meta.name) senderName = meta.name;
+                    cleanText = rawMsg.substring(endIdx + 3);
+                  } catch {}
+                }
+              }
+              const shortText = cleanText.length > 55 ? cleanText.slice(0, 55) + "..." : cleanText;
+              addNotification({
+                title: "เจ้าหน้าที่ตอบกลับข้อความแล้ว",
+                description: `${senderName}: "${shortText}" (เคส #${row.report_id})`,
+                type: "status",
+                link: `/my-reports?chat=${row.report_id}`,
+                targetRole: "user",
+                issueId: row.report_id,
+                isRead: false,
+              });
+              update();
+            }
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
+      supabase.removeChannel(channel);
       window.removeEventListener("storage", update);
       window.removeEventListener("unicare-notifications-updated", update);
       window.removeEventListener("unicare-profile-updated", update);
@@ -168,11 +217,17 @@ export default function NotificationDropdown({
           <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
             {notifications.length > 0 ? (
               notifications.map((item) => {
+                const isChatNotif =
+                  item.title.includes("ตอบกลับ") ||
+                  item.title.includes("แชท") ||
+                  item.title.includes("สนทนา") ||
+                  Boolean(item.link?.includes("chat="));
+
                 let targetLink = item.link || "#";
-                if (isAdmin && targetLink === "/my-reports") {
-                  targetLink = "/admin/reports";
+                if (isAdmin && targetLink.startsWith("/my-reports")) {
+                  targetLink = targetLink.replace("/my-reports", "/admin/issues");
                 } else if (!isAdmin && targetLink.startsWith("/admin")) {
-                  targetLink = "/my-reports";
+                  targetLink = targetLink.replace(/\/admin\/[a-zA-Z0-9_-]+/, "/my-reports");
                 }
 
                 return (
@@ -189,14 +244,18 @@ export default function NotificationDropdown({
                   >
                     <div
                       className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm mt-0.5 ${
-                        item.type === "status"
+                        isChatNotif
+                          ? "bg-emerald-100 text-emerald-800"
+                          : item.type === "status"
                           ? "bg-amber-100 text-amber-800"
                           : item.type === "news"
                             ? "bg-emerald-100 text-emerald-800"
                             : "bg-rose-100 text-rose-800"
                       }`}
                     >
-                      {item.type === "status" ? (
+                      {isChatNotif ? (
+                        <MessageSquare className="w-4 h-4 text-emerald-700" />
+                      ) : item.type === "status" ? (
                         <ClipboardList className="w-4 h-4" />
                       ) : item.type === "news" ? (
                         <Megaphone className="w-4 h-4" />
