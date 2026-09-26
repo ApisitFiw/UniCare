@@ -34,6 +34,7 @@ import {
   Layers,
   Sparkles,
   Megaphone,
+  Eye,
 } from "lucide-react";
 
 const CATEGORY_OPTIONS = [
@@ -66,7 +67,8 @@ export default function AdminAnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const [urgencyFilter, setUrgencyFilter] = useState<"all" | "urgent" | "normal">("all");
+  const [activeTab, setActiveTab] = useState<"all" | "pinned" | "urgent" | "normal">("all");
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<AnnouncementItem | null>(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -110,7 +112,9 @@ export default function AdminAnnouncementsPage() {
     return announcements
       .filter((item) => {
         if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
-        if (urgencyFilter !== "all" && item.urgency !== urgencyFilter) return false;
+        if (activeTab === "pinned" && !item.isPinned) return false;
+        if (activeTab === "urgent" && item.urgency !== "urgent") return false;
+        if (activeTab === "normal" && item.urgency !== "normal") return false;
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase().trim();
           const matchTitle = item.title.toLowerCase().includes(q);
@@ -127,7 +131,7 @@ export default function AdminAnnouncementsPage() {
         if (!a.isPinned && b.isPinned) return 1;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [announcements, categoryFilter, urgencyFilter, searchQuery]);
+  }, [announcements, categoryFilter, activeTab, searchQuery]);
 
   const counts = useMemo(() => {
     return {
@@ -228,41 +232,36 @@ export default function AdminAnnouncementsPage() {
         {/* ================= Summary Cards ================= */}
         <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <SummaryCard
-            active={urgencyFilter === "all" && categoryFilter === "all"}
+            active={activeTab === "all"}
             label="ประกาศทั้งหมด"
             count={counts.all}
             icon={<Newspaper className="h-5 w-5" />}
             iconClass="bg-emerald-50 text-emerald-700"
-            onClick={() => {
-              setUrgencyFilter("all");
-              setCategoryFilter("all");
-            }}
+            onClick={() => setActiveTab("all")}
           />
           <SummaryCard
-            active={urgencyFilter === "all" && categoryFilter !== "all"}
+            active={activeTab === "pinned"}
             label="ปักหมุดสำคัญ"
             count={counts.pinned}
             icon={<Pin className="h-5 w-5" />}
             iconClass="bg-amber-50 text-amber-600"
-            onClick={() => {
-              setCategoryFilter("all");
-            }}
+            onClick={() => setActiveTab("pinned")}
           />
           <SummaryCard
-            active={urgencyFilter === "urgent"}
+            active={activeTab === "urgent"}
             label="ระดับเร่งด่วน / มาตรการ"
             count={counts.urgent}
             icon={<AlertCircle className="h-5 w-5" />}
             iconClass="bg-rose-50 text-rose-500"
-            onClick={() => setUrgencyFilter("urgent")}
+            onClick={() => setActiveTab("urgent")}
           />
           <SummaryCard
-            active={urgencyFilter === "normal"}
+            active={activeTab === "normal"}
             label="ข่าวสารทั่วไป"
             count={counts.normal}
             icon={<CheckCircle2 className="h-5 w-5" />}
             iconClass="bg-blue-50 text-blue-600"
-            onClick={() => setUrgencyFilter("normal")}
+            onClick={() => setActiveTab("normal")}
           />
         </section>
 
@@ -286,7 +285,7 @@ export default function AdminAnnouncementsPage() {
                     <button
                       type="button"
                       onClick={() => setSearchQuery("")}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -296,7 +295,7 @@ export default function AdminAnnouncementsPage() {
                 <select
                   value={categoryFilter}
                   onChange={(e) => setCategoryFilter(e.target.value)}
-                  className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-xs text-slate-700 transition focus:border-emerald-500 focus:bg-white focus:outline-none"
+                  className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-xs text-slate-700 transition focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
                 >
                   <option value="all">ทุกหมวดหมู่ ({announcements.length})</option>
                   {CATEGORY_OPTIONS.map((cat) => (
@@ -307,13 +306,14 @@ export default function AdminAnnouncementsPage() {
                 </select>
 
                 <select
-                  value={urgencyFilter}
-                  onChange={(e) => setUrgencyFilter(e.target.value as any)}
-                  className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-xs text-slate-700 transition focus:border-emerald-500 focus:bg-white focus:outline-none"
+                  value={activeTab}
+                  onChange={(e) => setActiveTab(e.target.value as any)}
+                  className="rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-xs text-slate-700 transition focus:border-emerald-500 focus:bg-white focus:outline-none cursor-pointer"
                 >
-                  <option value="all">ทุกระดับความสำคัญ</option>
-                  <option value="urgent">เร่งด่วน / มาตรการ</option>
-                  <option value="normal">ปกติ</option>
+                  <option value="all">ทุกระดับความสำคัญ ({announcements.length})</option>
+                  <option value="pinned">ปักหมุดสำคัญ ({counts.pinned})</option>
+                  <option value="urgent">เร่งด่วน / มาตรการ ({counts.urgent})</option>
+                  <option value="normal">ข่าวสารทั่วไป ({counts.normal})</option>
                 </select>
               </div>
 
@@ -329,27 +329,100 @@ export default function AdminAnnouncementsPage() {
             </div>
           </div>
 
+          {/* Active Filter Bar (if filtered) */}
+          {(activeTab !== "all" || categoryFilter !== "all" || searchQuery) && (
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-emerald-50/40 px-4 py-2.5 sm:px-5 text-xs">
+              <div className="flex flex-wrap items-center gap-2 text-slate-600">
+                <span className="font-semibold text-slate-500">กำลังแสดง:</span>
+                {activeTab !== "all" && (
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-bold ${
+                      activeTab === "pinned"
+                        ? "border border-amber-200 bg-amber-100 text-amber-800"
+                        : activeTab === "urgent"
+                        ? "border border-rose-200 bg-rose-100 text-rose-800"
+                        : "border border-blue-200 bg-blue-100 text-blue-800"
+                    }`}
+                  >
+                    {activeTab === "pinned" && <Pin className="h-3 w-3" />}
+                    {activeTab === "urgent" && <AlertCircle className="h-3 w-3" />}
+                    {activeTab === "normal" && <CheckCircle2 className="h-3 w-3" />}
+                    <span>
+                      {activeTab === "pinned"
+                        ? "ปักหมุดสำคัญ"
+                        : activeTab === "urgent"
+                        ? "เร่งด่วน / มาตรการ"
+                        : "ข่าวสารทั่วไป"}
+                    </span>
+                  </span>
+                )}
+                {categoryFilter !== "all" && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-0.5 font-semibold text-emerald-800">
+                    <span>{categoryFilter}</span>
+                  </span>
+                )}
+                {searchQuery && (
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-slate-700">
+                    <span>ค้นหา: "{searchQuery}"</span>
+                  </span>
+                )}
+                <span className="text-slate-400">
+                  (พบ {filteredList.length} รายการ)
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("all");
+                  setCategoryFilter("all");
+                  setSearchQuery("");
+                }}
+                className="cursor-pointer text-[11px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline"
+              >
+                ล้างตัวกรองทั้งหมด
+              </button>
+            </div>
+          )}
+
           {/* List of Announcements */}
           <div className="p-4 sm:p-5">
             {filteredList.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-200 p-12 text-center">
                 <Newspaper className="mx-auto h-10 w-10 text-slate-300" />
                 <h3 className="mt-3 text-sm font-bold text-slate-700">
-                  ไม่พบข้อมูลประกาศ
+                  {activeTab === "pinned" ? "ยังไม่มีประกาศที่ปักหมุดสำคัญ" : "ไม่พบข้อมูลประกาศ"}
                 </h3>
                 <p className="mt-1 text-xs text-slate-400">
-                  {searchQuery || categoryFilter !== "all" || urgencyFilter !== "all"
+                  {activeTab === "pinned"
+                    ? "คุณสามารถกดไอคอนหมุดที่ประกาศเพื่อปักหมุดสำคัญไว้บนสุดได้"
+                    : searchQuery || categoryFilter !== "all" || activeTab !== "all"
                     ? "ลองปรับเงื่อนไขการค้นหาหรือตัวกรองใหม่อีกครั้ง"
                     : "ยังไม่มีการโพสต์ประกาศข่าวสารในระบบ"}
                 </p>
-                <button
-                  type="button"
-                  onClick={handleOpenCreateModal}
-                  className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>สร้างประกาศแรกเลย</span>
-                </button>
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                  {activeTab !== "all" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab("all");
+                        setCategoryFilter("all");
+                        setSearchQuery("");
+                      }}
+                      className="cursor-pointer inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-bold text-slate-700 transition hover:bg-slate-100"
+                    >
+                      <span>ดูประกาศทั้งหมด</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleOpenCreateModal}
+                    className="cursor-pointer inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>สร้างประกาศใหม่</span>
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="space-y-3.5">
@@ -358,10 +431,11 @@ export default function AdminAnnouncementsPage() {
                   return (
                     <article
                       key={item.id}
-                      className={`relative rounded-2xl border p-4 sm:p-5 transition hover:shadow-md ${
+                      onClick={() => setSelectedAnnouncement(item)}
+                      className={`group relative rounded-2xl border p-4 sm:p-5 transition hover:shadow-md cursor-pointer ${
                         item.isPinned
-                          ? "border-amber-200 bg-gradient-to-r from-amber-50/50 via-white to-white"
-                          : "border-slate-200/90 bg-white"
+                          ? "border-amber-200 bg-gradient-to-r from-amber-50/50 via-white to-white hover:border-amber-300"
+                          : "border-slate-200/90 bg-white hover:border-emerald-300"
                       }`}
                     >
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -406,16 +480,16 @@ export default function AdminAnnouncementsPage() {
 
                           {/* Title */}
                           <h3
-                            className="text-sm sm:text-base font-extrabold text-slate-800 leading-snug announcement-content"
+                            className="text-sm sm:text-base font-extrabold text-slate-800 leading-snug group-hover:text-emerald-800 transition announcement-content"
                             data-no-translate="true"
                             translate="no"
                           >
                             {item.title}
                           </h3>
 
-                          {/* Content */}
+                          {/* Content preview */}
                           <p
-                            className="text-xs sm:text-sm text-slate-600 leading-relaxed whitespace-pre-line announcement-content"
+                            className="text-xs sm:text-sm text-slate-600 leading-relaxed whitespace-pre-line announcement-content line-clamp-2 sm:line-clamp-3"
                             data-no-translate="true"
                             translate="no"
                           >
@@ -439,6 +513,10 @@ export default function AdminAnnouncementsPage() {
                               <Calendar className="h-3.5 w-3.5 text-slate-400" />
                               <span>{item.date}</span>
                             </span>
+
+                            <span className="text-emerald-700 font-semibold group-hover:underline inline-flex items-center gap-1">
+                              <span>คลิกเพื่อดูรายละเอียด</span>
+                            </span>
                           </div>
                         </div>
 
@@ -446,8 +524,24 @@ export default function AdminAnnouncementsPage() {
                         <div className="flex shrink-0 items-center gap-1.5 sm:self-start pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                           <button
                             type="button"
-                            onClick={() => togglePinAnnouncement(item.id)}
-                            className={`inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedAnnouncement(item);
+                            }}
+                            className="cursor-pointer inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+                            title="ดูรายละเอียดประกาศ"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">ดูรายละเอียด</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePinAnnouncement(item.id);
+                            }}
+                            className={`cursor-pointer inline-flex items-center gap-1 rounded-xl border px-2.5 py-1.5 text-xs font-semibold transition ${
                               item.isPinned
                                 ? "border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
                                 : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
@@ -469,8 +563,11 @@ export default function AdminAnnouncementsPage() {
 
                           <button
                             type="button"
-                            onClick={() => handleOpenEditModal(item)}
-                            className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditModal(item);
+                            }}
+                            className="cursor-pointer inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
                             title="แก้ไขประกาศ"
                           >
                             <Edit3 className="h-3.5 w-3.5" />
@@ -479,8 +576,11 @@ export default function AdminAnnouncementsPage() {
 
                           <button
                             type="button"
-                            onClick={() => setDeletingId(item.id)}
-                            className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 hover:text-rose-700"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeletingId(item.id);
+                            }}
+                            className="cursor-pointer inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-100 hover:text-rose-700"
                             title="ลบประกาศนี้"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -496,6 +596,171 @@ export default function AdminAnnouncementsPage() {
           </div>
         </section>
       </main>
+
+      {/* ================= Announcement Detail Modal ================= */}
+      {selectedAnnouncement && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-xs"
+          onClick={() => setSelectedAnnouncement(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-lg overflow-hidden rounded-3xl border border-white/60 bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className={`h-1.5 ${
+                selectedAnnouncement.isPinned
+                  ? "bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600"
+                  : "bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-700"
+              }`}
+            />
+
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div className="flex items-center gap-2.5">
+                <span
+                  className={`flex h-9 w-9 items-center justify-center rounded-xl border ${
+                    selectedAnnouncement.isPinned
+                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-100"
+                  }`}
+                >
+                  {selectedAnnouncement.isPinned ? (
+                    <Pin className="h-4 w-4" />
+                  ) : (
+                    <Newspaper className="h-4 w-4" />
+                  )}
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">
+                    รายละเอียดประกาศ
+                  </h3>
+                  <p className="text-[10px] text-slate-400">
+                    มหาวิทยาลัยวลัยลักษณ์ · UniCare
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedAnnouncement(null)}
+                className="cursor-pointer rounded-full bg-slate-100 p-1.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {/* Badges */}
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {selectedAnnouncement.isPinned && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 font-bold text-amber-800">
+                    <Pin className="h-3 w-3" />
+                    <span>ปักหมุดสำคัญ</span>
+                  </span>
+                )}
+                {selectedAnnouncement.urgency === "urgent" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 font-bold text-rose-700">
+                    <AlertCircle className="h-3 w-3" />
+                    <span>เร่งด่วน / มาตรการ</span>
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 font-semibold text-emerald-800">
+                  {getCategoryIcon(selectedAnnouncement.category)}
+                  <span>{selectedAnnouncement.category}</span>
+                </span>
+                {selectedAnnouncement.tag && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-600">
+                    <Tag className="h-2.5 w-2.5" />
+                    <span>{selectedAnnouncement.tag}</span>
+                  </span>
+                )}
+                <span className="text-[10px] text-slate-400 font-mono">
+                  #{selectedAnnouncement.id}
+                </span>
+              </div>
+
+              {/* Title */}
+              <h2 className="text-base sm:text-lg font-extrabold text-slate-900 leading-snug">
+                {selectedAnnouncement.title}
+              </h2>
+
+              {/* Content */}
+              <div className="rounded-2xl bg-slate-50/80 p-4 border border-slate-100">
+                <p className="text-xs sm:text-sm text-slate-700 leading-relaxed whitespace-pre-line">
+                  {selectedAnnouncement.content}
+                </p>
+              </div>
+
+              {/* Meta */}
+              <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 border-t border-slate-100">
+                <span className="inline-flex items-center gap-1.5 font-medium text-slate-600">
+                  <User className="h-3.5 w-3.5 text-slate-400" />
+                  <span>ผู้ประกาศ: {selectedAnnouncement.author}</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                  <span>{selectedAnnouncement.date}</span>
+                </span>
+              </div>
+
+              {/* Quick Actions in Detail Modal */}
+              <div className="pt-3 flex items-center justify-between gap-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    togglePinAnnouncement(selectedAnnouncement.id);
+                    setSelectedAnnouncement({
+                      ...selectedAnnouncement,
+                      isPinned: !selectedAnnouncement.isPinned,
+                    });
+                  }}
+                  className={`cursor-pointer inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-semibold transition ${
+                    selectedAnnouncement.isPinned
+                      ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                      : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  {selectedAnnouncement.isPinned ? (
+                    <>
+                      <PinOff className="h-3.5 w-3.5" />
+                      <span>ยกเลิกปักหมุด</span>
+                    </>
+                  ) : (
+                    <>
+                      <Pin className="h-3.5 w-3.5" />
+                      <span>ปักหมุดไว้บนสุด</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const itemToEdit = selectedAnnouncement;
+                      setSelectedAnnouncement(null);
+                      handleOpenEditModal(itemToEdit);
+                    }}
+                    className="cursor-pointer inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition"
+                  >
+                    <Edit3 className="h-3.5 w-3.5" />
+                    <span>แก้ไข</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedAnnouncement(null)}
+                    className="cursor-pointer rounded-xl bg-slate-100 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 transition"
+                  >
+                    ปิด
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ================= Create / Edit Modal ================= */}
       {isModalOpen && (
@@ -738,9 +1003,15 @@ function SummaryCard({
     <button
       type="button"
       onClick={onClick}
-      className={`group flex items-center justify-between rounded-2xl border p-4 text-left transition ${
+      className={`group flex items-center justify-between rounded-2xl border p-4 text-left transition cursor-pointer ${
         active
-          ? "border-emerald-600 bg-white shadow-md ring-2 ring-emerald-500/20"
+          ? label === "ปักหมุดสำคัญ"
+            ? "border-amber-400 bg-amber-50/30 shadow-md ring-2 ring-amber-400/30"
+            : label.includes("เร่งด่วน")
+            ? "border-rose-400 bg-rose-50/30 shadow-md ring-2 ring-rose-400/30"
+            : label.includes("ทั่วไป")
+            ? "border-blue-400 bg-blue-50/30 shadow-md ring-2 ring-blue-400/30"
+            : "border-emerald-600 bg-white shadow-md ring-2 ring-emerald-500/20"
           : "border-slate-200/90 bg-white hover:border-emerald-300 hover:shadow-xs"
       }`}
     >
