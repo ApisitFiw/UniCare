@@ -11,6 +11,7 @@ import {
   markNotificationAsRead,
   addNotification,
 } from "@/lib/notifications";
+import { getUserAllIssues } from "@/lib/issuesData";
 import { Bell, ClipboardList, Megaphone, AlertTriangle, MessageSquare } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import { getDemoSession } from "@/lib/authService";
@@ -42,13 +43,11 @@ export default function NotificationDropdown({
     const effectiveName =
       session?.name ||
       userName ||
-      (effectiveRole === "admin" ? "นัฐกรณ์" : "กิตติภูมิ");
+      (effectiveRole === "admin" ? "เจ้าหน้าที่" : "");
     const effectiveEmail =
       session?.email ||
       userEmail ||
-      (effectiveRole === "admin"
-        ? "Natthakon030948@gmail.com"
-        : "kittipoom@example.com");
+      "";
 
     return {
       role: effectiveRole,
@@ -73,7 +72,7 @@ export default function NotificationDropdown({
     window.addEventListener("unicare-profile-updated", update);
     window.addEventListener("focus", update);
 
-    // Supabase Realtime for instant notification when Admin replies in chat
+    // 1. Supabase Realtime for instant notification when messages arrive in ticket_messages
     const channelName = `notif_realtime_chat_${Date.now()}`;
     const channel = supabase
       .channel(channelName)
@@ -84,32 +83,204 @@ export default function NotificationDropdown({
           schema: "public",
           table: "ticket_messages",
         },
-        (payload) => {
+        async (payload) => {
           const row = payload.new as any;
-          if (row?.sender_role === "admin") {
-            const user = getCurrentUser();
-            if (user.role === "user") {
-              const rawMsg = row.message || "";
-              let cleanText = rawMsg;
-              let senderName = "เจ้าหน้าที่ (Admin)";
-              if (rawMsg.startsWith("<!--sender:")) {
-                const endIdx = rawMsg.indexOf("-->");
-                if (endIdx !== -1) {
-                  try {
-                    const meta = JSON.parse(rawMsg.substring("<!--sender:".length, endIdx));
-                    if (meta.name) senderName = meta.name;
-                    cleanText = rawMsg.substring(endIdx + 3);
-                  } catch {}
+          if (!row?.report_id) return;
+
+          const user = getCurrentUser();
+
+          // Case A: Admin replied, recipient is ONLY the user who reported this issue
+          if (row?.sender_role === "admin" && user.role === "user") {
+            const currentSession = getDemoSession() || user;
+            const userIssues = getUserAllIssues({
+              email: currentSession.email ?? undefined,
+              name: currentSession.name ?? undefined,
+            });
+            const targetReportId = String(row.report_id).replace(/^#/, "").trim().toLowerCase();
+            const targetNumMatch = targetReportId.match(/\d+$/);
+            const targetNum = targetNumMatch ? parseInt(targetNumMatch[0], 10) : null;
+
+            let isOwner = userIssues.some((issue) => {
+              const cleanId = String(issue.id || "").replace(/^#/, "").trim().toLowerCase();
+              const cleanSubId = String(issue.supabaseId || "").trim().toLowerCase();
+              const cleanRawId = String(issue.rawId || "").trim().toLowerCase();
+
+              if (cleanId === targetReportId || cleanSubId === targetReportId || cleanRawId === targetReportId) {
+                return true;
+              }
+              if (targetNum !== null) {
+                const issueNumMatch = cleanId.match(/\d+$/);
+                if (issueNumMatch && parseInt(issueNumMatch[0], 10) === targetNum) {
+                  return true;
                 }
               }
-              const shortText = cleanText.length > 55 ? cleanText.slice(0, 55) + "..." : cleanText;
+              return false;
+            });
+
+            // If not found in local user issues cache, double check against Supabase
+            if (!isOwner) {
+              try {
+                const { data: issueRow } = await supabase
+                  .from("issues")
+                  .select("id, ticket_number, reporter_id, reporter:profiles!reporter_id(id, full_name, email)")
+                  .or(`id.eq.${row.report_id},ticket_number.eq.${row.report_id}`)
+                  .maybeSingle();
+
+                if (issueRow) {
+                  const rep = (issueRow as any).reporter;
+                  const uEmail = (user.email || "").toLowerCase().trim();
+                  const uName = (user.name || "").toLowerCase().trim();
+                  const rEmail = (rep?.email || "").toLowerCase().trim();
+                  const rName = (rep?.full_name || "").toLowerCase().trim();
+
+                  if ((uEmail && rEmail && uEmail === rEmail) || (uName && rName && uName === rName)) {
+                    isOwner = true;
+                  }
+                }
+              } catch {
+                // ignore
+              }
+            }
+
+            // CRITICAL: If the current logged-in user is NOT the reporter, do NOT notify!
+            if (!isOwner) {
+              return;
+            }
+
+            const rawMsg = row.message || "";
+            let cleanText = rawMsg;
+            let senderName = "เจ้าหน้าที่ (Admin)";
+            if (rawMsg.startsWith("<!--sender:")) {
+              const endIdx = rawMsg.indexOf("-->");
+              if (endIdx !== -1) {
+                try {
+                  const meta = JSON.parse(rawMsg.substring("<!--sender:".length, endIdx));
+                  if (meta.name) senderName = meta.name;
+                  cleanText = rawMsg.substring(endIdx + 3);
+                } catch {}
+              }
+            }
+            const shortText = cleanText.length > 55 ? cleanText.slice(0, 55) + "..." : cleanText;
+            addNotification({
+              title: "เจ้าหน้าที่ตอบกลับข้อความแล้ว",
+              description: `${senderName}: "${shortText}" (เคส #${row.report_id})`,
+              type: "status",
+              link: `/my-reports?chat=${row.report_id}`,
+              targetRole: "user",
+              targetEmail: user.email || undefined,
+              targetName: user.name || undefined,
+              issueId: String(row.report_id),
+              isRead: false,
+            });
+            update();
+          }
+
+          // Case B: User sent a message, recipient is Admin
+          else if (row?.sender_role === "user" && user.role === "admin") {
+            const rawMsg = row.message || "";
+            let cleanText = rawMsg;
+            let senderName = "ผู้แจ้งเรื่อง";
+            if (rawMsg.startsWith("<!--sender:")) {
+              const endIdx = rawMsg.indexOf("-->");
+              if (endIdx !== -1) {
+                try {
+                  const meta = JSON.parse(rawMsg.substring("<!--sender:".length, endIdx));
+                  if (meta.name) senderName = meta.name;
+                  cleanText = rawMsg.substring(endIdx + 3);
+                } catch {}
+              }
+            }
+            const shortText = cleanText.length > 55 ? cleanText.slice(0, 55) + "..." : cleanText;
+            addNotification({
+              title: "ผู้แจ้งส่งข้อความเพิ่มเติม",
+              description: `${senderName}: "${shortText}" (เคส #${row.report_id})`,
+              type: "status",
+              link: `/admin/issues`,
+              targetRole: "admin",
+              issueId: String(row.report_id),
+              isRead: false,
+            });
+            update();
+          }
+        }
+      )
+      .subscribe();
+
+    // 2. Supabase Realtime for instant notification when issue status is updated
+    const issuesChannelName = `notif_realtime_issues_${Date.now()}`;
+    const issuesChannel = supabase
+      .channel(issuesChannelName)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "issues",
+        },
+        async (payload) => {
+          const newRow = payload.new as any;
+          const oldRow = payload.old as any;
+          if (newRow?.status && newRow.status !== oldRow?.status) {
+            const user = getCurrentUser();
+            if (user.role === "user") {
+              const currentSession = getDemoSession() || user;
+              const userIssues = getUserAllIssues({
+                email: currentSession.email ?? undefined,
+                name: currentSession.name ?? undefined,
+              });
+              const targetReportId = String(newRow.ticket_number || newRow.id).replace(/^#/, "").trim().toLowerCase();
+              const targetNumMatch = targetReportId.match(/\d+$/);
+              const targetNum = targetNumMatch ? parseInt(targetNumMatch[0], 10) : null;
+
+              let isOwner = userIssues.some((issue) => {
+                const cleanId = String(issue.id || "").replace(/^#/, "").trim().toLowerCase();
+                const cleanSubId = String(issue.supabaseId || "").trim().toLowerCase();
+                const cleanRawId = String(issue.rawId || "").trim().toLowerCase();
+                if (cleanId === targetReportId || cleanSubId === targetReportId || cleanRawId === targetReportId) return true;
+                if (targetNum !== null) {
+                  const issueNumMatch = cleanId.match(/\d+$/);
+                  if (issueNumMatch && parseInt(issueNumMatch[0], 10) === targetNum) return true;
+                }
+                return false;
+              });
+
+              if (!isOwner && newRow.reporter_id) {
+                try {
+                  const { data: profile } = await supabase
+                    .from("profiles")
+                    .select("id, email, full_name")
+                    .eq("id", newRow.reporter_id)
+                    .maybeSingle();
+
+                  if (profile) {
+                    const uEmail = (user.email || "").toLowerCase().trim();
+                    const uName = (user.name || "").toLowerCase().trim();
+                    const pEmail = (profile.email || "").toLowerCase().trim();
+                    const pName = (profile.full_name || "").toLowerCase().trim();
+                    if ((uEmail && pEmail && uEmail === pEmail) || (uName && pName && uName === pName)) {
+                      isOwner = true;
+                    }
+                  }
+                } catch {}
+              }
+
+              if (!isOwner) return;
+
+              let statusLabel = "รอดำเนินการ";
+              if (newRow.status === "in_progress") statusLabel = "กำลังดำเนินการ";
+              else if (newRow.status === "resolved") statusLabel = "แก้ไขสำเร็จ";
+              else if (newRow.status === "rejected") statusLabel = "ปฏิเสธเรื่อง";
+
+              const displayId = newRow.ticket_number || newRow.id;
               addNotification({
-                title: "เจ้าหน้าที่ตอบกลับข้อความแล้ว",
-                description: `${senderName}: "${shortText}" (เคส #${row.report_id})`,
-                type: "status",
-                link: `/my-reports?chat=${row.report_id}`,
+                title: `อัปเดตสถานะเคส #${displayId}`,
+                description: `เคสของคุณได้รับการอัปเดตสถานะเป็น "${statusLabel}"`,
+                type: newRow.status === "rejected" ? "urgent" : "status",
+                link: "/my-reports",
                 targetRole: "user",
-                issueId: row.report_id,
+                targetEmail: user.email || undefined,
+                targetName: user.name || undefined,
+                issueId: String(displayId),
                 isRead: false,
               });
               update();
@@ -121,6 +292,7 @@ export default function NotificationDropdown({
 
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(issuesChannel);
       window.removeEventListener("storage", update);
       window.removeEventListener("unicare-notifications-updated", update);
       window.removeEventListener("unicare-profile-updated", update);

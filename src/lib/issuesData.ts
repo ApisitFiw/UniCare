@@ -463,7 +463,7 @@ export function sortIssuesLatestFirst(issuesList: IssueItem[]): IssueItem[] {
  * Retrieve all issues belonging to a specific user (including pending, in_progress, and resolved).
  * Authoritative: combines Supabase cached issues and localStorage reports for this user.
  */
-export function getUserAllIssues(session?: { email?: string; name?: string } | null): IssueItem[] {
+export function getUserAllIssues(session?: { email?: string | null; name?: string | null } | null): IssueItem[] {
   if (typeof window === 'undefined') return []
   let currentSession = session
   if (!currentSession) {

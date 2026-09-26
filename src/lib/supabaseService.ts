@@ -283,7 +283,7 @@ export function syncSupabaseIssuesWithLocalStorage(remoteIssues: IssueItem[]) {
     }
 
     // 4. Purge unicare_demo_notifications tied to deleted issues
-    const savedNotifs = localStorage.getItem('unicare_demo_notifications_v4')
+    const savedNotifs = localStorage.getItem('unicare_demo_notifications')
     if (savedNotifs) {
       const parsedNotifs = JSON.parse(savedNotifs)
       if (Array.isArray(parsedNotifs)) {
@@ -294,7 +294,7 @@ export function syncSupabaseIssuesWithLocalStorage(remoteIssues: IssueItem[]) {
           return remoteCleanKeys.has(issueId) || (m && remoteNumKeys.has(m[0]))
         })
         if (cleanNotifs.length !== parsedNotifs.length) {
-          localStorage.setItem('unicare_demo_notifications_v4', JSON.stringify(cleanNotifs))
+          localStorage.setItem('unicare_demo_notifications', JSON.stringify(cleanNotifs))
         }
       }
     }

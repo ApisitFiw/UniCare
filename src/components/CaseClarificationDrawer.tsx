@@ -13,6 +13,8 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { addNotification } from '@/lib/notifications'
+import { getDemoSession } from '@/lib/authService'
+import { getUserAllIssues, getAllCurrentIssues } from '@/lib/issuesData'
 
 export interface TicketMessage {
   id: string
@@ -107,6 +109,7 @@ export default function CaseClarificationDrawer({
   const [newMessageText, setNewMessageText] = useState('')
   const [loading, setLoading] = useState<boolean>(false)
   const [isSending, setIsSending] = useState<boolean>(false)
+  const [isUnauthorized, setIsUnauthorized] = useState<boolean>(false)
   const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting')
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -116,11 +119,46 @@ export default function CaseClarificationDrawer({
   useEffect(() => {
     if (!isOpen || !activeReportId) {
       setMessages([])
+      setIsUnauthorized(false)
       return
     }
 
     const currentId = String(activeReportId)
     let isMounted = true
+
+    // For general users, ensure they own the report before fetching or subscribing
+    if (normalizedRole === 'user') {
+      const session = getDemoSession()
+      const userIssues = getUserAllIssues(session)
+      const targetId = currentId.replace(/^#/, '').trim().toLowerCase()
+      const targetNumMatch = targetId.match(/\d+$/)
+      const targetNum = targetNumMatch ? parseInt(targetNumMatch[0], 10) : null
+
+      const ownsReport = userIssues.some((issue) => {
+        const cleanId = String(issue.id || '').replace(/^#/, '').trim().toLowerCase()
+        const cleanSubId = String(issue.supabaseId || '').trim().toLowerCase()
+        const cleanRawId = String(issue.rawId || '').trim().toLowerCase()
+        if (cleanId === targetId || cleanSubId === targetId || cleanRawId === targetId) return true
+        if (targetNum !== null) {
+          const issueNumMatch = cleanId.match(/\d+$/)
+          if (issueNumMatch && parseInt(issueNumMatch[0], 10) === targetNum) return true
+        }
+        return false
+      })
+
+      const uEmail = (session?.email || '').trim().toLowerCase()
+      const uName = (session?.name || '').trim().toLowerCase()
+      const rEmail = (reporterEmail || '').trim().toLowerCase()
+      const rName = (reporterName || '').trim().toLowerCase()
+      const matchesEmailOrName = (uEmail && rEmail && uEmail === rEmail) || (uName && rName && uName === rName)
+
+      if (!ownsReport && !matchesEmailOrName) {
+        setIsUnauthorized(true)
+        setLoading(false)
+        return
+      }
+    }
+    setIsUnauthorized(false)
 
     async function fetchMessages() {
       setLoading(true)
@@ -291,6 +329,23 @@ export default function CaseClarificationDrawer({
 
       // If Admin is sending, trigger notification for User
       if (normalizedRole === 'admin') {
+        let finalReporterName = reporterName
+        let finalReporterEmail = reporterEmail
+
+        if (!finalReporterName && !finalReporterEmail) {
+          const allIssues = getAllCurrentIssues()
+          const cleanTarget = currentId.replace(/^#/, '').trim().toLowerCase()
+          const matched = allIssues.find((i) => {
+            const cleanId = String(i.id || '').replace(/^#/, '').trim().toLowerCase()
+            const cleanSub = String(i.supabaseId || '').trim().toLowerCase()
+            return cleanId === cleanTarget || cleanSub === cleanTarget
+          })
+          if (matched) {
+            finalReporterName = matched.reporterName
+            finalReporterEmail = matched.reporterEmail
+          }
+        }
+
         const notifTitle = 'เจ้าหน้าที่ตอบกลับข้อความแล้ว'
         const shortMsg = trimmed.length > 60 ? `${trimmed.slice(0, 60)}...` : trimmed
         const notifDesc = `เคส #${currentId}${activeTitle ? ` "${activeTitle}"` : ''}: ${shortMsg}`
@@ -302,8 +357,8 @@ export default function CaseClarificationDrawer({
           type: 'status',
           link: `/my-reports?chat=${currentId}`,
           targetRole: 'user',
-          targetName: reporterName,
-          targetEmail: reporterEmail,
+          targetName: finalReporterName || undefined,
+          targetEmail: finalReporterEmail || undefined,
           issueId: currentId,
           isRead: false,
         })
@@ -411,7 +466,24 @@ export default function CaseClarificationDrawer({
           ref={chatContainerRef}
           className="flex-1 overflow-y-auto p-4 space-y-4 text-xs bg-slate-50/50 scroll-smooth"
         >
-          {loading ? (
+          {isUnauthorized ? (
+            <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-3">
+              <div className="w-14 h-14 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-200">
+                <Shield className="w-7 h-7" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-800">ไม่มีสิทธิ์เข้าถึงการสนทนานี้</h3>
+              <p className="text-xs text-slate-500 max-w-xs leading-relaxed">
+                คุณสามารถดูและสนทนากับเจ้าหน้าที่ได้เฉพาะเคสที่คุณเป็นผู้แจ้งเรื่องเท่านั้น
+              </p>
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition cursor-pointer shadow-xs"
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+          ) : loading ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2 py-12">
               <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
               <p className="text-xs">กำลังโหลดข้อความจาก Supabase...</p>
@@ -545,37 +617,39 @@ export default function CaseClarificationDrawer({
         </div>
 
         {/* Input Form */}
-        <form
-          onSubmit={handleSendMessage}
-          className="p-3.5 border-t border-slate-200 bg-white sticky bottom-0"
-        >
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={newMessageText}
-              onChange={(e) => setNewMessageText(e.target.value)}
-              placeholder={
-                normalizedRole === 'admin'
-                  ? 'พิมพ์ข้อความตอบกลับหรือซักถามผู้แจ้ง...'
-                  : 'พิมพ์ข้อความสอบถามหรือให้ข้อมูลเพิ่มเติมแก่เจ้าหน้าที่...'
-              }
-              className="flex-1 border border-slate-200 bg-[#f8faf9] px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 text-slate-700"
-              disabled={isSending}
-            />
-            <button
-              type="submit"
-              disabled={!newMessageText.trim() || isSending}
-              className="w-9 h-9 rounded-xl bg-[#1b5e4a] hover:bg-[#154c3c] disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center transition cursor-pointer shadow-xs shrink-0"
-              title="ส่งข้อความ"
-            >
-              {isSending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
-            </button>
-          </div>
-        </form>
+        {!isUnauthorized && (
+          <form
+            onSubmit={handleSendMessage}
+            className="p-3.5 border-t border-slate-200 bg-white sticky bottom-0"
+          >
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newMessageText}
+                onChange={(e) => setNewMessageText(e.target.value)}
+                placeholder={
+                  normalizedRole === 'admin'
+                    ? 'พิมพ์ข้อความตอบกลับหรือซักถามผู้แจ้ง...'
+                    : 'พิมพ์ข้อความสอบถามหรือให้ข้อมูลเพิ่มเติมแก่เจ้าหน้าที่...'
+                }
+                className="flex-1 border border-slate-200 bg-[#f8faf9] px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 text-slate-700"
+                disabled={isSending}
+              />
+              <button
+                type="submit"
+                disabled={!newMessageText.trim() || isSending}
+                className="w-9 h-9 rounded-xl bg-[#1b5e4a] hover:bg-[#154c3c] disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center transition cursor-pointer shadow-xs shrink-0"
+                title="ส่งข้อความ"
+              >
+                {isSending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </form>
+        )}
       </aside>
     </>
   )

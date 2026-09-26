@@ -141,9 +141,27 @@ export default function MyReportsPage() {
     const params = new URLSearchParams(window.location.search);
     const chatReportId = params.get("chat");
     if (chatReportId) {
-      const found = reports.find((r) => String(r.id) === String(chatReportId));
+      const cleanTarget = chatReportId.replace(/^#/, "").trim().toLowerCase();
+      const targetNumMatch = cleanTarget.match(/\d+$/);
+      const targetNum = targetNumMatch ? parseInt(targetNumMatch[0], 10) : null;
+
+      const found = reports.find((r) => {
+        const cleanId = String(r.id).replace(/^#/, "").trim().toLowerCase();
+        if (cleanId === cleanTarget) return true;
+        if (targetNum !== null) {
+          const m = cleanId.match(/\d+$/);
+          if (m && parseInt(m[0], 10) === targetNum) return true;
+        }
+        return false;
+      });
+
       if (found) {
         setActiveChatReport(found);
+      } else {
+        // Not this user's report, remove unauthorized param without page reload
+        const url = new URL(window.location.href);
+        url.searchParams.delete("chat");
+        window.history.replaceState({}, "", url.toString());
       }
     }
   }, [reports]);
