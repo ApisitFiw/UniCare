@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/supabaseClient'
 import type { IssueItem, UrgencyLevel } from '@/lib/issuesData'
 import type { FeedbackItem } from '@/lib/feedbackData'
 
@@ -48,63 +48,137 @@ export interface SupabaseRiskArea {
 // -------------------------------------------------------------
 
 /**
- * Fetch all issues from Supabase joined with categories, risk areas, and profiles.
- * Gracefully returns null if Supabase is offline or fails.
+ * Helper to map raw issues array from Supabase into IssueItem[]
  */
-export async function fetchIssuesFromSupabase(): Promise<IssueItem[] | null> {
-  try {
-    const query = '*, categories(id, name), risk_areas(id, name), reporter:profiles!reporter_id(id, full_name, email), assignee:profiles!assigned_to(id, full_name, email)'
-    const { data, error } = await supabase.from('issues').select(query).order('created_at', { ascending: false })
-
-    if (error || !data) {
-      console.warn('Supabase issues fetch error:', error?.message)
-      return null
+function mapRawIssues(data: any[]): IssueItem[] {
+  const activeData = data.filter((item: any) => item.status !== 'rejected')
+  return activeData.map((item: any) => {
+    // Map priority to UrgencyLevel
+    let urgency: UrgencyLevel = 'ปกติ'
+    if (item.priority === 'urgent' || item.priority === 'high' || item.priority === 'very_high') {
+      urgency = item.priority === 'urgent' ? 'เร่งด่วนมาก' : 'เร่งด่วน'
     }
 
-    const activeData = data.filter((item: any) => item.status !== 'rejected')
+    // Map status to label
+    let statusLabel = 'รอดำเนินการ'
+    if (item.status === 'in_progress') statusLabel = 'กำลังดำเนินการ'
+    else if (item.status === 'resolved') statusLabel = 'แก้ไขสำเร็จ'
+    else if (item.status === 'rejected') statusLabel = 'ปฏิเสธเรื่อง'
 
-    const mapped: IssueItem[] = activeData.map((item: any) => {
-      // Map priority to UrgencyLevel
-      let urgency: UrgencyLevel = 'ปกติ'
-      if (item.priority === 'urgent' || item.priority === 'high' || item.priority === 'very_high') {
-        urgency = item.priority === 'urgent' ? 'เร่งด่วนมาก' : 'เร่งด่วน'
+    // Date formatting with 4-digit year for correct sorting
+    const createdDate = item.created_at ? new Date(item.created_at) : new Date()
+    const formattedDate = `${createdDate.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' })} - ${createdDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`
+
+    const adminFullName = item.assignee?.full_name || 'นัฐกรณ์'
+    const adminName = adminFullName.includes('(Admin)') ? adminFullName : `${adminFullName} (Admin)`
+    const adminInitial = adminFullName.substring(0, 2)
+
+    return {
+      id: item.ticket_number || item.id,
+      date: formattedDate,
+      category: item.categories?.name || item.title || 'ทั่วไป',
+      area: item.risk_areas?.name || item.location_detail || 'มหาวิทยาลัยวลัยลักษณ์',
+      description: item.description || item.title || 'ไม่มีรายละเอียด',
+      adminName,
+      adminInitial,
+      reporterName: item.reporter?.full_name || 'ผู้ใช้งาน',
+      reporterEmail: item.reporter?.email || 'user@wu.ac.th',
+      status: (item.status as any) || 'pending',
+      statusLabel,
+      urgency,
+    }
+  })
+}
+
+/**
+ * Cache helpers for offline resilience
+ */
+function getCachedIssues(): IssueItem[] | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem('unicare_cached_supabase_issues')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+  } catch {}
+  return null
+}
+
+function setCachedIssues(issues: IssueItem[]) {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.setItem('unicare_cached_supabase_issues', JSON.stringify(issues))
+  } catch {}
+}
+
+/**
+ * Fetch all issues from Supabase joined with categories, risk areas, and profiles.
+ * Features automatic fallback to direct REST and cached issues if network/offline occurs.
+ */
+export async function fetchIssuesFromSupabase(): Promise<IssueItem[] | null> {
+  const query = '*, categories(id, name), risk_areas(id, name), reporter:profiles!reporter_id(id, full_name, email), assignee:profiles!assigned_to(id, full_name, email)'
+
+  // 1. Try Supabase Client
+  try {
+    const { data, error } = await supabase.from('issues').select(query).order('created_at', { ascending: false })
+
+    if (!error && data && data.length > 0) {
+      const mapped = mapRawIssues(data)
+      setCachedIssues(mapped)
+      return mapped
+    }
+
+    if (error) {
+      const isNetworkError =
+        error.message?.includes('Failed to fetch') ||
+        error.message?.includes('NetworkError') ||
+        error.message?.includes('fetch failed')
+
+      if (!isNetworkError) {
+        console.warn('Supabase issues fetch error:', error.message)
       }
+    }
+  } catch (clientErr: any) {
+    const isNetwork =
+      clientErr?.message?.includes('Failed to fetch') ||
+      clientErr?.message?.includes('NetworkError')
 
-      // Map status to label
-      let statusLabel = 'รอดำเนินการ'
-      if (item.status === 'in_progress') statusLabel = 'กำลังดำเนินการ'
-      else if (item.status === 'resolved') statusLabel = 'แก้ไขสำเร็จ'
-      else if (item.status === 'rejected') statusLabel = 'ปฏิเสธเรื่อง'
-
-      // Date formatting with 4-digit year for correct sorting
-      const createdDate = item.created_at ? new Date(item.created_at) : new Date()
-      const formattedDate = `${createdDate.toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: 'numeric' })} - ${createdDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}`
-
-      const adminFullName = item.assignee?.full_name || 'นัฐกรณ์'
-      const adminName = adminFullName.includes('(Admin)') ? adminFullName : `${adminFullName} (Admin)`
-      const adminInitial = adminFullName.substring(0, 2)
-
-      return {
-        id: item.ticket_number || item.id,
-        date: formattedDate,
-        category: item.categories?.name || item.title || 'ทั่วไป',
-        area: item.risk_areas?.name || item.location_detail || 'มหาวิทยาลัยวลัยลักษณ์',
-        description: item.description || item.title || 'ไม่มีรายละเอียด',
-        adminName,
-        adminInitial,
-        reporterName: item.reporter?.full_name || 'ผู้ใช้งาน',
-        reporterEmail: item.reporter?.email || 'user@wu.ac.th',
-        status: (item.status as any) || 'pending',
-        statusLabel,
-        urgency,
-      }
-    })
-
-    return mapped
-  } catch (err) {
-    console.warn('fetchIssuesFromSupabase failed:', err)
-    return null
+    if (!isNetwork) {
+      console.warn('Supabase issues client error:', clientErr?.message)
+    }
   }
+
+  // 2. Direct REST Fallback (bypasses any stale token / auth interceptor issue)
+  if (typeof window !== 'undefined') {
+    try {
+      const endpoint = `${supabaseUrl}/rest/v1/issues?select=${encodeURIComponent(query)}&order=created_at.desc`
+      const res = await fetch(endpoint, {
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
+      })
+      if (res.ok) {
+        const raw = await res.json()
+        if (Array.isArray(raw) && raw.length > 0) {
+          const mapped = mapRawIssues(raw)
+          setCachedIssues(mapped)
+          return mapped
+        }
+      }
+    } catch {
+      // Offline or network unreachable
+    }
+  }
+
+  // 3. Fallback to cached Supabase issues in localStorage
+  const cached = getCachedIssues()
+  if (cached && cached.length > 0) {
+    return cached
+  }
+
+  return null
 }
 
 /**
@@ -303,7 +377,9 @@ export async function fetchFeedbacksFromSupabase(): Promise<FeedbackItem[] | nul
     const { data, error } = await supabase.from('feedbacks').select(query).order('created_at', { ascending: false })
 
     if (error || !data) {
-      console.warn('Supabase feedbacks fetch error:', error?.message)
+      if (error && !error.message?.includes('Failed to fetch') && !error.message?.includes('NetworkError')) {
+        console.warn('Supabase feedbacks fetch error:', error?.message)
+      }
       return null
     }
 
