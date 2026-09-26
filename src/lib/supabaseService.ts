@@ -9,9 +9,28 @@ export interface SupabaseProfile {
   id: string
   email: string
   full_name: string
-  role: 'admin' | 'user'
+  role: 'admin' | 'user' | string
   avatar_url?: string | null
   department?: string | null
+  phone?: string | null
+  username?: string | null
+  prefix?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  nickname?: string | null
+  gender?: string | null
+  birth_date?: string | null
+  dormitory?: string | null
+  building?: string | null
+  floor?: string | null
+  room_number?: string | null
+  residence_location?: string | null
+  address_line?: string | null
+  subdistrict?: string | null
+  district?: string | null
+  province?: string | null
+  postal_code?: string | null
+  status?: string | null
   created_at?: string
   updated_at?: string
 }
@@ -962,9 +981,28 @@ export async function upsertProfileInSupabase(profile: {
   id?: string
   email: string
   full_name: string
-  role?: 'admin' | 'user'
+  role?: 'admin' | 'user' | string
   department?: string
   avatar_url?: string | null
+  phone?: string | null
+  username?: string | null
+  prefix?: string | null
+  first_name?: string | null
+  last_name?: string | null
+  nickname?: string | null
+  gender?: string | null
+  birth_date?: string | null
+  dormitory?: string | null
+  building?: string | null
+  floor?: string | null
+  room_number?: string | null
+  residence_location?: string | null
+  address_line?: string | null
+  subdistrict?: string | null
+  district?: string | null
+  province?: string | null
+  postal_code?: string | null
+  status?: string | null
 }): Promise<boolean> {
   try {
     const payload: Record<string, any> = {
@@ -974,15 +1012,47 @@ export async function upsertProfileInSupabase(profile: {
       department: profile.department || 'มหาวิทยาลัยวลัยลักษณ์',
       updated_at: new Date().toISOString(),
     }
-    if (profile.avatar_url !== undefined) {
-      payload.avatar_url = profile.avatar_url
-    }
-    if (profile.id) {
-      payload.id = profile.id
-    }
+    if (profile.avatar_url !== undefined) payload.avatar_url = profile.avatar_url
+    if (profile.id) payload.id = profile.id
+    if (profile.phone !== undefined) payload.phone = profile.phone
+    if (profile.username !== undefined) payload.username = profile.username
+    if (profile.prefix !== undefined) payload.prefix = profile.prefix
+    if (profile.first_name !== undefined) payload.first_name = profile.first_name
+    if (profile.last_name !== undefined) payload.last_name = profile.last_name
+    if (profile.nickname !== undefined) payload.nickname = profile.nickname
+    if (profile.gender !== undefined) payload.gender = profile.gender
+    if (profile.birth_date !== undefined) payload.birth_date = profile.birth_date
+    if (profile.dormitory !== undefined) payload.dormitory = profile.dormitory
+    if (profile.building !== undefined) payload.building = profile.building
+    if (profile.floor !== undefined) payload.floor = profile.floor
+    if (profile.room_number !== undefined) payload.room_number = profile.room_number
+    if (profile.residence_location !== undefined) payload.residence_location = profile.residence_location
+    if (profile.address_line !== undefined) payload.address_line = profile.address_line
+    if (profile.subdistrict !== undefined) payload.subdistrict = profile.subdistrict
+    if (profile.district !== undefined) payload.district = profile.district
+    if (profile.province !== undefined) payload.province = profile.province
+    if (profile.postal_code !== undefined) payload.postal_code = profile.postal_code
+    if (profile.status !== undefined) payload.status = profile.status
 
     const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'email' })
     if (error) {
+      // If error indicates column does not exist (before SQL migration), fallback to minimal payload
+      if (error.message?.includes('column') || error.message?.includes('schema cache')) {
+        const fallbackPayload = {
+          email: profile.email.trim(),
+          full_name: profile.full_name.trim(),
+          role: profile.role || 'user',
+          department: profile.department || 'มหาวิทยาลัยวลัยลักษณ์',
+          avatar_url: profile.avatar_url,
+          updated_at: new Date().toISOString(),
+        }
+        const { error: fbErr } = await supabase.from('profiles').upsert(fallbackPayload, { onConflict: 'email' })
+        if (fbErr) {
+          console.warn('upsertProfileInSupabase fallback error:', fbErr.message)
+          return false
+        }
+        return true
+      }
       console.warn('upsertProfileInSupabase error:', error.message)
       return false
     }

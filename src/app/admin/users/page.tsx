@@ -397,6 +397,16 @@ export default function AdminUserManagementPage() {
                       updatedUsers[
                         matchedIndex
                       ].name,
+                    phone:
+                      profile.phone ||
+                      updatedUsers[
+                        matchedIndex
+                      ].phone,
+                    status:
+                      (profile.status as any) ||
+                      updatedUsers[
+                        matchedIndex
+                      ].status,
                     role: "user",
                   };
                   return;
@@ -409,8 +419,8 @@ export default function AdminUserManagementPage() {
                       "@",
                     )[0],
                   email: profile.email,
-                  phone: "-",
-                  status: "active",
+                  phone: profile.phone || "-",
+                  status: (profile.status as any) || "active",
                   role: "user",
                 });
               },

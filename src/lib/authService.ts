@@ -194,15 +194,16 @@ export async function signInWithSupabase(
       return fallbackLocalSignIn(clean, password)
     }
 
-    // 2. Find matching account by email, full_name, or embedded username in department JSON
+    // 2. Find matching account by email, full_name, or username (column or department JSON)
     const matched = profiles.find((p: any) => {
       const pEmail = (p.email || '').toLowerCase()
       const pName = (p.full_name || '').toLowerCase()
-      if (pEmail === clean || pName === clean) return true
+      const pUser = (p.username || '').toLowerCase()
+      if (pEmail === clean || pName === clean || pUser === clean) return true
       if (clean === 'admin@unicare.local' && (p.role === 'admin' || pEmail.includes('natthakon'))) return true
       if (clean === 'user@unicare.local' && (p.role === 'user' || pEmail.includes('somchai'))) return true
 
-      // Check metadata in department field if stored as JSON
+      // Check metadata in department field if stored as JSON (fallback)
       if (p.department && p.department.startsWith('{')) {
         try {
           const meta = JSON.parse(p.department)
@@ -228,7 +229,8 @@ export async function signInWithSupabase(
       } catch {}
     }
 
-    if (meta?.status === 'suspended') {
+    const userStatus = matched.status || meta?.status || 'active'
+    if (userStatus === 'suspended') {
       return {
         success: false,
         session: null,
@@ -236,7 +238,7 @@ export async function signInWithSupabase(
       }
     }
 
-    if (meta?.status === 'deleted') {
+    if (userStatus === 'deleted') {
       return {
         success: false,
         session: null,
@@ -288,13 +290,14 @@ export async function signInWithSupabase(
       localStorage.setItem(sessionKey, raw)
 
       // Store compatibility profiles
+      const userPhone = matched.phone || meta?.phone || (session.role === 'admin' ? '089-876-5432' : '082-345-6789')
       if (session.role === 'admin') {
         localStorage.setItem(
           'unicare_demo_admin_profile',
           JSON.stringify({
             fullName: session.name,
             email: session.email,
-            phone: meta?.phone || '089-876-5432',
+            phone: userPhone,
           })
         )
       } else {
@@ -303,7 +306,7 @@ export async function signInWithSupabase(
           JSON.stringify({
             fullName: session.name,
             email: session.email,
-            phone: meta?.phone || '082-345-6789',
+            phone: userPhone,
           })
         )
       }
@@ -358,26 +361,48 @@ export async function registerWithSupabase(data: {
     }
 
     // 2. Insert new account into Supabase profiles
-    const metadata = {
-      prefix: data.prefix,
-      firstName: data.firstName.trim(),
-      lastName: data.lastName.trim(),
-      phone: data.phone?.replace(/\D/g, '') || '',
-      username: cleanUsername,
-      password: data.password,
-      birthDate: data.birthDate,
-      gender: data.gender,
-      status: 'active',
-      department: 'มหาวิทยาลัยวลัยลักษณ์',
-    }
-
-    const { error: insertError } = await supabase.from('profiles').insert({
+    const cleanPhone = data.phone?.replace(/\D/g, '') || ''
+    const profilePayload: Record<string, any> = {
       email: cleanEmail,
       full_name: `${data.firstName.trim()} ${data.lastName.trim()}`.trim(),
       role: 'user',
-      department: JSON.stringify(metadata),
+      department: 'มหาวิทยาลัยวลัยลักษณ์',
+      phone: cleanPhone,
+      username: cleanUsername,
+      prefix: data.prefix || null,
+      first_name: data.firstName.trim(),
+      last_name: data.lastName.trim(),
+      birth_date: data.birthDate || null,
+      gender: data.gender || null,
+      status: 'active',
       updated_at: new Date().toISOString(),
-    })
+    }
+
+    let { error: insertError } = await supabase.from('profiles').insert(profilePayload)
+
+    // Fallback if individual columns not yet migrated in Supabase
+    if (insertError && (insertError.message?.includes('column') || insertError.message?.includes('schema cache'))) {
+      const metadata = {
+        prefix: data.prefix,
+        firstName: data.firstName.trim(),
+        lastName: data.lastName.trim(),
+        phone: cleanPhone,
+        username: cleanUsername,
+        password: data.password,
+        birthDate: data.birthDate,
+        gender: data.gender,
+        status: 'active',
+        department: 'มหาวิทยาลัยวลัยลักษณ์',
+      }
+      const fbResult = await supabase.from('profiles').insert({
+        email: cleanEmail,
+        full_name: `${data.firstName.trim()} ${data.lastName.trim()}`.trim(),
+        role: 'user',
+        department: JSON.stringify(metadata),
+        updated_at: new Date().toISOString(),
+      })
+      insertError = fbResult.error
+    }
 
     if (insertError) {
       console.warn('Supabase profile insertion error:', insertError.message)
