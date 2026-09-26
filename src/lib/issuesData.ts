@@ -303,7 +303,7 @@ export function getAllCurrentIssues(): IssueItem[] {
             const rawId = String(item.issue_id ?? item.id ?? '')
             if (rawId.startsWith('ISS-') || initialMockIssues.some((m) => m.id === rawId)) return true
             if (item.source === 'admin') return true
-            return rawStatus === 'in_progress' || rawStatus === 'resolved' || rawStatus === 'pending'
+            return rawStatus === 'in_progress' || rawStatus === 'resolved'
           })
           .map((item: any, idx: number) => {
             const rawStatus = (item.status || 'Pending').toLowerCase()

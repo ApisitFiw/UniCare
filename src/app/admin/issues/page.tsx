@@ -257,7 +257,7 @@ export default function StatusTrackingPage() {
                 // คำร้องที่สร้างโดยแอดมินโดยตรง
                 if (item.source === 'admin') return true
                 // คำร้องจากผู้ใช้ทั่วไป หรือแอดมินสร้าง
-                return rawStatus === 'in_progress' || rawStatus === 'resolved' || rawStatus === 'pending'
+                return rawStatus === 'in_progress' || rawStatus === 'resolved'
               })
               .map((item: any, idx: number) => {
                 const rawStatus = (item.status || 'Pending').toLowerCase()
