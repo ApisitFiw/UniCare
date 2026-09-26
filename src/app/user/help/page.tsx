@@ -263,8 +263,20 @@ export default function HelpCenterPage() {
       if (highlightTimer) clearTimeout(highlightTimer);
 
       scrollTimer = setTimeout(() => {
-        const target = document.getElementById(elementId);
-        if (!target) return;
+        let target = document.getElementById(elementId);
+        if (!target) {
+          setTimeout(() => {
+            target = document.getElementById(elementId);
+            if (target) {
+              target.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+              setHighlightedSection(elementId);
+            }
+          }, 250);
+          return;
+        }
 
         target.scrollIntoView({
           behavior: "smooth",
@@ -293,7 +305,13 @@ export default function HelpCenterPage() {
       }
     };
 
-    scrollToCurrentHash();
+    const storedTarget = typeof window !== "undefined" ? sessionStorage.getItem("unicare-scroll-target") : null;
+    if (storedTarget) {
+      sessionStorage.removeItem("unicare-scroll-target");
+      handleTarget(storedTarget);
+    } else {
+      scrollToCurrentHash();
+    }
 
     window.addEventListener("hashchange", scrollToCurrentHash);
     window.addEventListener("unicare-highlight-section", handleCustomHighlight);
@@ -568,11 +586,11 @@ export default function HelpCenterPage() {
             id="contact"
             className={`mb-6 mt-10 scroll-mt-24 rounded-3xl p-3 sm:p-4 transition-all duration-500 ${
               highlightedSection === "contact"
-                ? "bg-white/95 border-2 border-emerald-500 ring-4 ring-emerald-500/80 shadow-[0_0_35px_rgba(16,185,129,0.35)] scale-[1.008]"
+                ? "bg-white/95 border-2 border-[#1b5e4a] ring-4 ring-[#1b5e4a]/20 shadow-[0_0_35px_rgba(27,94,74,0.25)] scale-[1.008]"
                 : "border border-transparent"
             }`}
           >
-            <div className="relative overflow-hidden rounded-3xl bg-[#123f34] px-5 py-6 text-white sm:px-7">
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#15453b] via-[#1c5e52] to-[#2b8273] px-5 py-6 text-white shadow-md sm:px-7">
               <div className="pointer-events-none absolute -right-12 -top-16 h-48 w-48 rounded-full bg-emerald-300/10" />
 
               <div className="relative flex items-start gap-4">
@@ -651,7 +669,7 @@ function ContactInfo({
 }: ContactInfoProps) {
   const content = (
     <>
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-[#1b5e4a] border border-emerald-100">
         <Icon className="h-5 w-5" />
       </span>
 
@@ -671,7 +689,7 @@ function ContactInfo({
     return (
       <a
         href={href}
-        className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md"
+        className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs transition hover:-translate-y-0.5 hover:border-[#1b5e4a]/40 hover:shadow-md"
       >
         {content}
       </a>
@@ -679,7 +697,7 @@ function ContactInfo({
   }
 
   return (
-    <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
       {content}
     </div>
   );

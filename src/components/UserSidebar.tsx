@@ -109,6 +109,10 @@ export default function DashboardSidebar() {
 
   useEffect(() => {
     setMobileOpen(false);
+    if (typeof window !== "undefined") {
+      const h = window.location.hash.replace(/^#/, "");
+      setCurrentHash(h);
+    }
   }, [pathname]);
 
   function handleLogout() {
@@ -141,11 +145,29 @@ export default function DashboardSidebar() {
       setMobileOpen(false);
     }
 
+    // 1. Click "หน้าหลัก" (or any menu without hash):
+    if (!hash) {
+      if (pathname === targetPath) {
+        if (typeof window !== "undefined") {
+          if (window.location.hash) {
+            window.history.pushState(null, "", targetPath);
+          }
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+        setCurrentHash("");
+      } else {
+        setCurrentHash("");
+      }
+      return;
+    }
+
+    // 2. Click menu with hash:
     if (hash) {
+      setCurrentHash(hash);
+
       if (pathname === targetPath) {
         e.preventDefault();
         window.history.pushState(null, "", href);
-        setCurrentHash(hash);
 
         const element = document.getElementById(hash);
         if (element) {
@@ -154,6 +176,9 @@ export default function DashboardSidebar() {
         window.dispatchEvent(
           new CustomEvent("unicare-highlight-section", { detail: { target: hash } })
         );
+      } else {
+        // Navigating from another page:
+        sessionStorage.setItem("unicare-scroll-target", hash);
       }
     }
   }
@@ -198,7 +223,8 @@ export default function DashboardSidebar() {
         {/* โลโก้ */}
         <Link
           href="/user/dashboard"
-          className="group flex items-center space-x-3 border-b border-white/15 pb-4"
+          onClick={(e) => handleMenuClick(e, "/user/dashboard")}
+          className="group flex items-center space-x-3 border-b border-white/15 pb-4 cursor-pointer"
         >
           <UniCareLogo variant="dark" className="w-10 h-10 transition-transform group-hover:scale-105" />
 

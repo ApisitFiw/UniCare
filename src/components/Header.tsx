@@ -11,6 +11,8 @@ interface HeaderProps {
   userName?: string
   role?: 'ADMIN' | 'USER'
   backHref?: string
+  titleEn?: string
+  subtitleEn?: string
 }
 
 export default function Header({
@@ -19,8 +21,12 @@ export default function Header({
   userName,
   role = 'ADMIN',
   backHref,
+  titleEn,
+  subtitleEn,
 }: HeaderProps) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
+  const displayTitle = lang === 'en' && titleEn ? titleEn : t(title);
+  const displaySubtitle = lang === 'en' && subtitleEn ? subtitleEn : t(subtitle);
 
   return (
     <header className="bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-xs">
@@ -46,10 +52,10 @@ export default function Header({
         )}
         <div>
           <h1 className="text-sm lg:text-base font-bold text-slate-800 leading-tight">
-            {t(title)}
+            {displayTitle}
           </h1>
           <p className="text-[11px] lg:text-xs text-slate-400">
-            {t(subtitle)}
+            {displaySubtitle}
           </p>
         </div>
       </div>

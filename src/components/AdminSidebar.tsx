@@ -86,12 +86,20 @@ export default function DashboardSidebar() {
     }
   }
 
+  function handleNavClick(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
+    if (mobileOpen) setMobileOpen(false);
+    if (href === "/admin/dashboard" && pathname === "/admin/dashboard") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+
   const renderNavContent = () => (
     <>
       <div className="space-y-6">
         <Link
           href="/admin/dashboard"
-          className="group flex items-center space-x-3 border-b border-white/15 pb-4"
+          onClick={(e) => handleNavClick(e, "/admin/dashboard")}
+          className="group flex items-center space-x-3 border-b border-white/15 pb-4 cursor-pointer"
         >
           <UniCareLogo variant="dark" className="w-10 h-10 transition-transform group-hover:scale-105" />
 
@@ -115,6 +123,7 @@ export default function DashboardSidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={(e) => handleNavClick(e, item.href)}
                 aria-current={active ? "page" : undefined}
                 className={`flex items-center space-x-3 rounded-xl px-3.5 py-2.5 transition ${
                   active
