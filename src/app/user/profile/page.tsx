@@ -338,7 +338,7 @@ export default function UserProfilePage() {
     if (session.role === "admin") {
       setIsLoading(false);
       router.replace(
-        "/admin/profile",
+        "/admin/dashboard",
       );
       return;
     }

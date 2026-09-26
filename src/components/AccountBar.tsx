@@ -268,16 +268,6 @@ export default function AccountBar({
     };
   }, [loadCurrentAccount]);
 
-  const profileHref =
-    currentRole === "ADMIN"
-      ? "/admin/profile"
-      : "/user/profile";
-
-  const accountTitle =
-    currentRole === "ADMIN"
-      ? `ไปยังหน้าบัญชีผู้ดูแลระบบ (${currentName})`
-      : `ไปยังหน้าบัญชีของฉัน (${currentName})`;
-
   const initialLetter =
     currentName.trim().charAt(0) ||
     (currentRole === "ADMIN" ? "A" : "U");
@@ -292,39 +282,70 @@ export default function AccountBar({
         userEmail={currentEmail}
       />
 
-      <Link
-        href={profileHref}
-        title={accountTitle}
-        className="group flex items-center gap-2.5 rounded-full border border-slate-200/80 bg-slate-50 px-3 py-1.5 text-xs shadow-xs transition hover:border-emerald-500 hover:bg-slate-100"
-      >
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-emerald-200/80 bg-emerald-100 text-[10px] font-bold text-emerald-800 transition-transform group-hover:scale-105">
-          {currentAvatar ? (
-            <img
-              src={currentAvatar}
-              alt={`รูปโปรไฟล์ของ ${currentName}`}
-              className="h-full w-full object-cover"
-            />
-          ) : currentName ? (
-            <span>{initialLetter}</span>
-          ) : (
-            <User className="h-4 w-4" />
-          )}
-        </div>
-
-        <span className="hidden max-w-[180px] truncate font-semibold text-slate-800 sm:inline-block">
-          {currentName}
-        </span>
-
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide text-white ${
-            currentRole === "ADMIN"
-              ? "bg-[#1b5e4a]"
-              : "bg-[#217972]"
-          }`}
+      {currentRole === "ADMIN" ? (
+        /* ฝั่ง Admin: แสดงข้อมูลผู้ดูแลระบบเท่านั้น ไม่เป็นลิงก์ ไม่สามารถกดคลิกเพื่อดูหน้าเพจได้ */
+        <div
+          title={`ผู้ดูแลระบบ (${currentName})`}
+          className="flex items-center gap-2.5 rounded-full border border-slate-200/80 bg-slate-50 px-3 py-1.5 text-xs shadow-xs select-none cursor-default"
         >
-          {currentRole}
-        </span>
-      </Link>
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-emerald-200/80 bg-emerald-100 text-[10px] font-bold text-emerald-800">
+            {currentAvatar ? (
+              <img
+                src={currentAvatar}
+                alt={`รูปโปรไฟล์ของ ${currentName}`}
+                className="h-full w-full object-cover"
+              />
+            ) : currentName ? (
+              <span>{initialLetter}</span>
+            ) : (
+              <User className="h-4 w-4" />
+            )}
+          </div>
+
+          <span
+            data-user-content="true"
+            className="hidden max-w-[180px] truncate font-semibold text-slate-800 sm:inline-block notranslate"
+          >
+            {currentName}
+          </span>
+
+          <span className="shrink-0 rounded-full bg-[#1b5e4a] px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">
+            ADMIN
+          </span>
+        </div>
+      ) : (
+        /* ฝั่ง User: สามารถคลิกเพื่อไปยังหน้าบัญชีของฉัน (/user/profile) ได้ */
+        <Link
+          href="/user/profile"
+          title={`ไปยังหน้าบัญชีของฉัน (${currentName})`}
+          className="group flex items-center gap-2.5 rounded-full border border-slate-200/80 bg-slate-50 px-3 py-1.5 text-xs shadow-xs transition hover:border-emerald-500 hover:bg-slate-100 cursor-pointer"
+        >
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-emerald-200/80 bg-emerald-100 text-[10px] font-bold text-emerald-800 transition-transform group-hover:scale-105">
+            {currentAvatar ? (
+              <img
+                src={currentAvatar}
+                alt={`รูปโปรไฟล์ของ ${currentName}`}
+                className="h-full w-full object-cover"
+              />
+            ) : currentName ? (
+              <span>{initialLetter}</span>
+            ) : (
+              <User className="h-4 w-4" />
+            )}
+          </div>
+
+          <span
+            data-user-content="true"
+            className="hidden max-w-[180px] truncate font-semibold text-slate-800 sm:inline-block notranslate"
+          >
+            {currentName}
+          </span>
+
+          <span className="shrink-0 rounded-full bg-[#217972] px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">
+            USER
+          </span>
+        </Link>
+      )}
     </div>
   );
 }
