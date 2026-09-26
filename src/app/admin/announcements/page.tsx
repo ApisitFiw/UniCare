@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Header from "@/components/Header";
 import { getDemoSession } from "@/lib/authService";
+import { supabase } from "@/lib/supabaseClient";
 import {
   getAnnouncements,
+  fetchAnnouncementsFromSupabase,
   createAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
@@ -96,11 +98,28 @@ export default function AdminAnnouncementsPage() {
     }
     loadData();
 
+    // Fetch live announcements from Supabase
+    fetchAnnouncementsFromSupabase().then(() => loadData());
+
+    // Subscribe to realtime updates on announcements
+    const channel = supabase
+      .channel("unicare-admin-announcements-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "announcements" },
+        async () => {
+          await fetchAnnouncementsFromSupabase();
+          loadData();
+        }
+      )
+      .subscribe();
+
     window.addEventListener("unicare-announcements-updated", loadData);
     window.addEventListener("storage", loadData);
     window.addEventListener("focus", loadData);
 
     return () => {
+      supabase.removeChannel(channel);
       window.removeEventListener("unicare-announcements-updated", loadData);
       window.removeEventListener("storage", loadData);
       window.removeEventListener("focus", loadData);

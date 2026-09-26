@@ -1,3 +1,6 @@
+import { supabase } from "@/lib/supabaseClient";
+import { addNotification } from "@/lib/notifications";
+
 export type AnnouncementItem = {
   id: string;
   title: string;
@@ -77,7 +80,56 @@ export function saveAnnouncements(items: AnnouncementItem[]): void {
   window.dispatchEvent(new Event("unicare-announcements-updated"));
 }
 
-import { addNotification } from "@/lib/notifications";
+/**
+ * Fetch announcements from Supabase table `announcements`, sync to localStorage, and notify.
+ */
+export async function fetchAnnouncementsFromSupabase(): Promise<AnnouncementItem[]> {
+  try {
+    const { data, error } = await supabase
+      .from("announcements")
+      .select("*")
+      .order("pinned", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      const mapped: AnnouncementItem[] = data.map((row: any) => {
+        const pubDate = row.published_date || row.created_at;
+        const formattedDate = pubDate
+          ? new Date(pubDate).toLocaleDateString("th-TH", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })
+          : "วันนี้";
+
+        const isUrgent =
+          row.category?.includes("ด่วน") ||
+          row.category?.includes("มาตรการ") ||
+          row.title?.includes("ด่วน") ||
+          row.title?.includes("มาตรการ");
+
+        return {
+          id: String(row.id),
+          title: row.title || "ประกาศ",
+          content: row.content || "",
+          category: row.category || "ทั่วไป",
+          author: row.author || "ฝ่ายสวัสดิการและสิ่งแวดล้อม (Admin)",
+          date: formattedDate,
+          isPinned: Boolean(row.pinned),
+          urgency: isUrgent ? "urgent" : "normal",
+          tag: row.category,
+          createdAt: row.created_at || new Date().toISOString(),
+        };
+      });
+
+      saveAnnouncements(mapped);
+      return mapped;
+    }
+  } catch (err) {
+    console.warn("fetchAnnouncementsFromSupabase error:", err);
+  }
+  return getAnnouncements();
+}
 
 export function createAnnouncement(
   data: Omit<AnnouncementItem, "id" | "createdAt">,
@@ -94,6 +146,34 @@ export function createAnnouncement(
 
   const nextList = [newItem, ...current];
   saveAnnouncements(nextList);
+
+  // Sync to Supabase in background
+  (async () => {
+    try {
+      const { data: inserted, error } = await supabase
+        .from("announcements")
+        .insert({
+          title: newItem.title,
+          category: newItem.category,
+          content: newItem.content,
+          published_date: new Date().toISOString().split("T")[0],
+          pinned: newItem.isPinned,
+          author: newItem.author,
+        })
+        .select();
+
+      if (error) {
+        console.warn("createAnnouncement in Supabase error:", error.message);
+      } else if (inserted && Array.isArray(inserted) && (inserted[0] as any)?.id) {
+        const updatedList = getAnnouncements().map((a) =>
+          a.id === newId ? { ...a, id: String((inserted[0] as any).id) } : a
+        );
+        saveAnnouncements(updatedList);
+      }
+    } catch (err) {
+      console.warn("createAnnouncement sync error:", err);
+    }
+  })();
 
   // Send a real-time notification to all users
   try {
@@ -125,6 +205,29 @@ export function updateAnnouncement(
 
   current[index] = updated;
   saveAnnouncements(current);
+
+  // Sync to Supabase in background
+  (async () => {
+    try {
+      const sbUpdates: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (updates.title !== undefined) sbUpdates.title = updates.title;
+      if (updates.category !== undefined) sbUpdates.category = updates.category;
+      if (updates.content !== undefined) sbUpdates.content = updates.content;
+      if (updates.isPinned !== undefined) sbUpdates.pinned = updates.isPinned;
+      if (updates.author !== undefined) sbUpdates.author = updates.author;
+
+      const { error } = await supabase
+        .from("announcements")
+        .update(sbUpdates)
+        .eq("id", id);
+      if (error) console.warn("updateAnnouncement in Supabase error:", error.message);
+    } catch (err) {
+      console.warn("updateAnnouncement sync error:", err);
+    }
+  })();
+
   return updated;
 }
 
@@ -133,6 +236,20 @@ export function deleteAnnouncement(id: string): boolean {
   const next = current.filter((item) => item.id !== id);
   if (next.length !== current.length) {
     saveAnnouncements(next);
+
+    // Sync deletion to Supabase in background
+    (async () => {
+      try {
+        const { error } = await supabase
+          .from("announcements")
+          .delete()
+          .eq("id", id);
+        if (error) console.warn("deleteAnnouncement in Supabase error:", error.message);
+      } catch (err) {
+        console.warn("deleteAnnouncement sync error:", err);
+      }
+    })();
+
     return true;
   }
   return false;
@@ -145,5 +262,19 @@ export function togglePinAnnouncement(id: string): boolean {
 
   target.isPinned = !target.isPinned;
   saveAnnouncements(current);
+
+  // Sync pin state to Supabase in background
+  (async () => {
+    try {
+      const { error } = await supabase
+        .from("announcements")
+        .update({ pinned: target.isPinned, updated_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) console.warn("togglePinAnnouncement in Supabase error:", error.message);
+    } catch (err) {
+      console.warn("togglePinAnnouncement sync error:", err);
+    }
+  })();
+
   return true;
 }

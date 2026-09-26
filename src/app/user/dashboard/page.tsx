@@ -8,9 +8,12 @@ import {
   getDemoSession,
   type DemoSession,
 } from "@/lib/authService";
-import { getAllCurrentIssues, getDisabledCategoryNames } from "@/lib/issuesData";
+import { supabase } from "@/lib/supabaseClient";
+import { fetchIssuesFromSupabase } from "@/lib/supabaseService";
+import { getAllCurrentIssues, getDisabledCategoryNames, getUserAllIssues } from "@/lib/issuesData";
 import {
   getAnnouncements,
+  fetchAnnouncementsFromSupabase,
   type AnnouncementItem,
 } from "@/lib/announcementsData";
 import AccountBar from "@/components/AccountBar";
@@ -234,105 +237,29 @@ export default function UserDashboardPage() {
   }, [session]);
 
   /*
-   * ดึงข้อมูลหมวดหมู่และสถิติคำร้อง
+   * ดึงข้อมูลหมวดหมู่, ประกาศข่าวสาร และสถิติคำร้อง
    */
   useEffect(() => {
     function syncData() {
-      setDisabledCategories(
-        getDisabledCategoryNames(),
-      );
+      // 1. ดึงประกาศข่าวสาร
+      setAnnouncements(getAnnouncements());
 
-      const currentSession =
-        getDemoSession();
+      // 2. ดึงหมวดหมู่ที่ถูกปิดรับแจ้ง
+      setDisabledCategories(getDisabledCategoryNames());
 
+      const currentSession = getDemoSession();
       if (!currentSession) return;
 
-      const issues =
-        getAllCurrentIssues();
+      // 3. ดึงคำร้องทั้งหมดของผู้ใช้นี้ (รวม pending "รอรับเรื่อง", in_progress "กำลังดำเนินการ", resolved "แก้ไขแล้ว")
+      const myIssues = getUserAllIssues(currentSession);
 
-      const currentName = (
-        currentSession.name || ""
-      )
-        .trim()
-        .toLowerCase();
-
-      const currentEmail = (
-        currentSession.email || ""
-      )
-        .trim()
-        .toLowerCase();
-
-      const myIssues = issues.filter(
-        (issue) => {
-          const reporterName = (
-            issue.reporterName || ""
-          )
-            .trim()
-            .toLowerCase();
-
-          const reporterEmail = (
-            issue.reporterEmail || ""
-          )
-            .trim()
-            .toLowerCase();
-
-          /*
-           * ตรวจสอบคำร้องจากอีเมล
-           */
-          if (
-            currentEmail &&
-            reporterEmail &&
-            currentEmail === reporterEmail
-          ) {
-            return true;
-          }
-
-          /*
-           * รองรับบัญชีผู้ใช้ทดลองเดิม
-           */
-          if (
-            currentEmail ===
-              "user@unicare.local" &&
-            (reporterEmail ===
-              "kittipoom@example.com" ||
-              reporterName.includes(
-                "กิตติภูมิ",
-              ))
-          ) {
-            return true;
-          }
-
-          /*
-           * ตรวจสอบคำร้องจากชื่อ
-           */
-          if (
-            currentName &&
-            reporterName &&
-            currentName === reporterName
-          ) {
-            return true;
-          }
-
-          return false;
-        },
-      );
-
-      const total =
-        myIssues.length;
-
-      const inProgress =
-        myIssues.filter(
-          (issue) =>
-            issue.status ===
-              "in_progress" ||
-            issue.status === "pending",
-        ).length;
-
-      const resolved =
-        myIssues.filter(
-          (issue) =>
-            issue.status === "resolved",
-        ).length;
+      const total = myIssues.length;
+      const inProgress = myIssues.filter(
+        (issue) => issue.status === "in_progress" || issue.status === "pending"
+      ).length;
+      const resolved = myIssues.filter(
+        (issue) => issue.status === "resolved"
+      ).length;
 
       setStats({
         total,
@@ -341,18 +268,53 @@ export default function UserDashboardPage() {
       });
     }
 
+    // เรียก sync ทันที
     syncData();
+
+    // ดึงข้อมูลสดจาก Supabase ทันทีที่เข้าหน้า
+    fetchIssuesFromSupabase().then(() => syncData());
+    fetchAnnouncementsFromSupabase().then(() => syncData());
+
+    // สมัคร Realtime สำหรับตาราง issues
+    const issuesChannel = supabase
+      .channel("unicare-user-dashboard-issues-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "issues" },
+        async () => {
+          await fetchIssuesFromSupabase();
+          syncData();
+        }
+      )
+      .subscribe();
+
+    // สมัคร Realtime สำหรับตาราง announcements
+    const announcementsChannel = supabase
+      .channel("unicare-user-dashboard-announcements-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "announcements" },
+        async () => {
+          await fetchAnnouncementsFromSupabase();
+          syncData();
+        }
+      )
+      .subscribe();
 
     window.addEventListener("storage", syncData);
     window.addEventListener("unicare-demo-reports-updated", syncData);
+    window.addEventListener("unicare-issues-sync", syncData);
     window.addEventListener("unicare-category-metadata-updated", syncData);
     window.addEventListener("unicare-announcements-updated", syncData);
     window.addEventListener("unicare-profile-updated", syncData);
     window.addEventListener("focus", syncData);
 
     return () => {
+      supabase.removeChannel(issuesChannel);
+      supabase.removeChannel(announcementsChannel);
       window.removeEventListener("storage", syncData);
       window.removeEventListener("unicare-demo-reports-updated", syncData);
+      window.removeEventListener("unicare-issues-sync", syncData);
       window.removeEventListener("unicare-category-metadata-updated", syncData);
       window.removeEventListener("unicare-announcements-updated", syncData);
       window.removeEventListener("unicare-profile-updated", syncData);

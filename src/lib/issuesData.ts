@@ -459,6 +459,116 @@ export function sortIssuesLatestFirst(issuesList: IssueItem[]): IssueItem[] {
   })
 }
 
+/**
+ * Retrieve all issues belonging to a specific user (including pending, in_progress, and resolved).
+ * Authoritative: combines Supabase cached issues and localStorage reports for this user.
+ */
+export function getUserAllIssues(session?: { email?: string; name?: string } | null): IssueItem[] {
+  if (typeof window === 'undefined') return []
+  let currentSession = session
+  if (!currentSession) {
+    try {
+      const raw = window.localStorage.getItem('unicare_demo_session')
+      if (raw) currentSession = JSON.parse(raw)
+    } catch {}
+  }
+  if (!currentSession) return []
+
+  const currentEmail = (currentSession.email || '').trim().toLowerCase()
+  const currentName = (currentSession.name || '').trim().toLowerCase()
+
+  const matchUser = (itemReporterEmail?: string, itemReporterName?: string) => {
+    const repEmail = (itemReporterEmail || '').trim().toLowerCase()
+    const repName = (itemReporterName || '').trim().toLowerCase()
+
+    if (currentEmail && repEmail && currentEmail === repEmail) return true
+    if (
+      currentEmail === 'user@unicare.local' &&
+      (repEmail === 'somchai@example.com' ||
+        repName.includes('สมชาย') ||
+        repEmail === 'kittipoom@example.com' ||
+        repName.includes('กิตติภูมิ'))
+    ) {
+      return true
+    }
+    if (currentName && repName && currentName === repName) return true
+    return false
+  }
+
+  const map = new Map<string, IssueItem>()
+
+  // 1. From local reports (unicare_demo_issue_reports)
+  try {
+    const raw = window.localStorage.getItem('unicare_demo_issue_reports')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          const rawStatus = (item.status || 'Pending').toLowerCase()
+          if (rawStatus === 'closed' || rawStatus === 'rejected') continue
+
+          const repEmail = item.reporter_email || item.reporterEmail
+          const repName = item.reporter_name || item.reporterName
+          if (!matchUser(repEmail, repName)) continue
+
+          let statusKey: 'pending' | 'in_progress' | 'resolved' = 'pending'
+          let statusLabel = 'รอดำเนินการ'
+          if (rawStatus === 'in_progress') {
+            statusKey = 'in_progress'
+            statusLabel = 'กำลังดำเนินการ'
+          } else if (rawStatus === 'resolved' || rawStatus === 'closed') {
+            statusKey = 'resolved'
+            statusLabel = 'แก้ไขสำเร็จ'
+          }
+
+          const rawId = item.issue_id ?? item.id
+          const displayId = String(rawId).startsWith('ISS-')
+            ? String(rawId)
+            : `ISS-2026-${String(rawId).padStart(3, '0')}`
+
+          map.set(displayId.replace(/^#/, '').trim(), {
+            id: displayId,
+            date: item.date_created
+              ? new Date(item.date_created).toLocaleDateString('th-TH', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })
+              : 'วันนี้',
+            category: normalizeCategoryName(item.category || item.issue_categories?.category_name || item.title || 'อื่น ๆ'),
+            area: item.issue_areas?.area_name || item.location || 'มหาวิทยาลัยวลัยลักษณ์',
+            description: item.description || item.title || 'รายละเอียดเรื่องร้องเรียน',
+            adminName: item.adminName || item.admin_name || 'ฝ่ายสวัสดิการ (Admin)',
+            adminInitial: 'สน',
+            reporterName: repName || currentSession.name,
+            reporterEmail: repEmail || currentSession.email,
+            status: statusKey,
+            statusLabel,
+            urgency: item.urgency || 'ปกติ',
+          })
+        }
+      }
+    }
+  } catch {}
+
+  // 2. From Supabase cached issues (authoritative for synced issues)
+  try {
+    const rawCached = window.localStorage.getItem('unicare_cached_supabase_issues')
+    if (rawCached) {
+      const cached = JSON.parse(rawCached)
+      if (Array.isArray(cached)) {
+        for (const item of cached) {
+          if (!matchUser(item.reporterEmail, item.reporterName)) continue
+          const cleanId = item.id.replace(/^#/, '').trim()
+          map.set(cleanId, item)
+        }
+      }
+    }
+  } catch {}
+
+  return sortIssuesLatestFirst(Array.from(map.values()))
+}
+
 export function getDefaultCategoryCounts(): Record<string, number> {
   const counts: Record<string, number> = {
     'เสียงรบกวน': 0,
