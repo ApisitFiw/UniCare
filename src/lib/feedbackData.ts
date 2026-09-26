@@ -40,89 +40,7 @@ export const DIMENSION_TITLES: { id: number; title: string }[] = [
   { id: 10, title: "10. ความพึงพอใจต่อระบบ UniCare" },
 ];
 
-export const INITIAL_MOCK_FEEDBACKS: FeedbackItem[] = [
-  {
-    id: "1",
-    issueId: "ISS-2026-101",
-    reportCode: "#ISS-2026-101",
-    userName: "กิตติภูมิ ปราชญนคร",
-    category: "เสียงรบกวน",
-    categoryIcon: "",
-    location: "หอพักนักศึกษาชาย 3",
-    rating: 5,
-    isSolved: true,
-    comment:
-      "รปภ. เข้ามาระงับเหตุได้รวดเร็วมากครับ ภายใน 30 นาทีก็เงียบสงบ สามารถอ่านหนังสือสอบต่อได้ ขอบคุณครับ",
-    reinspected: false,
-    createdAt: "2026-09-04T23:45:00.000Z",
-    criteriaScores: {
-      1: 5,
-      2: 5,
-      3: 5,
-      4: 5,
-      5: 4,
-      6: 5,
-      7: 4,
-      8: 5,
-      9: 4,
-      10: 5,
-    },
-  },
-  {
-    id: "2",
-    issueId: "ISS-2026-102",
-    reportCode: "#ISS-2026-102",
-    userName: "นศ. สุภัทรา (สงวนนามสกุล)",
-    category: "ขยะ / ของเสีย",
-    categoryIcon: "",
-    location: "โรงอาหารกลาง",
-    rating: 2,
-    isSolved: false,
-    comment:
-      "มีการเก็บขยะไปแล้วส่วนหนึ่ง แต่น้ำขยะส่งกลิ่นเหม็นเน่ามาก ยังไม่มีการล้างพื้นจุดวางถังขยะ อยากให้ทำความสะอาดซ้ำค่ะ",
-    reinspected: false,
-    createdAt: "2026-09-06T12:00:00.000Z",
-    criteriaScores: {
-      1: 4,
-      2: 3,
-      3: 4,
-      4: 3,
-      5: 3,
-      6: 3,
-      7: 2,
-      8: 2,
-      9: 2,
-      10: 3,
-    },
-  },
-  {
-    id: "3",
-    issueId: "ISS-2026-105",
-    reportCode: "#ISS-2026-105",
-    userName: "อาจารย์ สันติสุข",
-    category: "ต้นไม้ / พื้นที่สีเขียว",
-    categoryIcon: "",
-    location: "ลานกิจกรรมหน้าอาคารสถาปัตยกรรมศาสตร์",
-    rating: 4,
-    isSolved: true,
-    comment:
-      "เจ้าหน้าที่ประสานงานตัดแต่งกิ่งไม้ได้ดี แต่อยากให้มีมาตรการติดป้ายเตือนช่วงลมแรงเพิ่มเติมครับ",
-    reinspected: false,
-    createdAt: "2026-09-08T15:00:00.000Z",
-    criteriaScores: {
-      1: 5,
-      2: 4,
-      3: 5,
-      4: 5,
-      5: 4,
-      6: 4,
-      7: 4,
-      8: 4,
-      9: 3,
-      10: 5,
-    },
-  },
-];
+export const INITIAL_MOCK_FEEDBACKS: FeedbackItem[] = [];
 
 const FEEDBACKS_STORAGE_KEY = "unicare_feedbacks";
 
@@ -144,25 +62,18 @@ function normalizeCriteria(f: FeedbackItem): FeedbackItem {
 
 export function getAllFeedbacks(): FeedbackItem[] {
   if (typeof window === "undefined") {
-    return INITIAL_MOCK_FEEDBACKS;
+    return [];
   }
-
   try {
     const raw = window.localStorage.getItem(FEEDBACKS_STORAGE_KEY);
-    if (!raw) {
-      window.localStorage.setItem(
-        FEEDBACKS_STORAGE_KEY,
-        JSON.stringify(INITIAL_MOCK_FEEDBACKS)
-      );
-      return INITIAL_MOCK_FEEDBACKS;
-    }
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
+    if (Array.isArray(parsed)) {
       return parsed.map(normalizeCriteria);
     }
-    return INITIAL_MOCK_FEEDBACKS;
+    return [];
   } catch {
-    return INITIAL_MOCK_FEEDBACKS;
+    return [];
   }
 }
 

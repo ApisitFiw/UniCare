@@ -191,11 +191,6 @@ export function removeIssueFromLocalStorage(idOrTicket: string) {
 export function syncSupabaseIssuesWithLocalStorage(remoteIssues: IssueItem[]) {
   if (typeof window === 'undefined' || !Array.isArray(remoteIssues)) return
   try {
-    const savedReports = localStorage.getItem('unicare_demo_issue_reports')
-    if (!savedReports) return
-    const currentList = JSON.parse(savedReports)
-    if (!Array.isArray(currentList) || currentList.length === 0) return
-
     const remoteCleanKeys = new Set(
       remoteIssues.map((r) => r.id.replace(/^#/, '').trim().toLowerCase())
     )
@@ -208,32 +203,84 @@ export function syncSupabaseIssuesWithLocalStorage(remoteIssues: IssueItem[]) {
         .filter(Boolean)
     )
 
-    const filteredList = currentList.filter((item: any) => {
-      const itemId = String(item.id || '').replace(/^#/, '').trim().toLowerCase()
-      const itemCode = String(item.code || '').replace(/^#/, '').trim().toLowerCase()
-      const issueId = String(item.issue_id || '').toLowerCase()
-      const numMatch = (itemId || itemCode || issueId).match(/\d+$/)
-      const num = numMatch ? parseInt(numMatch[0], 10) : 0
+    // 1. Purge unicare_demo_issue_reports of any issue not in remote Supabase issues
+    const savedReports = localStorage.getItem('unicare_demo_issue_reports')
+    if (savedReports) {
+      const currentList = JSON.parse(savedReports)
+      if (Array.isArray(currentList)) {
+        const filteredList = currentList.filter((item: any) => {
+          const itemId = String(item.id || '').replace(/^#/, '').trim().toLowerCase()
+          const itemCode = String(item.code || '').replace(/^#/, '').trim().toLowerCase()
+          const issueId = String(item.issue_id || '').toLowerCase()
+          const numMatch = (itemId || itemCode || issueId).match(/\d+$/)
 
-      // Only evaluate user/admin-created reports with ISS- ticket or num > 105
-      const isRemoteSyncedIssue =
-        itemId.startsWith('iss-') ||
-        itemCode.startsWith('iss-') ||
-        num > 105
-
-      if (isRemoteSyncedIssue) {
-        const existsInRemote =
-          remoteCleanKeys.has(itemId) ||
-          remoteCleanKeys.has(itemCode) ||
-          (numMatch && remoteNumKeys.has(numMatch[0]))
-        return existsInRemote
+          return (
+            remoteCleanKeys.has(itemId) ||
+            remoteCleanKeys.has(itemCode) ||
+            (numMatch && remoteNumKeys.has(numMatch[0]))
+          )
+        })
+        if (filteredList.length !== currentList.length) {
+          localStorage.setItem('unicare_demo_issue_reports', JSON.stringify(filteredList))
+        }
       }
-      return true
-    })
-
-    if (filteredList.length !== currentList.length) {
-      localStorage.setItem('unicare_demo_issue_reports', JSON.stringify(filteredList))
     }
+
+    // 2. Purge unicare_demo_timeline_history of any issue not in remote Supabase issues
+    const savedTimeline = localStorage.getItem('unicare_demo_timeline_history')
+    if (savedTimeline) {
+      const parsedTimeline = JSON.parse(savedTimeline)
+      if (typeof parsedTimeline === 'object' && parsedTimeline !== null) {
+        let changed = false
+        for (const key of Object.keys(parsedTimeline)) {
+          const cleanKey = key.replace(/^#/, '').trim().toLowerCase()
+          const m = cleanKey.match(/\d+$/)
+          const inRemote = remoteCleanKeys.has(cleanKey) || (m && remoteNumKeys.has(m[0]))
+          if (!inRemote) {
+            delete parsedTimeline[key]
+            changed = true
+          }
+        }
+        if (changed) {
+          localStorage.setItem('unicare_demo_timeline_history', JSON.stringify(parsedTimeline))
+        }
+      }
+    }
+
+    // 3. Purge unicare_feedbacks of any issue not in remote Supabase issues
+    const savedFeedbacks = localStorage.getItem('unicare_feedbacks')
+    if (savedFeedbacks) {
+      const parsedFeedbacks = JSON.parse(savedFeedbacks)
+      if (Array.isArray(parsedFeedbacks)) {
+        const cleanFeedbacks = parsedFeedbacks.filter((item: any) => {
+          const issueId = String(item.issueId || item.reportCode || '').replace(/^#/, '').trim().toLowerCase()
+          const m = issueId.match(/\d+$/)
+          return remoteCleanKeys.has(issueId) || (m && remoteNumKeys.has(m[0]))
+        })
+        if (cleanFeedbacks.length !== parsedFeedbacks.length) {
+          localStorage.setItem('unicare_feedbacks', JSON.stringify(cleanFeedbacks))
+        }
+      }
+    }
+
+    // 4. Purge unicare_demo_notifications tied to deleted issues
+    const savedNotifs = localStorage.getItem('unicare_demo_notifications_v4')
+    if (savedNotifs) {
+      const parsedNotifs = JSON.parse(savedNotifs)
+      if (Array.isArray(parsedNotifs)) {
+        const cleanNotifs = parsedNotifs.filter((item: any) => {
+          if (!item.issueId) return true // Keep general broadcasts
+          const issueId = String(item.issueId).replace(/^#/, '').trim().toLowerCase()
+          const m = issueId.match(/\d+$/)
+          return remoteCleanKeys.has(issueId) || (m && remoteNumKeys.has(m[0]))
+        })
+        if (cleanNotifs.length !== parsedNotifs.length) {
+          localStorage.setItem('unicare_demo_notifications_v4', JSON.stringify(cleanNotifs))
+        }
+      }
+    }
+
+    // USER ACCOUNTS ARE FULLY PRESERVED (unicare_demo_session, unicare_demo_user_profile, unicare_demo_users, etc.)
   } catch {}
 }
 

@@ -384,7 +384,8 @@ export default function StatusTrackingPage() {
   const handleOpenQuickTimelineModal = () => {
     setIsQuickTimelineModal(true)
     setModalMode("create")
-    const target = issues.length > 0 ? issues[0] : initialMockIssues[0]
+    const target = issues.length > 0 ? issues[0] : null;
+    if (!target) return;
     setActiveModalIssue(target)
     setNewStatus(target.statusLabel)
     setActionNote('')

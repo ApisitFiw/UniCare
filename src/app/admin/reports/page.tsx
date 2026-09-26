@@ -292,145 +292,7 @@ const DEMO_REPORTS_KEY =
 
   "unicare_demo_issue_reports";
 
-const demoReports: Report[] = [
-
-  {
-
-    issue_id: 908,
-
-    title: "เสียงรบกวนช่วงกลางคืน",
-
-    description:
-
-      "มีการเปิดเพลงเสียงดังบริเวณหอพักในช่วงกลางคืน ส่งผลกระทบต่อการพักผ่อน",
-
-    severity: "High",
-
-    status: "Pending",
-
-    date_created: "2026-09-08T20:30:00.000Z",
-
-    reporter_name: "สมชาย ใจดี",
-
-    reporter_email: "somchai@example.com",
-
-    reporter_phone: null,
-
-    answers: [
-
-      {
-
-        label: "แหล่งกำเนิดเสียง",
-
-        values: ["เพลง / ลำโพง"],
-
-      },
-
-      {
-
-        label: "ลักษณะเสียง",
-
-        values: ["ดังต่อเนื่อง"],
-
-      },
-
-      {
-
-        label: "ระยะเวลาต่อครั้ง",
-
-        values: ["มากกว่า 1 ชั่วโมง"],
-
-      },
-
-    ],
-
-    location:
-
-      "หอพัก / หอพักลักษณานิเวศ 3 / หลังอาคาร",
-
-    locationDetail:
-
-      "บริเวณด้านหลังอาคารใกล้ลานจอดรถ",
-
-    placeType: "หอพัก",
-
-    place: "หอพักลักษณานิเวศ 3",
-
-    floor: "- (บริเวณทั่วไป / หลังอาคาร)",
-
-    area: "หลังอาคาร",
-
-    occurredAt: "2026-09-08",
-
-    ongoing: "ยังเกิดอยู่",
-
-    additional:
-
-      "เสียงดังเป็นประจำในช่วงกลางคืน โดยเฉพาะหลังเวลา 22.00 น.",
-
-    frequency: "พบเป็นประจำ",
-
-    commonPeriods: ["กลางคืน"],
-
-    impacts: ["รบกวนการพักผ่อน"],
-
-    impactOther: "",
-
-    urgency: "เร่งด่วนมาก",
-
-    urgencyReason:
-
-      "เกิดขึ้นต่อเนื่องและรบกวนผู้พักอาศัยจำนวนมาก",
-
-    evidence_count: 2,
-
-    evidence_files: [
-
-      {
-
-        id: "908-image",
-
-        name: "ภาพบริเวณที่เกิดเหตุ.jpg",
-
-        type: "image",
-
-        mimeType: "image/jpeg",
-
-        size: "245 KB",
-
-      },
-
-      {
-
-        id: "908-audio",
-
-        name: "คลิปเสียงรบกวน.mp3",
-
-        type: "audio",
-
-        mimeType: "audio/mpeg",
-
-        size: "512 KB",
-
-      },
-
-    ],
-
-    issue_categories: {
-
-      category_name: "เสียงรบกวน",
-
-    },
-
-    issue_areas: {
-
-      area_name: "หอพักลักษณานิเวศ 3",
-
-    },
-
-  },
-
-];
+const demoReports: Report[] = [];
 
 function enrichReport(raw: Report): Report {
   const report: Report = { ...raw };
@@ -737,34 +599,17 @@ function enrichReport(raw: Report): Report {
 }
 
 function readDemoReports(): Report[] {
+  if (typeof window === "undefined") return [];
   const saved = window.localStorage.getItem(DEMO_REPORTS_KEY);
-  let list: Report[] = [];
-
-  if (!saved) {
-    list = demoReports.map(enrichReport);
-    try {
-      window.localStorage.setItem(DEMO_REPORTS_KEY, JSON.stringify(list));
-    } catch {}
-    return list;
-  }
-
+  if (!saved) return [];
   try {
     const parsed = JSON.parse(saved);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      list = parsed.map(enrichReport);
-    } else {
-      list = demoReports.map(enrichReport);
+    if (Array.isArray(parsed)) {
+      return parsed.map(enrichReport);
     }
-    try {
-      window.localStorage.setItem(DEMO_REPORTS_KEY, JSON.stringify(list));
-    } catch {}
-    return list;
+    return [];
   } catch {
-    list = demoReports.map(enrichReport);
-    try {
-      window.localStorage.setItem(DEMO_REPORTS_KEY, JSON.stringify(list));
-    } catch {}
-    return list;
+    return [];
   }
 }
 
