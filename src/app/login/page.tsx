@@ -18,8 +18,12 @@ import {
   Mail,
   Megaphone,
   User,
+  KeyRound,
+  CheckCircle2,
+  X,
+  ArrowRight,
 } from "lucide-react";
-import { signInUnified } from "@/lib/authService";
+import { signInUnified, verifyEmailExists } from "@/lib/authService";
 import { supabase } from "@/lib/supabaseClient";
 import UniCareLogo from "@/components/UniCareLogo";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -44,6 +48,13 @@ export default function LoginPage() {
     useState(false);
   const [isResetting, setIsResetting] =
     useState(false);
+
+  // Forgot Password Modal State
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [modalEmail, setModalEmail] = useState("");
+  const [modalError, setModalError] = useState("");
+  const [modalSuccess, setModalSuccess] = useState("");
+  const [isModalResetting, setIsModalResetting] = useState(false);
 
   useEffect(() => {
     const savedEmail = window.localStorage.getItem(
@@ -158,6 +169,56 @@ export default function LoginPage() {
       );
     } finally {
       setIsResetting(false);
+    }
+  }
+
+  function openForgotPasswordModal() {
+    setModalEmail(email.includes("@") ? email.trim() : "");
+    setModalError("");
+    setModalSuccess("");
+    setShowForgotModal(true);
+  }
+
+  async function handleModalSendReset(event: FormEvent) {
+    event.preventDefault();
+    setModalError("");
+    setModalSuccess("");
+
+    const normalized = modalEmail.trim().toLowerCase();
+    if (!normalized) {
+      setModalError("กรุณากรอกอีเมลที่ลงทะเบียนไว้");
+      return;
+    }
+
+    if (!normalized.includes("@")) {
+      setModalError("กรุณาระบุรูปแบบอีเมลที่ถูกต้อง");
+      return;
+    }
+
+    setIsModalResetting(true);
+    try {
+      // 1. ตรวจสอบว่ามีอีเมลนี้อยู่ในระบบ UniCare หรือไม่
+      const exists = await verifyEmailExists(normalized);
+      if (!exists) {
+        setModalError("ไม่พบบัญชีผู้ใช้ที่ใช้อีเมลนี้ในระบบ UniCare กรุณาตรวจสอบอีเมลอีกครั้ง");
+        setIsModalResetting(false);
+        return;
+      }
+
+      // 2. พยายามส่งอีเมลรีเซ็ตผ่าน Supabase Auth
+      try {
+        await supabase.auth.resetPasswordForEmail(normalized, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        });
+      } catch (authErr) {
+        console.warn("Supabase auth reset warning:", authErr);
+      }
+
+      setModalSuccess("ระบบยืนยันพบบัญชีของคุณแล้ว ท่านสามารถกดปุ่มตั้งรหัสผ่านใหม่ด้านล่างเพื่อดำเนินการได้ทันที");
+    } catch {
+      setModalError("เกิดข้อผิดพลาดในการตรวจสอบบัญชี กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setIsModalResetting(false);
     }
   }
 
@@ -388,13 +449,10 @@ export default function LoginPage() {
 
                 <button
                   type="button"
-                  disabled={isResetting}
-                  onClick={handleForgotPassword}
-                  className="text-[11px] font-semibold text-emerald-700 transition hover:text-emerald-900 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={openForgotPasswordModal}
+                  className="text-[11px] font-semibold text-emerald-700 transition hover:text-emerald-900 hover:underline cursor-pointer"
                 >
-                  {isResetting
-                    ? t("กำลังส่งลิงก์...")
-                    : t("ลืมรหัสผ่าน?")}
+                  {t("ลืมรหัสผ่าน?")}
                 </button>
               </div>
 
@@ -442,6 +500,139 @@ export default function LoginPage() {
           </div>
         </section>
       </div>
+
+      {/* ================= Modal ลืมรหัสผ่าน ================= */}
+      {showForgotModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-xs"
+          onClick={() => setShowForgotModal(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-md overflow-hidden rounded-3xl border border-white/60 bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-700" />
+
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
+                  <KeyRound className="h-4 w-4" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">
+                    {t("รีเซ็ตรหัสผ่าน")}
+                  </h3>
+                  <p className="text-[10px] text-slate-400">
+                    UniCare · Walailak University
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowForgotModal(false)}
+                className="rounded-full bg-slate-100 p-1.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleModalSendReset} className="p-6 space-y-4">
+              <div>
+                <h4 className="text-base font-extrabold text-slate-800">
+                  {t("ลืมรหัสผ่านใช่หรือไม่?")}
+                </h4>
+                <p className="mt-1 text-xs text-slate-500 leading-relaxed">
+                  {t("กรอกอีเมลที่ลงทะเบียนไว้กับระบบ เพื่อรับลิงก์สำหรับกำหนดรหัสผ่านใหม่")}
+                </p>
+              </div>
+
+              <label className="block">
+                <span className="text-xs font-bold text-slate-700">
+                  {t("อีเมลที่ใช้ลงทะเบียน")}
+                </span>
+                <div className="mt-1.5 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 transition focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
+                  <Mail className="h-4 w-4 text-slate-400 shrink-0" />
+                  <input
+                    type="email"
+                    required
+                    placeholder="example@wu.ac.th"
+                    value={modalEmail}
+                    onChange={(e) => {
+                      setModalEmail(e.target.value);
+                      setModalError("");
+                      setModalSuccess("");
+                    }}
+                    className="w-full bg-transparent text-xs text-slate-800 outline-none placeholder:text-slate-300 font-medium"
+                  />
+                </div>
+              </label>
+
+              {modalSuccess && (
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs leading-5 text-emerald-800">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">{modalSuccess}</p>
+                      <p className="mt-1 text-[11px] text-emerald-700 leading-relaxed">
+                        (หากไม่ได้รับอีเมลเนื่องจากข้อจำกัดของระบบส่งเมลภายนอก ท่านสามารถกดปุ่มสีเขียวด้านล่างเพื่อเปลี่ยนรหัสผ่านได้ทันที)
+                      </p>
+                    </div>
+                  </div>
+
+                  <Link
+                    href={`/reset-password?email=${encodeURIComponent(modalEmail.trim().toLowerCase())}`}
+                    onClick={() => setShowForgotModal(false)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white shadow-md hover:bg-emerald-700 transition"
+                  >
+                    <span>ตั้งรหัสผ่านใหม่ทันที (ไม่ต้องรออีเมล)</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              )}
+
+              {modalError && (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs leading-5 text-rose-600">
+                  {modalError}
+                </div>
+              )}
+
+              {!modalSuccess && (
+                <div className="pt-2 flex flex-col gap-2">
+                  <button
+                    type="submit"
+                    disabled={isModalResetting}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+                  >
+                    <KeyRound className="h-3.5 w-3.5" />
+                    {isModalResetting ? t("กำลังตรวจสอบบัญชี...") : t("ส่งคำขอรีเซ็ตรหัสผ่าน")}
+                  </button>
+
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                    <Link
+                      href={`/reset-password${modalEmail.trim() ? `?email=${encodeURIComponent(modalEmail.trim())}` : ""}`}
+                      onClick={() => setShowForgotModal(false)}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:underline"
+                    >
+                      <span>{t("ไปยังหน้าตั้งรหัสผ่านใหม่โดยตรง")}</span>
+                      <ArrowRight className="h-3 w-3" />
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotModal(false)}
+                      className="text-[11px] text-slate-400 hover:text-slate-600 font-medium cursor-pointer"
+                    >
+                      {t("ยกเลิก")}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

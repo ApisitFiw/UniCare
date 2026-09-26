@@ -1,25 +1,30 @@
 "use client";
 
 import {
+  Suspense,
   useEffect,
   useState,
   type FormEvent,
 } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   CheckCircle2,
   Eye,
   EyeOff,
   KeyRound,
   LockKeyhole,
+  Mail,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
+import { resetPasswordUnified } from "@/lib/authService";
 import UniCareLogo from "@/components/UniCareLogo";
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] =
     useState("");
@@ -41,12 +46,21 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     let mounted = true;
 
+    // Check query param for email
+    const queryEmail = searchParams.get("email");
+    if (queryEmail) {
+      setEmail(queryEmail);
+    }
+
     async function checkRecoverySession() {
       const {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (mounted && session) {
+      if (mounted) {
+        if (session?.user?.email) {
+          setEmail(session.user.email);
+        }
         setIsReady(true);
       }
     }
@@ -61,6 +75,9 @@ export default function ResetPasswordPage() {
           event === "PASSWORD_RECOVERY" ||
           (event === "SIGNED_IN" && session)
         ) {
+          if (session?.user?.email) {
+            setEmail(session.user.email);
+          }
           setIsReady(true);
           setError("");
         }
@@ -71,14 +88,14 @@ export default function ResetPasswordPage() {
       if (mounted) {
         setIsReady(true);
       }
-    }, 1500);
+    }, 800);
 
     return () => {
       mounted = false;
       window.clearTimeout(timeout);
       subscription.unsubscribe();
     };
-  }, []);
+  }, [searchParams]);
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
@@ -86,6 +103,12 @@ export default function ResetPasswordPage() {
     event.preventDefault();
 
     setError("");
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!cleanEmail) {
+      setError("กรุณากรอกอีเมลของบัญชีผู้ใช้");
+      return;
+    }
 
     if (password.length < 8) {
       setError(
@@ -104,16 +127,10 @@ export default function ResetPasswordPage() {
     setIsSubmitting(true);
 
     try {
-      const { error: updateError } =
-        await supabase.auth.updateUser({
-          password,
-        });
+      const res = await resetPasswordUnified(cleanEmail, password);
 
-      if (updateError) {
-        setError(
-          updateError.message ||
-            "ไม่สามารถเปลี่ยนรหัสผ่านได้",
-        );
+      if (!res.success) {
+        setError(res.error || "ไม่สามารถเปลี่ยนรหัสผ่านได้ กรุณาตรวจสอบอีเมล");
         return;
       }
 
@@ -123,10 +140,10 @@ export default function ResetPasswordPage() {
 
       window.setTimeout(() => {
         router.replace("/login");
-      }, 2000);
+      }, 2500);
     } catch {
       setError(
-        "เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน กรุณาลองใหม่",
+        "เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน กรุณาลองใหม่อีกครั้ง",
       );
     } finally {
       setIsSubmitting(false);
@@ -208,6 +225,28 @@ export default function ResetPasswordPage() {
               onSubmit={handleSubmit}
               className="mt-7 space-y-4"
             >
+              <label className="block">
+                <span className="text-xs font-bold text-slate-700">
+                  อีเมลบัญชีผู้ใช้
+                </span>
+
+                <div className="mt-1.5 flex items-center gap-3 rounded-xl border border-slate-200 px-4 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
+                  <Mail className="h-4 w-4 shrink-0 text-slate-400" />
+
+                  <input
+                    type="email"
+                    required
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) =>
+                      setEmail(event.target.value)
+                    }
+                    placeholder="example@wu.ac.th"
+                    className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none"
+                  />
+                </div>
+              </label>
+
               <label className="block">
                 <span className="text-xs font-bold text-slate-700">
                   รหัสผ่านใหม่
@@ -327,5 +366,24 @@ export default function ResetPasswordPage() {
         )}
       </div>
     </main>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-emerald-50 px-4">
+          <div className="text-center">
+            <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-emerald-100 border-t-emerald-600" />
+            <p className="mt-4 text-sm font-medium text-emerald-800">
+              กำลังโหลด...
+            </p>
+          </div>
+        </main>
+      }
+    >
+      <ResetPasswordForm />
+    </Suspense>
   );
 }

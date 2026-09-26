@@ -245,7 +245,19 @@ export async function signInWithSupabase(
     }
 
     // 4. Validate password
+    let customPass: string | undefined
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('unicare-custom-passwords')
+        if (raw) {
+          const map = JSON.parse(raw)
+          customPass = map[matched.email?.toLowerCase() || '']
+        }
+      } catch {}
+    }
+
     const validPasswords = [
+      customPass,
       meta?.password,
       '12345',
       matched.role === 'admin' ? 'Admin1234!' : 'User1234!',
@@ -433,7 +445,18 @@ function fallbackLocalSignIn(clean: string, password: string): SignInResult {
     }
   }
 
-  const validPasswords = ['12345', matched.role === 'admin' ? 'Admin1234!' : 'User1234!']
+  let customPass: string | undefined
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem('unicare-custom-passwords')
+      if (raw) {
+        const map = JSON.parse(raw)
+        customPass = map[matched.email.toLowerCase()]
+      }
+    } catch {}
+  }
+
+  const validPasswords = [customPass, '12345', matched.role === 'admin' ? 'Admin1234!' : 'User1234!'].filter(Boolean)
   if (!validPasswords.includes(password)) {
     return {
       success: false,
@@ -498,5 +521,146 @@ export function signOutDemo(): void {
   if (typeof window !== 'undefined') {
     sessionStorage.removeItem(sessionKey)
     localStorage.removeItem(sessionKey)
+  }
+}
+
+/**
+ * Check if an email exists across Supabase profiles, demo accounts, or localStorage
+ */
+export async function verifyEmailExists(email: string): Promise<boolean> {
+  const clean = email.trim().toLowerCase()
+  if (!clean) return false
+
+  // 1. Check in hardcoded accounts
+  const demoMatched = [...ADMIN_ACCOUNTS, ...USER_ACCOUNTS].some(
+    (a) => a.email.toLowerCase() === clean
+  )
+  if (demoMatched) return true
+
+  // 2. Check in Supabase profiles
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', clean)
+      .maybeSingle()
+    if (data) return true
+  } catch {}
+
+  // 3. Check in localStorage
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('unicare-demo-users')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (Array.isArray(parsed) && parsed.some((u: any) => u.email?.toLowerCase() === clean)) {
+          return true
+        }
+      }
+    } catch {}
+  }
+
+  return false
+}
+
+/**
+ * Unified password reset: updates password in Supabase profiles and local storage
+ */
+export async function resetPasswordUnified(
+  email: string,
+  newPassword: string
+): Promise<{ success: boolean; error?: string }> {
+  const cleanEmail = email.trim().toLowerCase()
+  if (!cleanEmail) {
+    return { success: false, error: 'กรุณากรอกอีเมล' }
+  }
+  if (newPassword.length < 8) {
+    return { success: false, error: 'รหัสผ่านใหม่ต้องมีอย่างน้อย 8 ตัวอักษร' }
+  }
+
+  try {
+    let foundAny = false
+
+    // 1. Update in Supabase profiles table
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, role, department')
+        .eq('email', cleanEmail)
+        .maybeSingle()
+
+      if (profile) {
+        foundAny = true
+        let meta: any = {}
+        if (profile.department) {
+          try {
+            meta = JSON.parse(profile.department)
+          } catch {
+            meta = {}
+          }
+        }
+        meta.password = newPassword
+
+        await supabase
+          .from('profiles')
+          .update({
+            department: JSON.stringify(meta),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', profile.id)
+      }
+    } catch (dbErr) {
+      console.warn('Supabase profile password update warning:', dbErr)
+    }
+
+    // 2. Update in localStorage unicare-demo-users
+    if (typeof window !== 'undefined') {
+      try {
+        const storedUsers = localStorage.getItem('unicare-demo-users')
+        if (storedUsers) {
+          const users = JSON.parse(storedUsers)
+          if (Array.isArray(users)) {
+            const hasUser = users.some((u: any) => u.email?.toLowerCase() === cleanEmail)
+            if (hasUser) {
+              foundAny = true
+              const updated = users.map((u: any) => {
+                if (u.email?.toLowerCase() === cleanEmail) {
+                  return { ...u, password: newPassword }
+                }
+                return u
+              })
+              localStorage.setItem('unicare-demo-users', JSON.stringify(updated))
+            }
+          }
+        }
+
+        // Store custom passwords map for demo accounts
+        const customPasswordsRaw = localStorage.getItem('unicare-custom-passwords') || '{}'
+        const customPasswords = JSON.parse(customPasswordsRaw)
+        customPasswords[cleanEmail] = newPassword
+        localStorage.setItem('unicare-custom-passwords', JSON.stringify(customPasswords))
+      } catch {}
+    }
+
+    // 3. Check hardcoded accounts
+    const isHardcoded = [...ADMIN_ACCOUNTS, ...USER_ACCOUNTS].some(
+      (a) => a.email.toLowerCase() === cleanEmail
+    )
+    if (isHardcoded) {
+      foundAny = true
+    }
+
+    // 4. Try Supabase Auth updateUser if active session exists
+    try {
+      await supabase.auth.updateUser({ password: newPassword })
+    } catch {}
+
+    if (!foundAny) {
+      return { success: false, error: 'ไม่พบบัญชีผู้ใช้นี้ในระบบ UniCare' }
+    }
+
+    return { success: true }
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'เกิดข้อผิดพลาดในการตั้งรหัสผ่านใหม่' }
   }
 }
