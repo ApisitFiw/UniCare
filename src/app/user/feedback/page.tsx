@@ -117,13 +117,72 @@ function FeedbackContent() {
     }
     loadUserData();
 
-    // 2. Load issues to find the target case
+    // 2. Load only RESOLVED issues for this user to show in feedback
+    const userSession = getDemoSession();
+    const currentEmail = (userSession?.email || "").trim().toLowerCase();
+    const currentName = (userSession?.name || "").trim().toLowerCase();
+
+    // Read from localStorage directly (includes all statuses)
+    let resolvedForUser: IssueItem[] = [];
+    try {
+      const raw = window.localStorage.getItem("unicare_demo_issue_reports");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          resolvedForUser = parsed
+            .filter((item: Record<string, unknown>) => {
+              const s = ((item.status as string) || "").toLowerCase();
+              if (s !== "resolved") return false;
+              const repEmail = ((item.reporter_email as string) || (item.reporterEmail as string) || "").trim().toLowerCase();
+              const repName = ((item.reporter_name as string) || (item.reporterName as string) || "").trim().toLowerCase();
+              if (currentEmail && repEmail && currentEmail === repEmail) return true;
+              if (currentEmail === "user@unicare.local" && (repEmail === "somchai@example.com" || repName.includes("สมชาย") || repEmail === "kittipoom@example.com" || repName.includes("กิตติภูมิ"))) return true;
+              if (currentName && repName && currentName === repName) return true;
+              return false;
+            })
+            .map((item: Record<string, unknown>) => {
+              const rawId = item.issue_id ?? item.id;
+              const displayId = String(rawId).startsWith("ISS-") ? String(rawId) : `ISS-2026-${String(rawId).padStart(3, "0")}`;
+              return {
+                id: displayId,
+                date: item.date_created ? new Date(item.date_created as string).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" }) : "วันนี้",
+                category: (item.category as string) || (item.title as string) || "อื่น ๆ",
+                area: (item.location as string) || "มหาวิทยาลัยวลัยลักษณ์",
+                description: (item.description as string) || (item.title as string) || "รายละเอียดเรื่องร้องเรียน",
+                adminName: (item.adminName as string) || (item.admin_name as string) || "",
+                adminInitial: "",
+                status: "resolved" as const,
+                statusLabel: "แก้ไขสำเร็จ",
+                reporterName: (item.reporter_name as string) || (item.reporterName as string),
+                reporterEmail: (item.reporter_email as string) || (item.reporterEmail as string),
+              } as IssueItem;
+            });
+        }
+      }
+    } catch { /* ignore */ }
+
+    // Also include resolved issues from Supabase cache (already filtered by getAllCurrentIssues)
     const allIssues = getAllCurrentIssues();
-    const resolved = allIssues.filter((i) => i.status === "resolved");
+    const supabaseResolved = allIssues.filter((i) => {
+      if (i.status !== "resolved") return false;
+      const repEmail = (i.reporterEmail || "").trim().toLowerCase();
+      const repName = (i.reporterName || "").trim().toLowerCase();
+      if (currentEmail && repEmail && currentEmail === repEmail) return true;
+      if (currentEmail === "user@unicare.local" && (repEmail === "somchai@example.com" || repName.includes("สมชาย") || repEmail === "kittipoom@example.com" || repName.includes("กิตติภูมิ"))) return true;
+      if (currentName && repName && currentName === repName) return true;
+      return false;
+    });
+
+    // Merge: deduplicate by id
+    const mergedMap = new Map<string, IssueItem>();
+    for (const i of resolvedForUser) mergedMap.set(i.id, i);
+    for (const i of supabaseResolved) mergedMap.set(i.id, i);
+    const resolved = Array.from(mergedMap.values());
+
     setAllResolvedIssues(resolved);
 
     if (queryIssueId) {
-      const match = allIssues.find(
+      const match = resolved.find(
         (i) => i.id === queryIssueId || i.id === queryIssueId.replace(/^#/, "")
       );
       if (match) {
@@ -138,8 +197,9 @@ function FeedbackContent() {
       setSelectedIssue(pendingCases[0]);
     } else if (resolved.length > 0) {
       setSelectedIssue(resolved[0]);
-    } else if (allIssues.length > 0) {
-      setSelectedIssue(allIssues[0]);
+    } else {
+      // No resolved issues at all — show empty state
+      setSelectedIssue(null);
     }
   }, [queryIssueId]);
 
@@ -389,7 +449,31 @@ function FeedbackContent() {
 
       {/* ส่วนเนื้อหาหลัก (Main Content) */}
       <main className="p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
-        {/* Banner */}
+
+        {/* Empty State: ไม่มีเคสที่แก้ไขเสร็จแล้ว */}
+        {allResolvedIssues.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-24 space-y-5 text-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 border border-slate-200">
+              <Star className="w-9 h-9 text-slate-300" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-lg font-bold text-slate-700">ยังไม่มีเคสที่พร้อมให้ประเมิน</h2>
+              <p className="text-sm text-slate-500 max-w-sm">
+                การประเมินความพึงพอใจจะเปิดให้ใช้งานได้หลังจากเจ้าหน้าที่แก้ไขปัญหาของคุณเสร็จสมบูรณ์แล้วเท่านั้น
+              </p>
+            </div>
+            <Link
+              href="/my-reports"
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800 transition-colors"
+            >
+              <ArrowRight className="w-4 h-4" />
+              ดูสถานะคำร้องของฉัน
+            </Link>
+          </div>
+        )}
+
+        {/* แสดงฟอร์มประเมินเฉพาะเมื่อมีเคสที่แก้ไขเสร็จแล้ว */}
+        {allResolvedIssues.length > 0 && (<>
         <section className="rounded-2xl bg-gradient-to-r from-[#0e4435] via-[#145946] to-[#1b6852] text-white p-6 sm:p-7 shadow-xs flex items-center justify-between">
           <div className="space-y-1">
             <span className="bg-emerald-400/20 text-emerald-200 text-[11px] font-semibold px-2.5 py-0.5 rounded-full border border-emerald-400/30 inline-block">
@@ -828,6 +912,7 @@ function FeedbackContent() {
             </div>
           )}
         </form>
+        </>)}
       </main>
 
       {showToast && (
