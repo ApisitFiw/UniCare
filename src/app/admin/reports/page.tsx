@@ -1029,6 +1029,12 @@ export default function AdminIssuesPage() {
                 remoteCleanKeys.has(key) ||
                 (numMatch && remoteNumKeys.has(numMatch[0]));
               if (!inRemote) {
+                // If created recently (within 5 minutes), do not purge
+                const createdTime = item.date_created ? new Date(item.date_created).getTime() : 0;
+                if (createdTime && Date.now() - createdTime < 5 * 60 * 1000) {
+                  map.set(key, item);
+                  continue;
+                }
                 // Deleted in Supabase - remove from local view
                 continue;
               }
@@ -1045,7 +1051,7 @@ export default function AdminIssuesPage() {
             if (r.status === "in_progress") mappedStatus = "In_Progress";
             else if (r.status === "resolved") mappedStatus = "Resolved";
             else if (
-              ["rejected", "closed", "ปฏิเสธ", "ปฏิเสธแล้ว"].includes(
+              ["rejected", "closed", "cancelled", "ปฏิเสธ", "ปฏิเสธแล้ว"].includes(
                 String(r.status || "").toLowerCase(),
               )
             ) {
@@ -1070,6 +1076,16 @@ export default function AdminIssuesPage() {
                 existing.adminName = r.adminName;
                 existing.adminInitial = r.adminInitial;
               }
+              if (r.title && !existing.title) existing.title = r.title;
+              if (r.description && (!existing.description || existing.description === "รายละเอียดเรื่องร้องเรียนจาก Supabase")) {
+                existing.description = r.description;
+              }
+              if ((r as any).locationDetail && !existing.locationDetail) {
+                existing.locationDetail = (r as any).locationDetail;
+              }
+              if ((r as any).evidenceCount && !existing.evidence_count) {
+                existing.evidence_count = (r as any).evidenceCount;
+              }
             } else {
               const match = cleanTicket.match(/\d+$/);
               const numId = match ? parseInt(match[0], 10) : Date.now();
@@ -1078,11 +1094,11 @@ export default function AdminIssuesPage() {
                 issue_id: numId,
                 id: cleanTicket,
                 code: cleanTicket,
-                title: r.description ? r.description.slice(0, 50) : r.category,
+                title: r.title || (r.description ? r.description.slice(0, 50) : r.category),
                 description: r.description || "รายละเอียดเรื่องร้องเรียนจาก Supabase",
                 severity: mappedSeverity,
                 status: mappedStatus,
-                date_created: new Date().toISOString(),
+                date_created: (r as any).createdAt || (r as any).created_at || new Date().toISOString(),
                 reporter_name: r.reporterName || "ผู้ใช้งาน",
                 reporter_email: r.reporterEmail || null,
                 admin_name: r.adminName,
@@ -1091,8 +1107,11 @@ export default function AdminIssuesPage() {
                 location: r.area,
                 area: r.area,
                 place: r.area,
+                locationDetail: (r as any).locationDetail || r.area,
                 issue_categories: { category_name: r.category },
                 issue_areas: { area_name: r.area },
+                evidence_count: (r as any).evidenceCount || 0,
+                evidence_files: (r as any).evidenceFiles || [],
               });
               map.set(key, newReport);
             }

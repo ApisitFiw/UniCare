@@ -4,17 +4,22 @@ export type IssueItem = {
   id: string
   supabaseId?: string
   rawId?: string
+  title?: string
   date: string
+  createdAt?: string
   category: string
   area: string
+  locationDetail?: string
   description: string
   adminName: string
   adminInitial: string
   reporterName?: string
   reporterEmail?: string
-  status: 'pending' | 'in_progress' | 'resolved'
+  status: 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'cancelled'
   statusLabel: string
   urgency?: UrgencyLevel
+  evidenceCount?: number
+  evidenceFiles?: Array<{ name: string; size: number; mimeType: string; type: string; url?: string }>
 }
 
 export type TimelineEntry = {

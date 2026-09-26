@@ -33,7 +33,7 @@ import {
 import { getDisabledCategoryNames } from "@/lib/issuesData";
 
 import { addNotification } from "@/lib/notifications";
-import { createIssueInSupabase, updateIssueEvidenceInSupabase } from "@/lib/supabaseService";
+import { createIssueInSupabase, updateIssueEvidenceInSupabase, getNextTicketNumber } from "@/lib/supabaseService";
 
 import Header from "@/components/Header";
 import { ClipboardList, AlertTriangle, FolderOpen, CheckCircle2 } from "lucide-react";
@@ -2063,27 +2063,14 @@ export default function UserReportPage() {
 
       // บันทึกลง localStorage (unicare_demo_issue_reports) เพื่อให้แสดงในหน้า "รายการของฉัน" และ "จัดการคำขอร้อง" ของแอดมิน
 
+      let assignedTicketNumber = "";
+
       try {
-
-        const savedReportsStr = window.localStorage.getItem("unicare_demo_issue_reports");
-
-        const existingReports = savedReportsStr ? JSON.parse(savedReportsStr) : [];
-
-        let maxId = 108;
-
-        if (Array.isArray(existingReports)) {
-
-          existingReports.forEach((item: any) => {
-
-            const num = Number(item.issue_id);
-
-            if (!isNaN(num) && num > maxId) maxId = num;
-
-          });
-
-        }
-
-        const nextNumericId = maxId + 1;
+        // 1. หาเลข Ticket ถัดไปโดยตรวจสอบจาก Supabase, แคช, และ LocalStorage พร้อมกัน
+        let nextTicketInfo = await getNextTicketNumber();
+        let nextNumericId = nextTicketInfo.numericId;
+        let ticketNumber = nextTicketInfo.ticketNumber;
+        assignedTicketNumber = ticketNumber;
 
         let reporterPhone = (session as any).phone || "";
         if (!reporterPhone && typeof window !== "undefined") {
@@ -2163,52 +2150,76 @@ export default function UserReportPage() {
           })
         );
 
-        const newReportForAdmin = {
-
-          issue_id: nextNumericId,
-
-          id: String(nextNumericId),
-
+        // 2. Sync new report to Supabase (พร้อมระบบป้องกัน Ticket ชนกันอัตโนมัติ)
+        const supabaseSyncResult = await createIssueInSupabase({
+          ticketNumber,
           title: form.title.trim() || categoryLabel,
-
           description:
-
             form.additional.trim() ||
-
             form.otherProblem.trim() ||
-
             form.title.trim() ||
-
             "รายละเอียดเรื่องร้องเรียน",
+          categoryName: categoryLabel,
+          areaName: effectivePlace || locationLabel,
+          locationDetail: effectiveLocationDetail,
+          urgency: form.urgency as any,
+          reporterName: session.name,
+          reporterEmail: session.email || "",
+          reporterPhone,
+          status: "pending",
+          evidenceFiles: files.map((f) => ({
+            name: f.name,
+            size: f.size,
+            mimeType: f.type,
+            type: f.type.startsWith("image/")
+              ? "image"
+              : f.type.startsWith("audio/")
+                ? "audio"
+                : f.type.startsWith("video/")
+                  ? "video"
+                  : "document",
+          })),
+        }).catch((err) => {
+          console.warn("Supabase issue sync failed:", err);
+          return null;
+        });
 
+        // หาก Supabase ปรับเลข Ticket อัตโนมัติ (ป้องกัน duplicate key) ให้อัปเดตเลขจริง
+        if (supabaseSyncResult && typeof supabaseSyncResult === "object" && supabaseSyncResult.ticketNumber) {
+          ticketNumber = supabaseSyncResult.ticketNumber;
+          assignedTicketNumber = ticketNumber;
+          const matchNum = ticketNumber.match(/\d+$/);
+          if (matchNum) {
+            nextNumericId = parseInt(matchNum[0], 10);
+          }
+        }
+
+        const newReportForAdmin = {
+          issue_id: nextNumericId,
+          id: ticketNumber,
+          code: ticketNumber,
+          title: form.title.trim() || categoryLabel,
+          description:
+            form.additional.trim() ||
+            form.otherProblem.trim() ||
+            form.title.trim() ||
+            "รายละเอียดเรื่องร้องเรียน",
           severity:
-
             form.urgency === "เร่งด่วนมาก"
-
               ? "High"
-
               : form.urgency === "เร่งด่วน"
-
                 ? "Medium"
-
                 : "Low",
-
           status: "Pending", // รอรับเรื่อง
-
           date_created: new Date().toISOString(),
-
           reporter_name: session.name,
-
           reporter_email: session.email || "",
           reporter_phone: reporterPhone,
           evidence_count: files.length,
           evidence_files,
           issue_categories: {
-
             category_name: categoryLabel,
-
           },
-
           issue_areas: {
             area_name: effectivePlace,
           },
@@ -2230,28 +2241,22 @@ export default function UserReportPage() {
           additional: form.additional.trim(),
           answers: answerSummary,
           source: "user_report",
-
           internal_id: id,
-
         };
-
-        const ticketNumber = `ISS-2026-${String(nextNumericId).padStart(3, "0")}`;
 
         // บันทึกลง IndexedDB พร้อมรหัสอ้างอิง เพื่อให้แอดมินเปิดดูหลักฐานได้เสมอ
         try {
-          await saveIssueReport({ ...report, code: ticketNumber });
+          await saveIssueReport({ ...report, code: ticketNumber, id: ticketNumber });
           await saveIssueReport({ ...report, id: String(nextNumericId), code: ticketNumber });
-          await saveIssueReport({ ...report, id: ticketNumber, code: ticketNumber });
         } catch (idbErr) {
           console.warn("Failed saving IndexedDB aliases:", idbErr);
         }
 
+        const savedReportsStr = window.localStorage.getItem("unicare_demo_issue_reports");
+        const existingReports = savedReportsStr ? JSON.parse(savedReportsStr) : [];
         const updatedList = [
-
           newReportForAdmin,
-
           ...(Array.isArray(existingReports) ? existingReports : []),
-
         ];
 
         try {
@@ -2277,31 +2282,15 @@ export default function UserReportPage() {
           } catch {}
         }
 
+        // แจ้งเตือนทุกแท็บ / หน้าต่างให้รีเฟรชข้อมูล
         window.dispatchEvent(new Event("unicare-demo-reports-updated"));
+        window.dispatchEvent(new Event("unicare-issues-sync"));
+        window.dispatchEvent(new Event("storage"));
 
-        // Sync new report to Supabase
-        const supabaseTicket = `ISS-2026-${String(nextNumericId).padStart(3, "0")}`;
-        await createIssueInSupabase({
-          ticketNumber: supabaseTicket,
-          title: form.title.trim() || categoryLabel,
-          description:
-            form.additional.trim() ||
-            form.otherProblem.trim() ||
-            form.title.trim() ||
-            "รายละเอียดเรื่องร้องเรียน",
-          categoryName: categoryLabel,
-          areaName: effectivePlace || locationLabel,
-          locationDetail: effectiveLocationDetail,
-          urgency: form.urgency as any,
-          reporterName: session.name,
-          reporterEmail: session.email || "",
-          reporterPhone,
-        }).catch((err) => console.warn("Supabase issue sync failed:", err));
-
-        // Sync evidence file metadata to Supabase issues table (no base64, just metadata)
+        // Sync evidence file metadata to Supabase issues table if needed
         if (files.length > 0) {
           updateIssueEvidenceInSupabase(
-            supabaseTicket,
+            ticketNumber,
             files.map((f) => ({
               name: f.name,
               size: f.size,
@@ -2318,66 +2307,41 @@ export default function UserReportPage() {
         }
 
         // ส่งการแจ้งเตือนแบบแยกกลุ่มผู้รับ
-
         try {
-
           // 1. ส่งถึงผู้ใช้ที่รายงานเรื่องนี้โดยเฉพาะ
-
           addNotification({
-
             title: "ส่งเรื่องร้องเรียนสำเร็จ",
-
-            description: `คำร้องเรียน #${id} (${categoryLabel}) ได้รับการส่งเข้าระบบเรียบร้อยแล้ว อยู่ระหว่างรอเจ้าหน้าที่รับเรื่อง`,
-
+            description: `คำร้องเรียน #${ticketNumber} (${categoryLabel}) ได้รับการส่งเข้าระบบเรียบร้อยแล้ว อยู่ระหว่างรอเจ้าหน้าที่รับเรื่อง`,
             type: "status",
-
             isRead: false,
-
             link: "/my-reports",
-
             targetRole: "user",
-
             targetEmail: session.email || "",
-
             targetName: session.name,
-
-            issueId: String(id),
-
+            issueId: ticketNumber,
           });
 
           // 2. ส่งถึงผู้ดูแลระบบ (Admin)
-
           addNotification({
-
             title: "มีคำร้องเรียนใหม่ส่งเข้ามา",
-
-            description: `คำร้องเรียน #${id} (${categoryLabel} - ${locationLabel}) ส่งโดย ${session.name}`,
-
+            description: `คำร้องเรียน #${ticketNumber} (${categoryLabel} - ${locationLabel}) ส่งโดย ${session.name}`,
             type: form.urgency === "เร่งด่วนมาก" ? "urgent" : "status",
-
             isRead: false,
-
             link: "/admin/reports",
-
             targetRole: "admin",
-
-            issueId: String(id),
-
+            issueId: ticketNumber,
           });
-
         } catch {
-
           // ignore
-
         }
-
       } catch {
-
         // ignore
-
       }
 
-      setSavedReport(report);
+      setSavedReport({
+        ...report,
+        code: assignedTicketNumber || report.code || report.id,
+      });
 
     } catch (cause) {
 

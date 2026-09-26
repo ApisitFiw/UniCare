@@ -50,6 +50,7 @@ import { addNotification } from '@/lib/notifications'
 import {
   updateIssueStatusInSupabase,
   createIssueInSupabase,
+  getNextTicketNumber,
   fetchIssuesFromSupabase,
   removeIssueFromLocalStorage,
   addTimelineEntryToSupabase,
@@ -568,8 +569,9 @@ export default function StatusTrackingPage() {
 
     setIsSubmitting(true)
 
-    const nextId = getNextIssueId()
-    const numericId = parseInt(nextId.split('-').pop() || '104', 10)
+    const nextTicketInfo = await getNextTicketNumber()
+    let nextId = nextTicketInfo.ticketNumber
+    let numericId = nextTicketInfo.numericId
 
     let statusKey: 'pending' | 'in_progress' | 'resolved' = 'pending'
     if (createStatus === 'กำลังดำเนินการ') statusKey = 'in_progress'
@@ -672,7 +674,7 @@ export default function StatusTrackingPage() {
 
     // 4. Sync to Supabase
     try {
-      await createIssueInSupabase({
+      const syncRes = await createIssueInSupabase({
         ticketNumber: nextId,
         title: createCategory,
         description: createDescription.trim(),
@@ -680,7 +682,11 @@ export default function StatusTrackingPage() {
         areaName: createArea,
         urgency: 'เร่งด่วน',
         reporterName: authorName,
+        status: statusKey,
       })
+      if (syncRes && typeof syncRes === 'object' && syncRes.ticketNumber) {
+        nextId = syncRes.ticketNumber
+      }
       await addTimelineEntryToSupabase({
         ticketNumberOrId: nextId,
         statusText: 'สร้างเรื่องร้องเรียน (Reported)',

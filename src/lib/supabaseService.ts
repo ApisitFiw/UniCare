@@ -82,7 +82,7 @@ function mapRawIssues(data: any[]): IssueItem[] {
     let statusLabel = 'รอดำเนินการ'
     if (item.status === 'in_progress') statusLabel = 'กำลังดำเนินการ'
     else if (item.status === 'resolved') statusLabel = 'แก้ไขสำเร็จ'
-    else if (item.status === 'rejected') statusLabel = 'ปฏิเสธเรื่อง'
+    else if (item.status === 'rejected' || item.status === 'cancelled') statusLabel = 'ปฏิเสธเรื่อง'
 
     // Date formatting with 4-digit year for correct sorting
     const createdDate = item.created_at ? new Date(item.created_at) : new Date()
@@ -92,13 +92,24 @@ function mapRawIssues(data: any[]): IssueItem[] {
     const adminName = adminFullName.includes('(Admin)') ? adminFullName : `${adminFullName} (Admin)`
     const adminInitial = adminFullName.substring(0, 2)
 
+    let evidenceFiles: any[] = []
+    if (item.evidence_files_json) {
+      try {
+        const parsed = typeof item.evidence_files_json === 'string' ? JSON.parse(item.evidence_files_json) : item.evidence_files_json
+        if (Array.isArray(parsed)) evidenceFiles = parsed
+      } catch {}
+    }
+
     return {
       id: item.ticket_number || item.id,
       supabaseId: item.id,
       rawId: item.id,
+      title: item.title,
       date: formattedDate,
+      createdAt: item.created_at,
       category: item.categories?.name || item.title || 'ทั่วไป',
       area: item.risk_areas?.name || item.location_detail || 'มหาวิทยาลัยวลัยลักษณ์',
+      locationDetail: item.location_detail || '',
       description: item.description || item.title || 'ไม่มีรายละเอียด',
       adminName,
       adminInitial,
@@ -107,6 +118,8 @@ function mapRawIssues(data: any[]): IssueItem[] {
       status: (item.status as any) || 'pending',
       statusLabel,
       urgency,
+      evidenceCount: item.evidence_count || evidenceFiles.length || 0,
+      evidenceFiles,
     }
   })
 }
@@ -233,11 +246,28 @@ export function syncSupabaseIssuesWithLocalStorage(remoteIssues: IssueItem[]) {
           const issueId = String(item.issue_id || '').toLowerCase()
           const numMatch = (itemId || itemCode || issueId).match(/\d+$/)
 
-          return (
+          // 1. Keep if exists in remote Supabase issues
+          if (
             remoteCleanKeys.has(itemId) ||
             remoteCleanKeys.has(itemCode) ||
             (numMatch && remoteNumKeys.has(numMatch[0]))
-          )
+          ) {
+            return true
+          }
+
+          // 2. Keep default demo seed reports (<= 108)
+          const num = numMatch ? parseInt(numMatch[0], 10) : 0
+          if (num > 0 && num <= 108) {
+            return true
+          }
+
+          // 3. Keep recently created local reports (within 10 minutes) to allow time for sync
+          const createdTime = item.date_created ? new Date(item.date_created).getTime() : 0
+          if (createdTime && (Date.now() - createdTime < 10 * 60 * 1000)) {
+            return true
+          }
+
+          return false
         })
         if (filteredList.length !== currentList.length) {
           localStorage.setItem('unicare_demo_issue_reports', JSON.stringify(filteredList))
@@ -375,10 +405,88 @@ export async function fetchIssuesFromSupabase(): Promise<IssueItem[] | null> {
 }
 
 /**
- * Insert a new issue to Supabase
+ * Safely generate the next available ticket number by checking Supabase issues,
+ * cached Supabase issues, and local storage demo reports.
+ */
+export async function getNextTicketNumber(): Promise<{ ticketNumber: string; numericId: number }> {
+  let maxNum = 108
+
+  // 1. Try querying latest issues from Supabase
+  try {
+    const { data: latestIssues } = await supabase
+      .from('issues')
+      .select('ticket_number')
+      .order('created_at', { ascending: false })
+      .limit(100)
+
+    if (Array.isArray(latestIssues)) {
+      for (const item of latestIssues) {
+        const match = (item.ticket_number || '').match(/\d+$/)
+        if (match) {
+          const num = parseInt(match[0], 10)
+          if (!isNaN(num) && num > maxNum) maxNum = num
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('getNextTicketNumber Supabase query failed, falling back to cache/local:', err)
+  }
+
+  // 2. Check cached Supabase issues in localStorage
+  if (typeof window !== 'undefined') {
+    try {
+      const cached = localStorage.getItem('unicare_cached_supabase_issues')
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            const match = String(item.id || '').match(/\d+$/)
+            if (match) {
+              const num = parseInt(match[0], 10)
+              if (!isNaN(num) && num > maxNum) maxNum = num
+            }
+          }
+        }
+      }
+    } catch {}
+
+    // 3. Check local reports in localStorage
+    try {
+      const local = localStorage.getItem('unicare_demo_issue_reports')
+      if (local) {
+        const parsed = JSON.parse(local)
+        if (Array.isArray(parsed)) {
+          for (const item of parsed) {
+            const rawId = item.issue_id ?? item.id
+            const match = String(rawId || '').match(/\d+$/)
+            if (match) {
+              const num = parseInt(match[0], 10)
+              if (!isNaN(num) && num > maxNum) maxNum = num
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
+  const nextNumericId = maxNum + 1
+  const ticketNumber = `ISS-2026-${String(nextNumericId).padStart(3, '0')}`
+  return { ticketNumber, numericId: nextNumericId }
+}
+
+export type CreateIssueResult = {
+  success: boolean
+  ticketNumber: string
+  id?: string
+  error?: string
+}
+
+/**
+ * Insert a new issue to Supabase with automatic collision resolution and FK fallbacks.
+ * Returns an object with { success, ticketNumber, id } which evaluates to truthy on success.
  */
 export async function createIssueInSupabase(issue: {
-  ticketNumber: string
+  ticketNumber?: string
   title: string
   description: string
   categoryName?: string
@@ -391,8 +499,9 @@ export async function createIssueInSupabase(issue: {
   reporterEmail?: string
   reporterPhone?: string
   assignedAdminName?: string
-  status?: 'pending' | 'in_progress' | 'resolved' | 'rejected'
-}): Promise<boolean> {
+  status?: 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'cancelled'
+  evidenceFiles?: Array<{ name: string; size: number; mimeType: string; type: string }>
+}): Promise<CreateIssueResult> {
   try {
     const catName = issue.categoryName || issue.category
     const area = issue.areaName || issue.location
@@ -419,8 +528,21 @@ export async function createIssueInSupabase(issue: {
     let reporterId: string | null = null
     const { data: profs } = await supabase.from('profiles').select('id, full_name, email, role')
     if (profs && profs.length > 0) {
-      const matched = profs.find((p) => (issue.reporterEmail && p.email.toLowerCase() === issue.reporterEmail.toLowerCase()) || (issue.reporterName && p.full_name.includes(issue.reporterName)))
-      reporterId = matched ? matched.id : profs.find((p) => p.role === 'user')?.id || profs[0].id
+      const repEmail = (issue.reporterEmail || '').toLowerCase().trim()
+      const repName = (issue.reporterName || '').toLowerCase().trim()
+      const matched = profs.find((p) => {
+        const pEmail = (p.email || '').toLowerCase().trim()
+        const pName = (p.full_name || '').toLowerCase().trim()
+        if (repEmail && pEmail === repEmail) return true
+        if (repName && (pName === repName || pName.includes(repName) || repName.includes(pName))) return true
+        return false
+      })
+      if (matched) {
+        reporterId = matched.id
+      } else {
+        const defaultUser = profs.find((p) => p.role === 'user')
+        if (defaultUser) reporterId = defaultUser.id
+      }
     }
 
     // 4. Resolve assigned admin
@@ -435,38 +557,142 @@ export async function createIssueInSupabase(issue: {
       ))
       if (matchedAdmin) assignedAdminId = matchedAdmin.id
     }
-    if (!assignedAdminId && profs) {
-      const defaultAdmin = profs.find((p) => p.role === 'admin')
-      if (defaultAdmin) assignedAdminId = defaultAdmin.id
-    }
 
     // Priority mapping
     let priority = 'medium'
     if (issue.urgency === 'เร่งด่วนมาก') priority = 'high'
     else if (issue.urgency === 'ปกติ') priority = 'low'
 
-    const payload = {
-      ticket_number: issue.ticketNumber,
-      title: issue.title || issue.description.substring(0, 50),
-      description: issue.description,
-      category_id: categoryId,
-      risk_area_id: riskAreaId,
-      location_detail: issue.locationDetail || area || '',
-      status: issue.status || 'pending',
-      priority,
-      reporter_id: reporterId,
-      assigned_to: assignedAdminId,
+    // Status mapping for Supabase enum 'issue_status' ('pending' | 'in_progress' | 'resolved' | 'cancelled')
+    let safeStatus: 'pending' | 'in_progress' | 'resolved' | 'cancelled' = 'pending'
+    if (issue.status === 'in_progress') safeStatus = 'in_progress'
+    else if (issue.status === 'resolved') safeStatus = 'resolved'
+    else if (issue.status === 'rejected' || issue.status === 'cancelled') safeStatus = 'cancelled'
+
+    // Ticket number resolution
+    let currentTicket = issue.ticketNumber?.trim()
+    if (!currentTicket) {
+      const nextTicketObj = await getNextTicketNumber()
+      currentTicket = nextTicketObj.ticketNumber
     }
 
-    const { error } = await supabase.from('issues').insert(payload)
-    if (error) {
-      console.warn('createIssueInSupabase insert error:', error.message)
-      return false
+    // Ensure proper ISS-2026-XXX formatting
+    if (!currentTicket.startsWith('ISS-') && /^\d+$/.test(currentTicket)) {
+      currentTicket = `ISS-2026-${currentTicket.padStart(3, '0')}`
     }
-    return true
-  } catch (err) {
+
+    let insertSuccess = false
+    let createdRow: any = null
+    let lastError: any = null
+    let attempts = 0
+    const maxAttempts = 5
+
+    while (!insertSuccess && attempts < maxAttempts) {
+      attempts++
+
+      const payload: Record<string, any> = {
+        ticket_number: currentTicket,
+        title: issue.title || issue.description.substring(0, 50),
+        description: issue.description,
+        category_id: categoryId,
+        risk_area_id: riskAreaId,
+        location_detail: issue.locationDetail || area || '',
+        status: safeStatus,
+        priority,
+        reporter_id: reporterId,
+        assigned_to: assignedAdminId,
+      }
+
+      if (issue.evidenceFiles && issue.evidenceFiles.length > 0) {
+        payload.evidence_count = issue.evidenceFiles.length
+        payload.evidence_files_json = JSON.stringify(issue.evidenceFiles.map((f) => ({
+          name: f.name,
+          size: f.size,
+          mimeType: f.mimeType,
+          type: f.type,
+        })))
+      }
+
+      const { data, error } = await supabase.from('issues').insert(payload).select()
+
+      if (!error && data && data.length > 0) {
+        insertSuccess = true
+        createdRow = data[0]
+        break
+      }
+
+      lastError = error
+      if (error) {
+        const isDuplicateKey =
+          error.message?.includes('issues_ticket_number_key') ||
+          error.message?.includes('duplicate key') ||
+          error.code === '23505'
+
+        if (isDuplicateKey) {
+          // Bumping ticket number on collision
+          const nextInfo = await getNextTicketNumber()
+          const curMatch = currentTicket.match(/\d+$/)
+          const curNum = curMatch ? parseInt(curMatch[0], 10) : 108
+          const bumpedNum = Math.max(nextInfo.numericId, curNum + 1)
+          currentTicket = `ISS-2026-${String(bumpedNum).padStart(3, '0')}`
+          continue
+        }
+
+        const isFkError = error.code === '23503' || error.message?.includes('foreign key')
+        if (isFkError) {
+          categoryId = null
+          riskAreaId = null
+          reporterId = null
+          assignedAdminId = null
+          continue
+        }
+
+        console.warn('createIssueInSupabase insert error:', error.message)
+        break
+      }
+    }
+
+    if (insertSuccess && createdRow) {
+      // Auto-add initial timeline entry in Supabase
+      try {
+        await addTimelineEntryToSupabase({
+          ticketNumberOrId: currentTicket,
+          statusText: 'ส่งเรื่องร้องเรียนเข้าระบบ (Reported)',
+          note: issue.description,
+          authorName: issue.reporterName || 'ผู้ใช้งาน',
+          authorId: reporterId || undefined,
+          changedStatus: safeStatus,
+        })
+      } catch {}
+
+      // Cache newly created issue in local cache
+      try {
+        const cached = getCachedIssues() || []
+        const mapped = mapRawIssues([createdRow])
+        if (mapped.length > 0) {
+          setCachedIssues([mapped[0], ...cached])
+        }
+      } catch {}
+
+      return {
+        success: true,
+        ticketNumber: currentTicket,
+        id: createdRow.id,
+      }
+    }
+
+    return {
+      success: false,
+      ticketNumber: currentTicket,
+      error: lastError?.message || 'Failed to create issue in Supabase',
+    }
+  } catch (err: any) {
     console.warn('createIssueInSupabase failed:', err)
-    return false
+    return {
+      success: false,
+      ticketNumber: issue.ticketNumber || '',
+      error: err?.message || String(err),
+    }
   }
 }
 
@@ -475,7 +701,7 @@ export async function createIssueInSupabase(issue: {
  */
 export async function updateIssueStatusInSupabase(
   ticketNumberOrId: string,
-  status: 'pending' | 'in_progress' | 'resolved' | 'rejected',
+  status: 'pending' | 'in_progress' | 'resolved' | 'rejected' | 'cancelled',
   assignedAdminName?: string,
   fallbackReportData?: {
     title?: string
@@ -490,8 +716,14 @@ export async function updateIssueStatusInSupabase(
   }
 ): Promise<boolean> {
   try {
+    // Map status for Supabase enum 'issue_status' ('pending' | 'in_progress' | 'resolved' | 'cancelled')
+    let safeStatus: 'pending' | 'in_progress' | 'resolved' | 'cancelled' = 'pending'
+    if (status === 'in_progress') safeStatus = 'in_progress'
+    else if (status === 'resolved') safeStatus = 'resolved'
+    else if (status === 'rejected' || (status as string) === 'cancelled' || (status as string) === 'closed') safeStatus = 'cancelled'
+
     const updatePayload: Record<string, any> = {
-      status,
+      status: safeStatus,
       updated_at: new Date().toISOString(),
     }
 
