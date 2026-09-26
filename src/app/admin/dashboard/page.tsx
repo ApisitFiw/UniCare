@@ -441,23 +441,23 @@ export default function AdminDashboardPage() {
                         {time}
                       </td>
 
-                      <td className="px-3 py-4">
+                      <td className="px-3 py-4 whitespace-nowrap">
                         {report.status === "in_progress" && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
-                            <span>กำลังดำเนินการ</span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 shrink-0"></span>
+                            <span className="whitespace-nowrap select-none">กำลังดำเนินการ</span>
                           </span>
                         )}
                         {report.status === "pending" && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                            <span>รอดำเนินการ</span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                            <span className="whitespace-nowrap select-none">รอดำเนินการ</span>
                           </span>
                         )}
                         {report.status === "resolved" && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                            <span>แก้ไขสำเร็จ</span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap shrink-0">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                            <span className="whitespace-nowrap select-none">แก้ไขสำเร็จ</span>
                           </span>
                         )}
                       </td>
@@ -465,11 +465,11 @@ export default function AdminDashboardPage() {
                       <td className="whitespace-nowrap px-3 py-4 text-center">
                         <Link
                           href={`/admin/issues?issueId=${encodeURIComponent(report.id)}`}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1b5e4a] text-white hover:bg-[#144737] text-[11px] font-semibold transition shadow-xs cursor-pointer"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1b5e4a] text-white hover:bg-[#144737] text-[11px] font-semibold transition-colors duration-150 shadow-xs cursor-pointer whitespace-nowrap shrink-0"
                           title="เปิดแก้ไขและบันทึกไทม์ไลน์ในระบบติดตามสถานะ"
                         >
-                          <span>จัดการสถานะ</span>
-                          <ArrowRight className="w-3 h-3" />
+                          <span className="whitespace-nowrap select-none">จัดการสถานะ</span>
+                          <ArrowRight className="w-3 h-3 shrink-0" />
                         </Link>
                       </td>
                     </tr>
