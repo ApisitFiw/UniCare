@@ -33,7 +33,7 @@ import {
 import { getDisabledCategoryNames } from "@/lib/issuesData";
 
 import { addNotification } from "@/lib/notifications";
-import { createIssueInSupabase } from "@/lib/supabaseService";
+import { createIssueInSupabase, updateIssueEvidenceInSupabase } from "@/lib/supabaseService";
 
 import Header from "@/components/Header";
 import { ClipboardList, AlertTriangle, FolderOpen, CheckCircle2 } from "lucide-react";
@@ -2280,8 +2280,9 @@ export default function UserReportPage() {
         window.dispatchEvent(new Event("unicare-demo-reports-updated"));
 
         // Sync new report to Supabase
+        const supabaseTicket = `ISS-2026-${String(nextNumericId).padStart(3, "0")}`;
         await createIssueInSupabase({
-          ticketNumber: `ISS-2026-${String(nextNumericId).padStart(3, "0")}`,
+          ticketNumber: supabaseTicket,
           title: form.title.trim() || categoryLabel,
           description:
             form.additional.trim() ||
@@ -2296,6 +2297,25 @@ export default function UserReportPage() {
           reporterEmail: session.email || "",
           reporterPhone,
         }).catch((err) => console.warn("Supabase issue sync failed:", err));
+
+        // Sync evidence file metadata to Supabase issues table (no base64, just metadata)
+        if (files.length > 0) {
+          updateIssueEvidenceInSupabase(
+            supabaseTicket,
+            files.map((f) => ({
+              name: f.name,
+              size: f.size,
+              mimeType: f.type,
+              type: f.type.startsWith("image/")
+                ? "image"
+                : f.type.startsWith("audio/")
+                  ? "audio"
+                  : f.type.startsWith("video/")
+                    ? "video"
+                    : "document",
+            }))
+          ).catch((err) => console.warn("Supabase evidence sync failed:", err));
+        }
 
         // ส่งการแจ้งเตือนแบบแยกกลุ่มผู้รับ
 

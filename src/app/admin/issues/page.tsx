@@ -52,6 +52,7 @@ import {
   createIssueInSupabase,
   fetchIssuesFromSupabase,
   removeIssueFromLocalStorage,
+  addTimelineEntryToSupabase,
 } from '@/lib/supabaseService'
 
 function IssuesUrlWatcher({
@@ -804,15 +805,25 @@ export default function StatusTrackingPage() {
       // Ignore
     }
 
-    // 4. Sync to Supabase
+    // 5. Sync to Supabase (status + timeline entry)
     try {
-      await updateIssueStatusInSupabase(
-        activeModalIssue.id,
-        statusKey,
-        assignedAdmin
-      )
+      await Promise.all([
+        updateIssueStatusInSupabase(
+          activeModalIssue.id,
+          statusKey,
+          assignedAdmin
+        ),
+        addTimelineEntryToSupabase({
+          ticketNumberOrId: activeModalIssue.id,
+          statusText: titleText,
+          note: actionNote.trim(),
+          authorName: authorName,
+          changedStatus: statusKey,
+          evidenceFileName: evidenceFileName || undefined,
+        }),
+      ])
     } catch {
-      // Ignored
+      // Ignored — local state and localStorage already updated
     }
 
     setIsSubmitting(false)

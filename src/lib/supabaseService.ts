@@ -798,7 +798,147 @@ export async function deleteRiskAreaFromSupabase(idOrName: string): Promise<bool
 }
 
 // -------------------------------------------------------------
-// 5. PROFILES / USERS
+// 5. ISSUE TIMELINES
+// -------------------------------------------------------------
+
+/**
+ * Insert a new timeline entry into the issue_timelines table in Supabase.
+ * Falls back gracefully if the table does not exist yet.
+ */
+export async function addTimelineEntryToSupabase(entry: {
+  ticketNumberOrId: string
+  statusText: string
+  note?: string
+  authorName?: string
+  changedStatus?: string
+  evidenceFileName?: string
+}): Promise<boolean> {
+  try {
+    const cleanTicket = entry.ticketNumberOrId.replace(/^#/, '').trim()
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanTicket)
+
+    // 1. Resolve the issue UUID
+    let issueId: string | null = null
+    let query = supabase.from('issues').select('id, ticket_number')
+    if (isUuid) {
+      const { data } = await query.or(`ticket_number.eq.${cleanTicket},id.eq.${cleanTicket}`).limit(1)
+      issueId = data?.[0]?.id || null
+    } else {
+      const formattedTicket = !cleanTicket.startsWith('ISS-') && /^\d+$/.test(cleanTicket)
+        ? `ISS-2026-${cleanTicket.padStart(3, '0')}`
+        : cleanTicket
+      const { data } = await supabase
+        .from('issues')
+        .select('id, ticket_number')
+        .or(`ticket_number.eq.${cleanTicket},ticket_number.eq.${formattedTicket}`)
+        .limit(1)
+      issueId = data?.[0]?.id || null
+    }
+
+    if (!issueId) {
+      console.warn('addTimelineEntryToSupabase: issue not found for', cleanTicket)
+      return false
+    }
+
+    // 2. Resolve author profile id (optional)
+    let changedById: string | null = null
+    if (entry.authorName) {
+      const cleanName = entry.authorName.replace(/\(Admin\)/i, '').trim().toLowerCase()
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .ilike('full_name', `%${cleanName}%`)
+        .limit(1)
+      changedById = profs?.[0]?.id || null
+    }
+
+    // 3. Build note text (combine note + evidence file name)
+    const noteText = [
+      entry.note?.trim(),
+      entry.evidenceFileName ? `[แนบไฟล์: ${entry.evidenceFileName}]` : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+
+    const payload: Record<string, any> = {
+      issue_id: issueId,
+      status_text: entry.statusText,
+      note: noteText || null,
+      changed_status: entry.changedStatus || null,
+      changed_by: changedById,
+      created_at: new Date().toISOString(),
+    }
+
+    const { error } = await supabase.from('issue_timelines').insert(payload)
+    if (error) {
+      // Warn but don't crash — table may not exist on some deployments
+      console.warn('addTimelineEntryToSupabase insert error:', error.message)
+      return false
+    }
+    return true
+  } catch (err) {
+    console.warn('addTimelineEntryToSupabase failed:', err)
+    return false
+  }
+}
+
+/**
+ * Update evidence metadata (evidence_count, evidence_files_json) on an issue row in Supabase.
+ * Uses ticket_number to locate the row.
+ */
+export async function updateIssueEvidenceInSupabase(
+  ticketNumber: string,
+  evidenceFiles: Array<{ name: string; size: number; mimeType: string; type: string }>,
+): Promise<boolean> {
+  try {
+    if (!ticketNumber || evidenceFiles.length === 0) return false
+
+    const cleanTicket = ticketNumber.replace(/^#/, '').trim()
+
+    // Build a lean JSON summary (no base64) to store in Supabase
+    const evidenceSummary = evidenceFiles.map((f) => ({
+      name: f.name,
+      size: f.size,
+      mimeType: f.mimeType,
+      type: f.type,
+    }))
+
+    const updatePayload: Record<string, any> = {
+      evidence_count: evidenceFiles.length,
+      evidence_files_json: JSON.stringify(evidenceSummary),
+      updated_at: new Date().toISOString(),
+    }
+
+    // Try by ticket_number first
+    const { error: ticketErr } = await supabase
+      .from('issues')
+      .update(updatePayload)
+      .eq('ticket_number', cleanTicket)
+
+    if (!ticketErr) return true
+
+    // Fallback: try formatted ticket
+    const formattedTicket = !cleanTicket.startsWith('ISS-') && /^\d+$/.test(cleanTicket)
+      ? `ISS-2026-${cleanTicket.padStart(3, '0')}`
+      : cleanTicket
+
+    const { error: formattedErr } = await supabase
+      .from('issues')
+      .update(updatePayload)
+      .eq('ticket_number', formattedTicket)
+
+    if (!formattedErr) return true
+
+    console.warn('updateIssueEvidenceInSupabase errors:', ticketErr?.message, formattedErr?.message)
+    return false
+  } catch (err) {
+    console.warn('updateIssueEvidenceInSupabase failed:', err)
+    return false
+  }
+}
+
+// -------------------------------------------------------------
+// 6. PROFILES / USERS
 // -------------------------------------------------------------
 
 /**
