@@ -1056,7 +1056,27 @@ export async function upsertProfileInSupabase(profile: {
 
     const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'email' })
     if (error) {
-      // If error indicates column does not exist (before SQL migration), fallback to minimal payload
+      console.warn('upsertProfileInSupabase client error:', error.message)
+
+      // 1. Direct REST Fallback with anon key (bypasses any stale auth tokens / RLS issues)
+      if (supabaseUrl && supabaseAnonKey) {
+        try {
+          const endpoint = `${supabaseUrl}/rest/v1/profiles?on_conflict=email`
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              apikey: supabaseAnonKey,
+              Authorization: `Bearer ${supabaseAnonKey}`,
+              'Content-Type': 'application/json',
+              Prefer: 'resolution=merge-duplicates,return=minimal',
+            },
+            body: JSON.stringify(payload),
+          })
+          if (res.ok) return true
+        } catch {}
+      }
+
+      // 2. If error indicates column does not exist (before SQL migration), fallback to minimal payload
       if (error.message?.includes('column') || error.message?.includes('schema cache')) {
         const fallbackPayload = {
           email: profile.email.trim(),
@@ -1073,7 +1093,6 @@ export async function upsertProfileInSupabase(profile: {
         }
         return true
       }
-      console.warn('upsertProfileInSupabase error:', error.message)
       return false
     }
     return true

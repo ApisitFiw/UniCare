@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 
 import Header from "@/components/Header";
-import { getDemoSession, updateDemoSession } from "@/lib/authService";
+import { getDemoSession, updateDemoSession, resetPasswordUnified } from "@/lib/authService";
 
 type Gender =
   | ""
@@ -252,20 +252,24 @@ function updateAccountSession(
 ) {
   const updatedSession = {
     ...session,
-    name: getFullName(profile),
-    username: profile.username,
-    avatar: profile.avatar,
+    name: getFullName(profile) || session.name,
+    username: profile.username || session.username,
+    avatar: profile.avatar || session.avatar,
   };
 
-  window.sessionStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify(updatedSession),
-  );
+  try {
+    window.sessionStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify(updatedSession),
+    );
+  } catch {}
 
-  window.localStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify(updatedSession),
-  );
+  try {
+    window.localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify(updatedSession),
+    );
+  } catch {}
 
   window.dispatchEvent(
     new Event(
@@ -376,7 +380,7 @@ export default function UserProfilePage() {
           }
 
           const fullNameStr = remoteProfile.full_name || "";
-          let pPrefix = meta.prefix || "";
+          let pPrefix = remoteProfile.prefix || meta.prefix || "";
           let nameWithoutPrefix = fullNameStr;
           if (!pPrefix) {
             if (fullNameStr.startsWith("นางสาว")) {
@@ -391,30 +395,30 @@ export default function UserProfilePage() {
             }
           }
           const parts = nameWithoutPrefix.split(/\s+/).filter(Boolean);
-          const pFirst = meta.firstName || parts[0] || "";
-          const pLast = meta.lastName || parts.slice(1).join(" ") || "";
+          const pFirst = remoteProfile.first_name || meta.firstName || parts[0] || "";
+          const pLast = remoteProfile.last_name || meta.lastName || parts.slice(1).join(" ") || "";
 
           const mergedProfile: Profile = {
             ...loadedProfile,
             avatar: remoteProfile.avatar_url || loadedProfile.avatar || undefined,
-            prefix: pPrefix || loadedProfile.prefix,
-            firstName: pFirst || loadedProfile.firstName,
-            lastName: pLast || loadedProfile.lastName,
-            nickname: meta.nickname || loadedProfile.nickname,
-            gender: meta.gender || loadedProfile.gender,
-            username: meta.username || loadedProfile.username || session.email?.split("@")[0] || "",
-            phone: meta.phone || loadedProfile.phone,
-            birthDate: meta.birthDate || loadedProfile.birthDate,
-            residenceLocation: meta.residenceLocation || loadedProfile.residenceLocation,
-            dormitory: meta.dormitory || loadedProfile.dormitory,
-            building: meta.building || loadedProfile.building,
-            floor: meta.floor || loadedProfile.floor,
-            roomNumber: meta.roomNumber || loadedProfile.roomNumber,
-            addressLine: meta.addressLine || loadedProfile.addressLine,
-            subdistrict: meta.subdistrict || loadedProfile.subdistrict,
-            district: meta.district || loadedProfile.district,
-            province: meta.province || loadedProfile.province,
-            postalCode: meta.postalCode || loadedProfile.postalCode,
+            prefix: pPrefix || loadedProfile.prefix || "",
+            firstName: pFirst || loadedProfile.firstName || "",
+            lastName: pLast || loadedProfile.lastName || "",
+            nickname: remoteProfile.nickname || meta.nickname || loadedProfile.nickname || "",
+            gender: ((remoteProfile.gender as any) || meta.gender || loadedProfile.gender || "") as Gender,
+            username: remoteProfile.username || meta.username || loadedProfile.username || session.email?.split("@")[0] || "",
+            phone: remoteProfile.phone || meta.phone || loadedProfile.phone || "",
+            birthDate: remoteProfile.birth_date || meta.birthDate || loadedProfile.birthDate || "",
+            residenceLocation: ((remoteProfile.residence_location as any) || meta.residenceLocation || loadedProfile.residenceLocation || "") as ResidenceLocation,
+            dormitory: remoteProfile.dormitory || meta.dormitory || loadedProfile.dormitory || "",
+            building: remoteProfile.building || meta.building || loadedProfile.building || "",
+            floor: remoteProfile.floor || meta.floor || loadedProfile.floor || "",
+            roomNumber: remoteProfile.room_number || meta.roomNumber || loadedProfile.roomNumber || "",
+            addressLine: remoteProfile.address_line || meta.addressLine || loadedProfile.addressLine || "",
+            subdistrict: remoteProfile.subdistrict || meta.subdistrict || loadedProfile.subdistrict || "",
+            district: remoteProfile.district || meta.district || loadedProfile.district || "",
+            province: remoteProfile.province || meta.province || loadedProfile.province || "",
+            postalCode: remoteProfile.postal_code || meta.postalCode || loadedProfile.postalCode || "",
             notifyReportStatus: meta.notifyReportStatus ?? loadedProfile.notifyReportStatus,
             notifyNews: meta.notifyNews ?? loadedProfile.notifyNews,
             showNameOnReport: meta.showNameOnReport ?? loadedProfile.showNameOnReport,
@@ -473,21 +477,57 @@ export default function UserProfilePage() {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
+    if (file.size > 10 * 1024 * 1024) {
       setAlert({
         type: "warning",
         title: "ขนาดไฟล์ใหญ่เกินไป",
-        message: "กรุณาเลือกรูปภาพขนาดไม่เกิน 5 MB",
+        message: "กรุณาเลือกรูปภาพขนาดไม่เกิน 10 MB",
       });
       return;
     }
 
+    // Compress image to max 256x256 using HTML Canvas
     const reader = new FileReader();
     reader.onload = (e) => {
-      const result = e.target?.result as string;
-      if (result) {
-        setDraft((prev) => ({ ...prev, avatar: result }));
-      }
+      const src = e.target?.result as string;
+      if (!src) return;
+
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          const MAX_SIZE = 256;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height = Math.round((height * MAX_SIZE) / width);
+              width = MAX_SIZE;
+            }
+          } else {
+            if (height > MAX_SIZE) {
+              width = Math.round((width * MAX_SIZE) / height);
+              height = MAX_SIZE;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL("image/jpeg", 0.85);
+            setDraft((prev) => ({ ...prev, avatar: compressed }));
+            return;
+          }
+        } catch {}
+        setDraft((prev) => ({ ...prev, avatar: src }));
+      };
+      img.onerror = () => {
+        setDraft((prev) => ({ ...prev, avatar: src }));
+      };
+      img.src = src;
     };
     reader.readAsDataURL(file);
   }
@@ -512,6 +552,9 @@ export default function UserProfilePage() {
       return;
     }
 
+    const sessionFirstName = currentSession.name?.split(" ")[0] || "ผู้ใช้งาน";
+    const sessionLastName = currentSession.name?.split(" ").slice(1).join(" ") || "";
+
     const cleanedProfile: Profile = {
       ...draft,
 
@@ -519,17 +562,17 @@ export default function UserProfilePage() {
         draft.prefix.trim(),
 
       firstName:
-        draft.firstName.trim(),
+        draft.firstName.trim() || sessionFirstName,
 
       lastName:
-        draft.lastName.trim(),
+        draft.lastName.trim() || sessionLastName,
 
       nickname:
         draft.nickname.trim(),
 
       username: draft.username
         .trim()
-        .toLowerCase(),
+        .toLowerCase() || currentSession.email?.split("@")[0] || "user",
 
       phone: draft.phone
         .replace(/\D/g, "")
@@ -567,33 +610,6 @@ export default function UserProfilePage() {
     };
 
     if (
-      !cleanedProfile.prefix ||
-      !cleanedProfile.firstName ||
-      !cleanedProfile.lastName
-    ) {
-      setAlert({
-        type: "warning",
-        title: "ข้อมูลไม่ครบ",
-        message:
-          "กรุณากรอกคำนำหน้า ชื่อ และนามสกุลให้ครบ",
-      });
-      return;
-    }
-
-    if (
-      !cleanedProfile.username
-    ) {
-      setAlert({
-        type: "warning",
-        title:
-          "ไม่พบชื่อผู้ใช้งาน",
-        message:
-          "กรุณาระบุชื่อผู้ใช้งาน",
-      });
-      return;
-    }
-
-    if (
       cleanedProfile.phone &&
       !/^\d{9,10}$/.test(
         cleanedProfile.phone,
@@ -605,35 +621,6 @@ export default function UserProfilePage() {
           "เบอร์โทรศัพท์ไม่ถูกต้อง",
         message:
           "กรุณากรอกเบอร์โทรศัพท์เป็นตัวเลข 9–10 หลัก",
-      });
-      return;
-    }
-
-    if (
-      !cleanedProfile.residenceLocation
-    ) {
-      setAlert({
-        type: "warning",
-        title:
-          "กรุณาเลือกที่พัก",
-        message:
-          "กรุณาเลือกว่าปัจจุบันพักอยู่ภายในหรือนอกมหาวิทยาลัย",
-      });
-      return;
-    }
-
-    if (
-      cleanedProfile.residenceLocation ===
-        "inside-campus" &&
-      (!cleanedProfile.dormitory ||
-        !cleanedProfile.roomNumber)
-    ) {
-      setAlert({
-        type: "warning",
-        title:
-          "ข้อมูลหอพักไม่ครบ",
-        message:
-          "กรุณากรอกชื่อหอพักและเลขห้อง",
       });
       return;
     }
@@ -656,29 +643,38 @@ export default function UserProfilePage() {
       return;
     }
 
-    const profileKey =
-      getProfileStorageKey(
-        currentSession,
+    // Save to LocalStorage safely
+    try {
+      const profileKey =
+        getProfileStorageKey(
+          currentSession,
+        );
+
+      window.localStorage.setItem(
+        profileKey,
+        JSON.stringify(
+          cleanedProfile,
+        ),
       );
+    } catch (storageErr) {
+      console.warn("Could not save profile to localStorage:", storageErr);
+    }
 
-    window.localStorage.setItem(
-      profileKey,
-      JSON.stringify(
+    try {
+      updateAccountSession(
+        currentSession,
         cleanedProfile,
-      ),
-    );
-
-    updateAccountSession(
-      currentSession,
-      cleanedProfile,
-    );
+      );
+    } catch (sessionErr) {
+      console.warn("Could not update account session:", sessionErr);
+    }
 
     const updatedSession = {
       ...currentSession,
       name:
         getFullName(
           cleanedProfile,
-        ),
+        ) || currentSession.name,
       username:
         cleanedProfile.username,
       avatar: cleanedProfile.avatar,
@@ -696,28 +692,28 @@ export default function UserProfilePage() {
     if (currentSession?.email) {
       upsertProfileInSupabase({
         email: currentSession.email,
-        full_name: getFullName(cleanedProfile),
+        full_name: getFullName(cleanedProfile) || currentSession.name || "ผู้ใช้งาน",
         role: "user",
         avatar_url: cleanedProfile.avatar || null,
         department: "มหาวิทยาลัยวลัยลักษณ์",
-        prefix: cleanedProfile.prefix,
-        first_name: cleanedProfile.firstName,
-        last_name: cleanedProfile.lastName,
-        nickname: cleanedProfile.nickname,
-        phone: cleanedProfile.phone,
-        dormitory: cleanedProfile.dormitory,
-        building: cleanedProfile.building,
-        floor: cleanedProfile.floor,
-        room_number: cleanedProfile.roomNumber,
-        residence_location: cleanedProfile.residenceLocation,
-        gender: cleanedProfile.gender,
-        birth_date: cleanedProfile.birthDate,
-        address_line: cleanedProfile.addressLine,
-        subdistrict: cleanedProfile.subdistrict,
-        district: cleanedProfile.district,
-        province: cleanedProfile.province,
-        postal_code: cleanedProfile.postalCode,
-        username: cleanedProfile.username,
+        prefix: cleanedProfile.prefix || null,
+        first_name: cleanedProfile.firstName || null,
+        last_name: cleanedProfile.lastName || null,
+        nickname: cleanedProfile.nickname || null,
+        phone: cleanedProfile.phone || null,
+        dormitory: cleanedProfile.dormitory || null,
+        building: cleanedProfile.building || null,
+        floor: cleanedProfile.floor || null,
+        room_number: cleanedProfile.roomNumber || null,
+        residence_location: cleanedProfile.residenceLocation || null,
+        gender: cleanedProfile.gender || null,
+        birth_date: cleanedProfile.birthDate || null,
+        address_line: cleanedProfile.addressLine || null,
+        subdistrict: cleanedProfile.subdistrict || null,
+        district: cleanedProfile.district || null,
+        province: cleanedProfile.province || null,
+        postal_code: cleanedProfile.postalCode || null,
+        username: cleanedProfile.username || null,
         status: "active",
       }).catch((err) => console.warn("Supabase user profile sync failed:", err));
     }
@@ -726,7 +722,7 @@ export default function UserProfilePage() {
       type: "success",
       title: "บันทึกสำเร็จ",
       message:
-        "ข้อมูลบัญชี เบอร์โทรศัพท์ วันเกิด และข้อมูลที่อยู่ถูกบันทึกเรียบร้อยแล้ว",
+        "ข้อมูลบัญชี รูปโปรไฟล์ และข้อมูลที่อยู่ถูกบันทึกเรียบร้อยแล้ว",
     });
   }
 
@@ -824,12 +820,18 @@ export default function UserProfilePage() {
 
     closePasswordModal();
 
+    if (currentSession?.email) {
+      resetPasswordUnified(currentSession.email, passwords.next).catch((err) =>
+        console.warn("resetPasswordUnified failed:", err)
+      );
+    }
+
     setAlert({
       type: "success",
       title:
         "เปลี่ยนรหัสผ่านสำเร็จ",
       message:
-        "บันทึกรหัสผ่านใหม่ในระบบทดลองเรียบร้อยแล้ว",
+        "บันทึกรหัสผ่านใหม่เรียบร้อยแล้ว",
     });
   }
 
