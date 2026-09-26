@@ -2445,13 +2445,6 @@ export default function UserReportPage() {
 
             </div>
 
-            <div className="relative z-10 inline-flex w-fit items-center gap-1.5 rounded-full border border-white/35 bg-white/15 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm">
-
-              <AlertTriangle className="h-3.5 w-3.5 text-amber-200" />
-
-              <span>โหมดทดลอง: บันทึกในเบราว์เซอร์นี้</span>
-
-            </div>
 
           </header>
 

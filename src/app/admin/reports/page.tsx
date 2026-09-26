@@ -61,7 +61,6 @@ import {
 import Header from "@/components/Header";
 
 import { addNotification } from "@/lib/notifications";
-import { USER_ACCOUNTS } from "@/lib/authService";
 import { updateIssueStatusInSupabase, fetchIssuesFromSupabase } from "@/lib/supabaseService";
 import { getIssueReport, findIssueReport, getAllIssueReports } from "@/lib/issueReports";
 
@@ -312,9 +311,9 @@ const demoReports: Report[] = [
 
     reporter_name: "สมชาย ใจดี",
 
-    reporter_email: "somchai\@example.com",
+    reporter_email: "somchai@example.com",
 
-    reporter_phone: "081-234-5678",
+    reporter_phone: null,
 
     answers: [
 
@@ -698,33 +697,39 @@ function enrichReport(raw: Report): Report {
   if (!report.reporter_name || report.reporter_name.trim() === "" || report.reporter_name === "ไม่ได้ระบุ") {
     report.reporter_name = "สมชาย ใจดี";
   }
-  if (!report.reporter_email || report.reporter_email.trim() === "" || report.reporter_email === "ไม่ได้ระบุ") {
-    if (report.reporter_name === "สมชาย ใจดี") report.reporter_email = "somchai@example.com";
-    else if (report.reporter_name === "นภัสสร แสงทอง") report.reporter_email = "napatsorn@example.com";
-    else if (report.reporter_name === "กิตติพงษ์ ศรีสุข") report.reporter_email = "kittipong@example.com";
-    else if (report.reporter_name === "พิมพ์ชนก วัฒนะ") report.reporter_email = "pimchanok@example.com";
-    else if (report.reporter_name === "กิตติภูมิ") report.reporter_email = "kittipoom@example.com";
-    else report.reporter_email = "user@unicare.local";
+  if (
+    !report.reporter_email ||
+    report.reporter_email.trim() === "" ||
+    report.reporter_email === "ไม่ได้ระบุ" ||
+    [
+      "somchai@example.com",
+      "napatsorn@example.com",
+      "kittipong@example.com",
+      "pimchanok@example.com",
+      "kittipoom@example.com",
+      "user@unicare.local",
+      "user@wu.ac.th",
+    ].includes(report.reporter_email.toLowerCase())
+  ) {
+    report.reporter_email = null;
   }
-  if (!report.reporter_phone || report.reporter_phone.trim() === "" || report.reporter_phone === "ไม่ได้ระบุ") {
-    const matchedAccount = USER_ACCOUNTS.find(
-      (u) => u.name === report.reporter_name || u.email === report.reporter_email
-    );
-    if (matchedAccount?.phone) {
-      report.reporter_phone = matchedAccount.phone;
-    } else if (report.reporter_name?.includes("สมชาย") || report.reporter_email?.includes("somchai")) {
-      report.reporter_phone = "082-345-6789";
-    } else if (report.reporter_name?.includes("นภัสสร") || report.reporter_email?.includes("napatsorn")) {
-      report.reporter_phone = "083-456-7890";
-    } else if (report.reporter_name?.includes("กิตติพงษ์") || report.reporter_email?.includes("kittipong")) {
-      report.reporter_phone = "084-567-8901";
-    } else if (report.reporter_name?.includes("พิมพ์ชนก") || report.reporter_email?.includes("pimchanok")) {
-      report.reporter_phone = "085-678-9012";
-    } else if (report.reporter_name?.includes("กิตติภูมิ") || report.reporter_email?.includes("kittipoom")) {
-      report.reporter_phone = "089-123-4567";
-    } else {
-      report.reporter_phone = "081-234-5678";
-    }
+  const legacyDemoPhones = new Set([
+    "081-234-5678",
+    "082-345-6789",
+    "083-456-7890",
+    "084-567-8901",
+    "085-678-9012",
+    "089-123-4567",
+  ]);
+
+  const reporterPhone = report.reporter_phone?.trim() || "";
+
+  if (
+    !reporterPhone ||
+    reporterPhone === "ไม่ได้ระบุ" ||
+    legacyDemoPhones.has(reporterPhone)
+  ) {
+    report.reporter_phone = null;
   }
 
   return report;
@@ -762,7 +767,7 @@ function readDemoReports(): Report[] {
   }
 }
 
-function saveDemoReports(reports: Report[]) {
+function saveDemoReports(reports: Report[], notify = true) {
 
   window.localStorage.setItem(
 
@@ -772,11 +777,11 @@ function saveDemoReports(reports: Report[]) {
 
   );
 
-  window.dispatchEvent(
-
-    new Event("unicare-demo-reports-updated"),
-
-  );
+  if (notify) {
+    window.dispatchEvent(
+      new Event("unicare-demo-reports-updated"),
+    );
+  }
 
 }
 
@@ -1119,6 +1124,30 @@ export default function AdminIssuesPage() {
 
   const [savingId, setSavingId] = useState<number | null>(null);
 
+  // โหลดชื่อหลังจาก Component mount เพื่อให้ Server และ Browser render ครั้งแรกตรงกัน
+  const [currentAdminName, setCurrentAdminName] = useState<string | undefined>(
+    undefined,
+  );
+
+  useEffect(() => {
+    const syncAdminName = () => {
+      const name = getCurrentAdminDisplayName()
+        .replace(/\(Admin\)/gi, "")
+        .trim();
+
+      setCurrentAdminName(name || undefined);
+    };
+
+    syncAdminName();
+    window.addEventListener("unicare-profile-updated", syncAdminName);
+    window.addEventListener("storage", syncAdminName);
+
+    return () => {
+      window.removeEventListener("unicare-profile-updated", syncAdminName);
+      window.removeEventListener("storage", syncAdminName);
+    };
+  }, []);
+
   const loadReports = useCallback(
     async (showLoading = true) => {
       if (showLoading) setLoading(true);
@@ -1143,14 +1172,27 @@ export default function AdminIssuesPage() {
             let mappedStatus: Status = "Pending";
             if (r.status === "in_progress") mappedStatus = "In_Progress";
             else if (r.status === "resolved") mappedStatus = "Resolved";
-            else if ((r.status as string) === "rejected") mappedStatus = "Closed";
+            else if (
+              ["rejected", "closed", "ปฏิเสธ", "ปฏิเสธแล้ว"].includes(
+                String(r.status || "").toLowerCase(),
+              )
+            ) {
+              mappedStatus = "Closed";
+            }
 
             let mappedSeverity: Severity = "Low";
             if (r.urgency === "เร่งด่วนมาก") mappedSeverity = "High";
             else if (r.urgency === "เร่งด่วน") mappedSeverity = "Medium";
 
             if (existing) {
-              existing.status = mappedStatus;
+              // อย่าให้สถานะ Pending เก่าจาก Supabase เขียนทับคำร้องที่
+              // Admin เพิ่งปฏิเสธและบันทึกเป็น Closed ในเครื่อง
+              const keepLocalClosed =
+                existing.status === "Closed" && mappedStatus === "Pending";
+
+              if (!keepLocalClosed) {
+                existing.status = mappedStatus;
+              }
               if (r.adminName) {
                 existing.admin_name = r.adminName;
                 existing.adminName = r.adminName;
@@ -1170,7 +1212,7 @@ export default function AdminIssuesPage() {
                 status: mappedStatus,
                 date_created: new Date().toISOString(),
                 reporter_name: r.reporterName || "ผู้ใช้งาน",
-                reporter_email: r.reporterEmail || "user@wu.ac.th",
+                reporter_email: r.reporterEmail || null,
                 admin_name: r.adminName,
                 adminName: r.adminName,
                 adminInitial: r.adminInitial,
@@ -1185,7 +1227,10 @@ export default function AdminIssuesPage() {
           }
 
           currentList = Array.from(map.values());
-          saveDemoReports(currentList);
+          // บันทึกผลจาก Supabase โดยไม่ยิง event ซ้ำ
+          // ไม่เช่นนั้น loadReports -> saveDemoReports -> event -> loadReports
+          // จะวนลูปและทำให้หน้าสลับสถานะกลับไปกลับมา
+          saveDemoReports(currentList, false);
         }
       } catch (err) {
         console.warn("Failed syncing reports from Supabase:", err);
@@ -1386,6 +1431,9 @@ export default function AdminIssuesPage() {
         rejectionReason: reason,
       },
     );
+
+    // เปิดการ์ดเสร็จสิ้น / ปิดเรื่อง เพื่อให้เห็นคำร้องที่ปฏิเสธทันที
+    setStatusFilter("Resolved");
   }
 
   async function resolveEvidenceFile(
@@ -1579,14 +1627,6 @@ export default function AdminIssuesPage() {
 
   ]);
 
-  const currentAdmin =
-
-    getCurrentAdminDisplayName()
-
-      .replace(/\\(Admin\\)/gi, "")
-
-      .trim();
-
   return (
 
     <div className="min-h-screen bg-[#f4f7f5] text-slate-800">
@@ -1597,7 +1637,7 @@ export default function AdminIssuesPage() {
 
         subtitle="มหาวิทยาลัยวลัยลักษณ์"
 
-        userName={currentAdmin}
+        userName={currentAdminName}
 
         role="ADMIN"
 
@@ -2530,20 +2570,17 @@ function ReportDetailModal({
               <InfoCard
                 icon={<Mail className="h-4 w-4" />}
                 label="อีเมล"
-                value={displayValue(report.reporter_email)}
+                value={
+                  report.reporter_email?.trim() ||
+                  "ไม่พบอีเมลของผู้แจ้ง"
+                }
               />
               <InfoCard
                 icon={<UserRound className="h-4 w-4" />}
                 label="เบอร์โทรศัพท์"
-                value={displayValue(report.reporter_phone)}
-              />
-              <InfoCard
-                icon={<ShieldCheck className="h-4 w-4" />}
-                label="ผู้รับผิดชอบ"
                 value={
-                  report.admin_name ||
-                  report.adminName ||
-                  "ยังไม่มีผู้รับผิดชอบ"
+                  report.reporter_phone?.trim() ||
+                  "ยังไม่ได้ลงทะเบียนเบอร์โทรศัพท์"
                 }
               />
             </div>
@@ -2731,77 +2768,55 @@ function ReportDetailModal({
             </DetailSection>
           )}
 
-          <DetailSection
-            title="หลักฐานประกอบ"
-            icon={<FolderOpen className="h-4 w-4" />}
-          >
-            <div className="flex items-center justify-between rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
-              <div>
-                <p className="font-bold">
-                  หลักฐานแนบ {evidenceCount} ไฟล์
-                </p>
-                <p className="text-xs text-slate-400">
-                  รูปภาพ เสียง วิดีโอ และเอกสารประกอบ
-                </p>
-              </div>
-              <button
-                type="button"
-                disabled={evidenceCount === 0}
-                onClick={onOpenEvidence}
-                className="rounded-full bg-emerald-700 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-emerald-800 disabled:bg-slate-300 cursor-pointer"
-              >
-                ดูหลักฐานทั้งหมด ({evidenceCount})
-              </button>
-            </div>
+        <DetailSection
+  title="หลักฐานประกอบ"
+  icon={<FolderOpen className="h-4 w-4" />}
+>
+  <div className="space-y-4 rounded-2xl bg-slate-50 p-4">
+    {/* จำนวนไฟล์ */}
+    <div className="flex items-center justify-between gap-4">
+      <div>
+  <p className="font-bold text-slate-800">
+    หลักฐานแนบ {evidenceCount} ไฟล์
+  </p>
+  <p className="text-xs text-slate-500">
+    รูปภาพ เสียง วิดีโอ และเอกสารประกอบ
+  </p>
+</div>
 
-            {evidenceCount > 0 ? (
-              <div className="mt-3 space-y-3">
-                {/* Image thumbnails row */}
-                {evidenceList.some((f) => getEvidenceType(f) === "image") && (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 p-3 rounded-2xl bg-slate-50 border border-slate-200">
-                    {evidenceList
-                      .filter((f) => getEvidenceType(f) === "image")
-                      .map((f, i) => {
-                        const imgUrl = f.url || f.dataUrl || getFallbackEvidenceUrl(f);
-                        return (
-                          <div
-                            key={`thumb-${f.id || i}`}
-                            onClick={() => (onOpenFile ? onOpenFile(f) : onOpenEvidence())}
-                            className="group relative cursor-pointer overflow-hidden rounded-xl border border-slate-200 bg-white aspect-video flex items-center justify-center hover:border-emerald-500 hover:shadow-md transition"
-                            title={`คลิกเพื่อดูรูปภาพ: ${f.name}`}
-                          >
-                            <img
-                              src={imgUrl}
-                              alt={f.name}
-                              className="w-full h-full object-cover transition group-hover:scale-105"
-                            />
-                            <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white">
-                              <Eye className="w-5 h-5 drop-shadow" />
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
-                )}
+      <span className="shrink-0 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
+        {evidenceCount} ไฟล์
+      </span>
+    </div>
 
-                {/* List of files with Open & Download */}
-                <div className="space-y-2">
-                  {evidenceList.map((f, i) => (
-                    <EvidenceRow
-                      key={f.id || `${f.name}-${i}`}
-                      file={f}
-                      onOpen={() => (onOpenFile ? onOpenFile(f) : onOpenEvidence())}
-                      onDownload={() => (onDownload ? onDownload(f) : undefined)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-xs text-slate-400">
-                ไม่มีหลักฐานแนบสำหรับคำร้องนี้
-              </div>
-            )}
-          </DetailSection>
+    {/* รายการไฟล์ */}
+    {evidenceCount > 0 ? (
+      <div className="space-y-2">
+        {evidenceList.map((file, index) => (
+          <EvidenceRow
+            key={file.id || `${file.name}-${index}`}
+            file={file}
+            onOpen={() =>
+              onOpenFile
+                ? onOpenFile(file)
+                : onOpenEvidence()
+            }
+            onDownload={() =>
+              onDownload
+                ? onDownload(file)
+                : undefined
+            }
+          />
+        ))}
+      </div>
+    ) : (
+      <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-6 text-center text-xs text-slate-400">
+        ไม่มีหลักฐานแนบสำหรับคำร้องนี้
+      </div>
+    )}
+  </div>
+</DetailSection>
+
         </div>
 
         <div className="sticky bottom-0 flex justify-end border-t bg-white px-6 py-4">
@@ -2929,14 +2944,7 @@ function EvidenceModal({
         <div className="p-6">
           {previewFile ? (
             <>
-              <button
-                type="button"
-                onClick={onBack}
-                className="mb-4 flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-800 transition cursor-pointer"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                กลับไปรายการไฟล์
-              </button>
+        
               <FilePreview file={previewFile} />
             </>
           ) : (
@@ -3319,7 +3327,7 @@ function SummaryCard({
       type="button"
 
       onClick={onClick}
-      className={`flex items-center gap-4 rounded-2xl border bg-white p-5 text-left shadow-sm ${
+      className={`grid min-w-0 grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-4 rounded-2xl border bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
         active
           ? "border-emerald-500 ring-1 ring-emerald-100"
           : "border-slate-200"
@@ -3333,28 +3341,20 @@ function SummaryCard({
 
       </span>
 
-      <span className="flex-1">
+      <span className="min-w-0">
 
-        <span className="block text-sm font-semibold">
+        <span className="block text-sm font-semibold leading-5">
 
           {label}
 
         </span>
 
-        <span className="text-[11px] text-slate-400">
+        <span className="mt-0.5 block text-[11px] leading-5 text-slate-400">
 
           {description}
 
         </span>
 
-      </span>
-      <span className="flex-1">
-        <span className="block text-sm font-semibold">
-          {label}
-        </span>
-        <span className="text-[11px] text-slate-400">
-          {description}
-        </span>
       </span>
       <span className="text-2xl sm:text-3xl font-extrabold text-slate-800">
         {count}

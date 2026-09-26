@@ -204,9 +204,6 @@ export default function MyReportsPage() {
           {/* Hero Banner */}
           <section className="relative rounded-2xl overflow-hidden shadow-md bg-gradient-to-r from-[#064e3b] via-[#047857] to-[#065f46] text-white p-6 sm:p-7 flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="space-y-1.5 max-w-xl">
-              <span className="bg-white/20 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-white/30">
-                มุมมอง: ผู้แจ้งเรื่อง (User Perspective)
-              </span>
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight">
                 ติดตามสถานะและสนทนากับเจ้าหน้าที่
               </h2>
