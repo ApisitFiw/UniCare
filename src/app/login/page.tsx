@@ -575,9 +575,9 @@ export default function LoginPage() {
                   <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs leading-5 text-emerald-800">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold">{modalSuccess}</p>
+                      <p className="font-bold">{t(modalSuccess)}</p>
                       <p className="mt-1 text-[11px] text-emerald-700 leading-relaxed">
-                        (หากไม่ได้รับอีเมลเนื่องจากข้อจำกัดของระบบส่งเมลภายนอก ท่านสามารถกดปุ่มสีเขียวด้านล่างเพื่อเปลี่ยนรหัสผ่านได้ทันที)
+                        {t("(หากไม่ได้รับอีเมลเนื่องจากข้อจำกัดของระบบส่งเมลภายนอก ท่านสามารถกดปุ่มสีเขียวด้านล่างเพื่อเปลี่ยนรหัสผ่านได้ทันที)")}
                       </p>
                     </div>
                   </div>
@@ -587,7 +587,7 @@ export default function LoginPage() {
                     onClick={() => setShowForgotModal(false)}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white shadow-md hover:bg-emerald-700 transition"
                   >
-                    <span>ตั้งรหัสผ่านใหม่ทันที (ไม่ต้องรออีเมล)</span>
+                    <span>{t("ตั้งรหัสผ่านใหม่ทันที (ไม่ต้องรออีเมล)")}</span>
                     <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>
@@ -595,7 +595,7 @@ export default function LoginPage() {
 
               {modalError && (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs leading-5 text-rose-600">
-                  {modalError}
+                  {t(modalError)}
                 </div>
               )}
 

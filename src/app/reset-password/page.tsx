@@ -19,10 +19,13 @@ import {
 import { supabase } from "@/lib/supabaseClient";
 import { resetPasswordUnified } from "@/lib/authService";
 import UniCareLogo from "@/components/UniCareLogo";
+import { useLanguage } from "@/context/LanguageContext";
+import LanguageSwitcher from "@/components/LanguageSwitcher";
 
 function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useLanguage();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -157,7 +160,7 @@ function ResetPasswordForm() {
           <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-emerald-100 border-t-emerald-600" />
 
           <p className="mt-4 text-sm font-medium text-emerald-800">
-            กำลังตรวจสอบลิงก์เปลี่ยนรหัสผ่าน...
+            {t("กำลังตรวจสอบลิงก์เปลี่ยนรหัสผ่าน...")}
           </p>
         </div>
       </main>
@@ -167,22 +170,26 @@ function ResetPasswordForm() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-teal-50 px-4 py-10">
       <div className="w-full max-w-md rounded-3xl border border-emerald-100 bg-white p-7 shadow-xl sm:p-9">
-        <Link
-          href="/"
-          className="flex w-fit items-center gap-3"
-        >
-          <UniCareLogo className="h-10 w-10" />
+        <div className="flex items-center justify-between">
+          <Link
+            href="/"
+            className="flex w-fit items-center gap-3"
+          >
+            <UniCareLogo className="h-10 w-10" />
 
-          <div>
-            <p className="font-extrabold text-emerald-900">
-              UNICARE
-            </p>
+            <div>
+              <p className="font-extrabold text-emerald-900">
+                UNICARE
+              </p>
 
-            <p className="text-[9px] uppercase tracking-wider text-slate-400">
-              Walailak University
-            </p>
-          </div>
-        </Link>
+              <p className="text-[9px] uppercase tracking-wider text-slate-400">
+                Walailak University
+              </p>
+            </div>
+          </Link>
+
+          <LanguageSwitcher />
+        </div>
 
         {success ? (
           <div className="py-8 text-center">
@@ -191,18 +198,18 @@ function ResetPasswordForm() {
             </span>
 
             <h1 className="mt-5 text-xl font-extrabold text-slate-800">
-              เปลี่ยนรหัสผ่านสำเร็จ
+              {t("เปลี่ยนรหัสผ่านสำเร็จ")}
             </h1>
 
             <p className="mt-2 text-sm text-slate-500">
-              ระบบกำลังนำคุณกลับไปยังหน้าเข้าสู่ระบบ
+              {t("ระบบกำลังนำคุณกลับไปยังหน้าเข้าสู่ระบบ")}
             </p>
 
             <Link
               href="/login"
-              className="mt-6 inline-flex rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white hover:bg-emerald-700"
+              className="mt-6 inline-flex rounded-xl bg-emerald-600 px-6 py-3 text-sm font-bold text-white hover:bg-emerald-700 cursor-pointer"
             >
-              กลับไปหน้าเข้าสู่ระบบ
+              {t("กลับไปหน้าเข้าสู่ระบบ")}
             </Link>
           </div>
         ) : (
@@ -213,11 +220,11 @@ function ResetPasswordForm() {
               </span>
 
               <h1 className="mt-4 text-2xl font-extrabold text-slate-800">
-                ตั้งรหัสผ่านใหม่
+                {t("ตั้งรหัสผ่านใหม่")}
               </h1>
 
               <p className="mt-2 text-sm leading-6 text-slate-500">
-                กรุณากำหนดรหัสผ่านใหม่สำหรับบัญชีของคุณ
+                {t("กรุณากำหนดรหัสผ่านใหม่สำหรับบัญชีของคุณ")}
               </p>
             </div>
 
@@ -227,7 +234,7 @@ function ResetPasswordForm() {
             >
               <label className="block">
                 <span className="text-xs font-bold text-slate-700">
-                  อีเมลบัญชีผู้ใช้
+                  {t("อีเมลบัญชีผู้ใช้")}
                 </span>
 
                 <div className="mt-1.5 flex items-center gap-3 rounded-xl border border-slate-200 px-4 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
@@ -249,7 +256,7 @@ function ResetPasswordForm() {
 
               <label className="block">
                 <span className="text-xs font-bold text-slate-700">
-                  รหัสผ่านใหม่
+                  {t("รหัสผ่านใหม่")}
                 </span>
 
                 <div className="mt-1.5 flex items-center gap-3 rounded-xl border border-slate-200 px-4 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
@@ -268,7 +275,7 @@ function ResetPasswordForm() {
                     onChange={(event) =>
                       setPassword(event.target.value)
                     }
-                    placeholder="อย่างน้อย 8 ตัวอักษร"
+                    placeholder={t("อย่างน้อย 8 ตัวอักษร")}
                     className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none"
                   />
 
@@ -279,7 +286,7 @@ function ResetPasswordForm() {
                         (current) => !current,
                       )
                     }
-                    className="text-slate-400 hover:text-emerald-700"
+                    className="text-slate-400 hover:text-emerald-700 cursor-pointer"
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4" />
@@ -292,7 +299,7 @@ function ResetPasswordForm() {
 
               <label className="block">
                 <span className="text-xs font-bold text-slate-700">
-                  ยืนยันรหัสผ่านใหม่
+                  {t("ยืนยันรหัสผ่านใหม่")}
                 </span>
 
                 <div className="mt-1.5 flex items-center gap-3 rounded-xl border border-slate-200 px-4 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
@@ -313,7 +320,7 @@ function ResetPasswordForm() {
                         event.target.value,
                       )
                     }
-                    placeholder="กรอกรหัสผ่านอีกครั้ง"
+                    placeholder={t("กรอกรหัสผ่านอีกครั้ง")}
                     className="min-w-0 flex-1 bg-transparent py-3 text-sm outline-none"
                   />
 
@@ -324,7 +331,7 @@ function ResetPasswordForm() {
                         (current) => !current,
                       )
                     }
-                    className="text-slate-400 hover:text-emerald-700"
+                    className="text-slate-400 hover:text-emerald-700 cursor-pointer"
                   >
                     {showConfirmPassword ? (
                       <EyeOff className="h-4 w-4" />
@@ -337,29 +344,29 @@ function ResetPasswordForm() {
 
               {error && (
                 <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs leading-5 text-rose-600">
-                  {error}
+                  {t(error)}
                 </div>
               )}
 
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
               >
                 <KeyRound className="h-4 w-4" />
 
                 {isSubmitting
-                  ? "กำลังบันทึก..."
-                  : "บันทึกรหัสผ่านใหม่"}
+                  ? t("กำลังบันทึก...")
+                  : t("บันทึกรหัสผ่านใหม่")}
               </button>
             </form>
 
             <p className="mt-5 text-center text-xs text-slate-400">
               <Link
                 href="/login"
-                className="font-bold text-emerald-700 hover:underline"
+                className="font-bold text-emerald-700 hover:underline cursor-pointer"
               >
-                กลับไปหน้าเข้าสู่ระบบ
+                {t("กลับไปหน้าเข้าสู่ระบบ")}
               </Link>
             </p>
           </>
