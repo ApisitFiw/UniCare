@@ -54,55 +54,81 @@ export default function MyReportsPage() {
     const currentName = (session?.name || "").trim().toLowerCase();
     const currentEmail = (session?.email || "").trim().toLowerCase();
 
-    const allIssues = getAllCurrentIssues();
-    const myIssues = allIssues.filter((i) => {
-      const repName = (i.reporterName || "").trim().toLowerCase();
-      const repEmail = (i.reporterEmail || "").trim().toLowerCase();
-
-      // Check email match
-      if (currentEmail && repEmail && currentEmail === repEmail) return true;
-      // Check alias user@unicare.local
-      if (
-        currentEmail === "user@unicare.local" &&
-        (repEmail === "somchai@example.com" ||
-          repName.includes("สมชาย") ||
-          repEmail === "kittipoom@example.com" ||
-          repName.includes("กิตติภูมิ"))
-      ) {
-        return true;
+    // Read all reports directly from localStorage to include pending (not yet accepted)
+    let myIssues: UserReportItem[] = [];
+    try {
+      const raw = window.localStorage.getItem("unicare_demo_issue_reports");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          myIssues = parsed
+            .filter((item: Record<string, unknown>) => {
+              const s = ((item.status as string) || "Pending").toLowerCase();
+              if (s === "closed" || s === "rejected") return false;
+              const repName = ((item.reporter_name as string) || (item.reporterName as string) || "").trim().toLowerCase();
+              const repEmail = ((item.reporter_email as string) || (item.reporterEmail as string) || "").trim().toLowerCase();
+              if (currentEmail && repEmail && currentEmail === repEmail) return true;
+              if (
+                currentEmail === "user@unicare.local" &&
+                (repEmail === "somchai@example.com" ||
+                  repName.includes("สมชาย") ||
+                  repEmail === "kittipoom@example.com" ||
+                  repName.includes("กิตติภูมิ"))
+              ) return true;
+              if (currentName && repName && currentName === repName) return true;
+              return false;
+            })
+            .map((item: Record<string, unknown>) => {
+              const s = ((item.status as string) || "Pending").toLowerCase();
+              let statusKey: "pending" | "in_progress" | "resolved" | "rejected" = "pending";
+              if (s === "in_progress") statusKey = "in_progress";
+              else if (s === "resolved") statusKey = "resolved";
+              const rawId = item.issue_id ?? item.id;
+              const displayId = String(rawId).startsWith("ISS-")
+                ? String(rawId)
+                : `ISS-2026-${String(rawId).padStart(3, "0")}`;
+              return {
+                id: displayId,
+                date: item.date_created
+                  ? new Date(item.date_created as string).toLocaleDateString("th-TH", { day: "2-digit", month: "short", year: "numeric" })
+                  : "วันนี้",
+                category: (item.category as string) || (item.title as string) || "อื่น ๆ",
+                area: (item.location as string) || "มหาวิทยาลัยวลัยลักษณ์",
+                description: (item.description as string) || (item.title as string) || "รายละเอียดเรื่องร้องเรียน",
+                adminName: (item.adminName as string) || (item.admin_name as string),
+                reporterName: (item.reporter_name as string) || (item.reporterName as string),
+                reporterEmail: (item.reporter_email as string) || (item.reporterEmail as string),
+                status: statusKey,
+                statusLabel: statusKey === "in_progress" ? "กำลังดำเนินการ" : statusKey === "resolved" ? "แก้ไขสำเร็จ" : "รอรับเรื่อง",
+              } as UserReportItem;
+            });
+        }
       }
-      // Check name match
-      if (currentName && repName && currentName === repName) return true;
+    } catch {
+      // fallback to getAllCurrentIssues
+      myIssues = getAllCurrentIssues()
+        .filter((i) => {
+          const repName = (i.reporterName || "").trim().toLowerCase();
+          const repEmail = (i.reporterEmail || "").trim().toLowerCase();
+          if (currentEmail && repEmail && currentEmail === repEmail) return true;
+          if (currentName && repName && currentName === repName) return true;
+          return false;
+        })
+        .map((i) => ({
+          id: i.id,
+          date: i.date,
+          category: i.category,
+          area: i.area,
+          description: i.description,
+          status: i.status as "pending" | "in_progress" | "resolved" | "rejected",
+          statusLabel: i.statusLabel,
+          reporterName: i.reporterName,
+          reporterEmail: i.reporterEmail,
+          adminName: i.adminName,
+        }));
+    }
 
-      return false;
-    });
-
-    const mappedReports: UserReportItem[] = myIssues.map((item) => {
-      let statusKey: "pending" | "in_progress" | "resolved" | "rejected" = item.status;
-      let statusLabel = item.statusLabel;
-      if (item.status === "in_progress") {
-        statusLabel = "กำลังดำเนินการ";
-      } else if (item.status === "resolved") {
-        statusLabel = "แก้ไขสำเร็จ";
-      } else {
-        statusLabel = "รอรับเรื่อง";
-      }
-
-      return {
-        id: item.id,
-        date: item.date,
-        category: item.category,
-        area: item.area,
-        description: item.description,
-        status: statusKey,
-        statusLabel,
-        reporterName: item.reporterName,
-        reporterEmail: item.reporterEmail,
-        adminName: item.adminName,
-      };
-    });
-
-    setReports(mappedReports);
+    setReports(myIssues);
   }, []);
 
   useEffect(() => {

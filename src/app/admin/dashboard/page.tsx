@@ -114,9 +114,32 @@ export default function AdminDashboardPage() {
     };
   }, [router]);
 
+  const [pendingCount, setPendingCount] = useState<number>(0);
+
   useEffect(() => {
     const loadIssues = () => {
+      // getAllCurrentIssues returns only in_progress / resolved (accepted issues)
       setIssues(getAllCurrentIssues());
+      // Count pending separately from the raw reports storage
+      try {
+        const raw = window.localStorage.getItem("unicare_demo_issue_reports");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const count = parsed.filter((item: { status?: string }) => {
+              const s = (item.status || "Pending").toLowerCase();
+              return s === "pending";
+            }).length;
+            setPendingCount(count);
+          } else {
+            setPendingCount(0);
+          }
+        } else {
+          setPendingCount(0);
+        }
+      } catch {
+        setPendingCount(0);
+      }
     };
 
     loadIssues();
@@ -132,10 +155,9 @@ export default function AdminDashboardPage() {
     };
   }, []);
 
-  const totalCount = issues.length;
-  const pendingCount = issues.filter((i) => i.status === "pending").length;
   const inProgressCount = issues.filter((i) => i.status === "in_progress").length;
   const resolvedCount = issues.filter((i) => i.status === "resolved").length;
+  const totalCount = pendingCount + inProgressCount + resolvedCount;
   const resolvedRate = totalCount > 0 ? ((resolvedCount / totalCount) * 100).toFixed(1) : "0.0";
 
   const stats = [

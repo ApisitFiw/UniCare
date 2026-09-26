@@ -408,11 +408,11 @@ export function getAllCurrentIssues(): IssueItem[] {
       map.set(l.id.replace(/^#/, '').trim(), l)
     }
 
-    // Supabase cached items take precedence
+    // Supabase cached items take precedence -- only accepted (in_progress / resolved)
     for (const r of cachedSupabase) {
+      if (r.status === 'pending') continue
       map.set(r.id.replace(/^#/, '').trim(), r)
     }
-  } else {
     // If Supabase cache not yet loaded, use mappedFromLocal
     for (const l of mappedFromLocal) {
       map.set(l.id.replace(/^#/, '').trim(), l)

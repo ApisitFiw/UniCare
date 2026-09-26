@@ -203,8 +203,9 @@ export default function StatusTrackingPage() {
           for (const m of initialMockIssues) {
             map.set(m.id.replace(/^#/, "").trim(), m)
           }
-          // 2. Remote Supabase issues ALWAYS take precedence
+          // 2. Remote Supabase issues -- only accepted (in_progress / resolved)
           for (const r of remote) {
+            if (r.status === 'pending') continue
             const cleanId = r.id.replace(/^#/, "").trim()
             map.set(cleanId, r)
           }
