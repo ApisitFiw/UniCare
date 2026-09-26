@@ -2,6 +2,8 @@ export type UrgencyLevel = 'เร่งด่วนมาก' | 'เร่ง�
 
 export type IssueItem = {
   id: string
+  supabaseId?: string
+  rawId?: string
   date: string
   category: string
   area: string
@@ -617,6 +619,18 @@ export function getAllCurrentIssues(): IssueItem[] {
     return initialMockIssues
   }
 
+  // 1. Check if we have cached Supabase issues
+  let cachedSupabase: IssueItem[] | null = null
+  try {
+    const rawCached = window.localStorage.getItem('unicare_cached_supabase_issues')
+    if (rawCached) {
+      const parsed = JSON.parse(rawCached)
+      if (Array.isArray(parsed)) {
+        cachedSupabase = parsed
+      }
+    }
+  } catch {}
+
   let mappedFromLocal: IssueItem[] = []
   try {
     const savedReports = window.localStorage.getItem('unicare_demo_issue_reports')
@@ -696,18 +710,57 @@ export function getAllCurrentIssues(): IssueItem[] {
     // ignore
   }
 
-  const existingIds = new Set(mappedFromLocal.map((i) => i.id))
-  const fallbackItems = initialMockIssues
-    .filter((p) => !existingIds.has(p.id))
-    .map((item, idx) => {
-      const normalized = normalizeIssueAdminName(item.adminName, idx)
-      return {
-        ...item,
-        adminName: normalized.adminName,
-        adminInitial: normalized.adminInitial,
-      }
+  const map = new Map<string, IssueItem>()
+
+  // 1. Initial mock issues baseline
+  for (const m of initialMockIssues) {
+    const normalized = normalizeIssueAdminName(m.adminName)
+    map.set(m.id.replace(/^#/, '').trim(), {
+      ...m,
+      adminName: normalized.adminName,
+      adminInitial: normalized.adminInitial,
     })
-  return sortIssuesLatestFirst([...mappedFromLocal, ...fallbackItems])
+  }
+
+  // 2. If cached Supabase exists, it is authoritative for all remote-synced issues
+  if (cachedSupabase !== null) {
+    const remoteCleanKeys = new Set(
+      cachedSupabase.map((r) => r.id.replace(/^#/, '').trim().toLowerCase())
+    )
+    const remoteNumKeys = new Set(
+      cachedSupabase
+        .map((r) => {
+          const m = r.id.match(/\d+$/)
+          return m ? m[0] : ''
+        })
+        .filter(Boolean)
+    )
+
+    // Add local reports only if they are not deleted Supabase issues
+    for (const l of mappedFromLocal) {
+      const cleanId = l.id.replace(/^#/, '').trim().toLowerCase()
+      const m = cleanId.match(/\d+$/)
+      const num = m ? parseInt(m[0], 10) : 0
+      const isRemoteSynced = cleanId.startsWith('iss-') || num > 105
+      if (isRemoteSynced) {
+        const inRemote = remoteCleanKeys.has(cleanId) || (m && remoteNumKeys.has(m[0]))
+        if (!inRemote) continue
+      }
+      map.set(l.id.replace(/^#/, '').trim(), l)
+    }
+
+    // Supabase cached items take precedence
+    for (const r of cachedSupabase) {
+      map.set(r.id.replace(/^#/, '').trim(), r)
+    }
+  } else {
+    // If Supabase cache not yet loaded, use mappedFromLocal
+    for (const l of mappedFromLocal) {
+      map.set(l.id.replace(/^#/, '').trim(), l)
+    }
+  }
+
+  return sortIssuesLatestFirst(Array.from(map.values()))
 }
 
 const THAI_MONTH_MAP: Record<string, number> = {

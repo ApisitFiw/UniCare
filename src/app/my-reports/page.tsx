@@ -9,7 +9,7 @@ import Header from "@/components/Header";
 import CaseClarificationDrawer from "@/components/CaseClarificationDrawer";
 import UserSidebar from "@/components/UserSidebar";
 import { getAllCurrentIssues } from "@/lib/issuesData";
-import { fetchIssuesFromSupabase } from "@/lib/supabaseService";
+import { fetchIssuesFromSupabase, removeIssueFromLocalStorage } from "@/lib/supabaseService";
 import {
   MapPin,
   Clock,
@@ -127,63 +127,40 @@ export default function MyReportsPage() {
     };
 
     // 3. Sync latest issues from Supabase
-    fetchIssuesFromSupabase().then((issues) => {
-      if (issues && issues.length > 0) {
-        try {
-          const saved = window.localStorage.getItem("unicare_demo_issue_reports");
-          const current = saved ? JSON.parse(saved) : [];
-          issues.forEach((remote) => {
-            const idx = current.findIndex(
-              (l: any) => String(l.id) === remote.id || String(l.issue_id) === remote.id
-            );
-            if (idx >= 0) {
-              current[idx].status = remote.status;
-            }
-          });
-          window.localStorage.setItem("unicare_demo_issue_reports", JSON.stringify(current));
-          handleUpdate();
-        } catch {
-          // ignore
-        }
-      }
+    fetchIssuesFromSupabase().then(() => {
+      handleUpdate();
     });
 
     const channel = supabase
       .channel("unicare-user-issues-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "issues" }, () => {
-        fetchIssuesFromSupabase().then((issues) => {
-          if (issues && issues.length > 0) {
-            try {
-              const saved = window.localStorage.getItem("unicare_demo_issue_reports");
-              const current = saved ? JSON.parse(saved) : [];
-              issues.forEach((remote) => {
-                const idx = current.findIndex(
-                  (l: any) => String(l.id) === remote.id || String(l.issue_id) === remote.id
-                );
-                if (idx >= 0) {
-                  current[idx].status = remote.status;
-                }
-              });
-              window.localStorage.setItem("unicare_demo_issue_reports", JSON.stringify(current));
-              handleUpdate();
-            } catch {
-              // ignore
-            }
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "issues" },
+        async (payload) => {
+          if (payload.eventType === "DELETE") {
+            const oldId = (payload.old as any)?.id;
+            const oldTicket = (payload.old as any)?.ticket_number;
+            if (oldId) removeIssueFromLocalStorage(oldId);
+            if (oldTicket) removeIssueFromLocalStorage(oldTicket);
           }
-        });
-      })
+          await fetchIssuesFromSupabase();
+          handleUpdate();
+        }
+      )
       .subscribe();
 
     // 4. Listen to real-time updates from admin actions and user reports
     window.addEventListener("storage", handleUpdate);
     window.addEventListener("unicare-demo-reports-updated", handleUpdate);
+    window.addEventListener("unicare-issues-sync", handleUpdate);
     window.addEventListener("unicare-profile-updated", handleUpdate);
     window.addEventListener("unicare-feedbacks-updated", handleUpdate);
 
     return () => {
-      channel.unsubscribe();
+      supabase.removeChannel(channel);
       window.removeEventListener("storage", handleUpdate);
       window.removeEventListener("unicare-demo-reports-updated", handleUpdate);
+      window.removeEventListener("unicare-issues-sync", handleUpdate);
       window.removeEventListener("unicare-profile-updated", handleUpdate);
       window.removeEventListener("unicare-feedbacks-updated", handleUpdate);
     };

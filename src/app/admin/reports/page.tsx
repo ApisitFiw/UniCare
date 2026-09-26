@@ -60,8 +60,9 @@ import {
 
 import Header from "@/components/Header";
 
+import { supabase } from "@/lib/supabaseClient";
 import { addNotification } from "@/lib/notifications";
-import { updateIssueStatusInSupabase, fetchIssuesFromSupabase } from "@/lib/supabaseService";
+import { updateIssueStatusInSupabase, fetchIssuesFromSupabase, removeIssueFromLocalStorage } from "@/lib/supabaseService";
 import { getIssueReport, findIssueReport, getAllIssueReports } from "@/lib/issueReports";
 
 import {
@@ -1157,10 +1158,36 @@ export default function AdminIssuesPage() {
       // Sync with Supabase issues
       try {
         const remote = await fetchIssuesFromSupabase();
-        if (remote && remote.length > 0) {
+        if (remote !== null && Array.isArray(remote)) {
           const map = new Map<string, Report>();
+
+          const remoteCleanKeys = new Set(
+            remote.map((r) => (r.id || "").replace(/^#/, "").trim().toLowerCase())
+          );
+          const remoteNumKeys = new Set(
+            remote
+              .map((r) => {
+                const m = (r.id || "").match(/\d+$/);
+                return m ? m[0] : "";
+              })
+              .filter(Boolean)
+          );
+
           for (const item of currentList) {
             const key = getDisplayId(item).toLowerCase();
+            const numMatch = key.match(/\d+$/);
+            const num = numMatch ? parseInt(numMatch[0], 10) : 0;
+            const isRemoteSynced = key.startsWith("iss-") || num > 105;
+
+            if (isRemoteSynced) {
+              const inRemote =
+                remoteCleanKeys.has(key) ||
+                (numMatch && remoteNumKeys.has(numMatch[0]));
+              if (!inRemote) {
+                // Deleted in Supabase - remove from local view
+                continue;
+              }
+            }
             map.set(key, item);
           }
 
@@ -1255,12 +1282,30 @@ export default function AdminIssuesPage() {
       loadReports(false);
     };
 
+    const channel = supabase
+      .channel("unicare-admin-reports-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "issues" },
+        (payload) => {
+          if (payload.eventType === "DELETE") {
+            const oldId = (payload.old as any)?.id;
+            const oldTicket = (payload.old as any)?.ticket_number;
+            if (oldId) removeIssueFromLocalStorage(oldId);
+            if (oldTicket) removeIssueFromLocalStorage(oldTicket);
+          }
+          loadReports(false);
+        }
+      )
+      .subscribe();
+
     window.addEventListener("storage", refresh);
     window.addEventListener("unicare-demo-reports-updated", refresh);
     window.addEventListener("unicare-issues-sync", refresh);
     window.addEventListener("focus", refresh);
 
     return () => {
+      supabase.removeChannel(channel);
       window.removeEventListener("storage", refresh);
       window.removeEventListener("unicare-demo-reports-updated", refresh);
       window.removeEventListener("unicare-issues-sync", refresh);

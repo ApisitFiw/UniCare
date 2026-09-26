@@ -51,8 +51,8 @@ export interface SupabaseRiskArea {
  * Helper to map raw issues array from Supabase into IssueItem[]
  */
 function mapRawIssues(data: any[]): IssueItem[] {
-  const activeData = data.filter((item: any) => item.status !== 'rejected')
-  return activeData.map((item: any) => {
+  if (!Array.isArray(data)) return []
+  return data.map((item: any) => {
     // Map priority to UrgencyLevel
     let urgency: UrgencyLevel = 'ปกติ'
     if (item.priority === 'urgent' || item.priority === 'high' || item.priority === 'very_high') {
@@ -75,6 +75,8 @@ function mapRawIssues(data: any[]): IssueItem[] {
 
     return {
       id: item.ticket_number || item.id,
+      supabaseId: item.id,
+      rawId: item.id,
       date: formattedDate,
       category: item.categories?.name || item.title || 'ทั่วไป',
       area: item.risk_areas?.name || item.location_detail || 'มหาวิทยาลัยวลัยลักษณ์',
@@ -93,22 +95,145 @@ function mapRawIssues(data: any[]): IssueItem[] {
 /**
  * Cache helpers for offline resilience
  */
-function getCachedIssues(): IssueItem[] | null {
+export function getCachedIssues(): IssueItem[] | null {
   if (typeof window === 'undefined') return null
   try {
     const raw = localStorage.getItem('unicare_cached_supabase_issues')
     if (raw) {
       const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      if (Array.isArray(parsed)) return parsed
     }
   } catch {}
   return null
 }
 
-function setCachedIssues(issues: IssueItem[]) {
+export function setCachedIssues(issues: IssueItem[]) {
   if (typeof window === 'undefined') return
   try {
     localStorage.setItem('unicare_cached_supabase_issues', JSON.stringify(issues))
+  } catch {}
+}
+
+/**
+ * Purge deleted issue from all local browser storage caches immediately
+ */
+export function removeIssueFromLocalStorage(idOrTicket: string) {
+  if (typeof window === 'undefined' || !idOrTicket) return
+  const clean = String(idOrTicket).replace(/^#/, '').trim().toLowerCase()
+  const numMatch = clean.match(/\d+$/)
+  const numericPart = numMatch ? numMatch[0] : ''
+
+  // 1. Remove from cached Supabase issues
+  try {
+    const cached = localStorage.getItem('unicare_cached_supabase_issues')
+    if (cached) {
+      const list = JSON.parse(cached)
+      if (Array.isArray(list)) {
+        const updated = list.filter((item: any) => {
+          const itemId = String(item.id || '').replace(/^#/, '').trim().toLowerCase()
+          const subId = String(item.supabaseId || item.rawId || '').toLowerCase()
+          if (itemId === clean || subId === clean) return false
+          if (numericPart && itemId.endsWith(numericPart)) return false
+          return true
+        })
+        localStorage.setItem('unicare_cached_supabase_issues', JSON.stringify(updated))
+      }
+    }
+  } catch {}
+
+  // 2. Remove from unicare_demo_issue_reports
+  try {
+    const reports = localStorage.getItem('unicare_demo_issue_reports')
+    if (reports) {
+      const list = JSON.parse(reports)
+      if (Array.isArray(list)) {
+        const updated = list.filter((item: any) => {
+          const itemId = String(item.id || '').replace(/^#/, '').trim().toLowerCase()
+          const itemCode = String(item.code || '').replace(/^#/, '').trim().toLowerCase()
+          const issueId = String(item.issue_id || '').toLowerCase()
+          const subId = String(item.supabaseId || '').toLowerCase()
+          if (itemId === clean || itemCode === clean || issueId === clean || subId === clean) return false
+          if (numericPart && (itemId.endsWith(numericPart) || itemCode.endsWith(numericPart) || issueId === numericPart)) return false
+          return true
+        })
+        localStorage.setItem('unicare_demo_issue_reports', JSON.stringify(updated))
+      }
+    }
+  } catch {}
+
+  // 3. Remove from timeline
+  try {
+    const timeline = localStorage.getItem('unicare_demo_timeline_history')
+    if (timeline) {
+      const map = JSON.parse(timeline)
+      if (typeof map === 'object' && map !== null) {
+        for (const key of Object.keys(map)) {
+          const cleanKey = key.replace(/^#/, '').trim().toLowerCase()
+          if (cleanKey === clean || (numericPart && cleanKey.endsWith(numericPart))) {
+            delete map[key]
+          }
+        }
+        localStorage.setItem('unicare_demo_timeline_history', JSON.stringify(map))
+      }
+    }
+  } catch {}
+
+  // 4. Notify open windows & tabs
+  window.dispatchEvent(new Event('storage'))
+  window.dispatchEvent(new Event('unicare-demo-reports-updated'))
+  window.dispatchEvent(new Event('unicare-issues-sync'))
+}
+
+/**
+ * Reconcile local storage reports with Supabase live issues
+ * If an issue was created / synced to Supabase but is no longer in Supabase, remove it.
+ */
+export function syncSupabaseIssuesWithLocalStorage(remoteIssues: IssueItem[]) {
+  if (typeof window === 'undefined' || !Array.isArray(remoteIssues)) return
+  try {
+    const savedReports = localStorage.getItem('unicare_demo_issue_reports')
+    if (!savedReports) return
+    const currentList = JSON.parse(savedReports)
+    if (!Array.isArray(currentList) || currentList.length === 0) return
+
+    const remoteCleanKeys = new Set(
+      remoteIssues.map((r) => r.id.replace(/^#/, '').trim().toLowerCase())
+    )
+    const remoteNumKeys = new Set(
+      remoteIssues
+        .map((r) => {
+          const m = r.id.match(/\d+$/)
+          return m ? m[0] : ''
+        })
+        .filter(Boolean)
+    )
+
+    const filteredList = currentList.filter((item: any) => {
+      const itemId = String(item.id || '').replace(/^#/, '').trim().toLowerCase()
+      const itemCode = String(item.code || '').replace(/^#/, '').trim().toLowerCase()
+      const issueId = String(item.issue_id || '').toLowerCase()
+      const numMatch = (itemId || itemCode || issueId).match(/\d+$/)
+      const num = numMatch ? parseInt(numMatch[0], 10) : 0
+
+      // Only evaluate user/admin-created reports with ISS- ticket or num > 105
+      const isRemoteSyncedIssue =
+        itemId.startsWith('iss-') ||
+        itemCode.startsWith('iss-') ||
+        num > 105
+
+      if (isRemoteSyncedIssue) {
+        const existsInRemote =
+          remoteCleanKeys.has(itemId) ||
+          remoteCleanKeys.has(itemCode) ||
+          (numMatch && remoteNumKeys.has(numMatch[0]))
+        return existsInRemote
+      }
+      return true
+    })
+
+    if (filteredList.length !== currentList.length) {
+      localStorage.setItem('unicare_demo_issue_reports', JSON.stringify(filteredList))
+    }
   } catch {}
 }
 
@@ -123,9 +248,10 @@ export async function fetchIssuesFromSupabase(): Promise<IssueItem[] | null> {
   try {
     const { data, error } = await supabase.from('issues').select(query).order('created_at', { ascending: false })
 
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       const mapped = mapRawIssues(data)
       setCachedIssues(mapped)
+      syncSupabaseIssuesWithLocalStorage(mapped)
       return mapped
     }
 
@@ -161,9 +287,10 @@ export async function fetchIssuesFromSupabase(): Promise<IssueItem[] | null> {
       })
       if (res.ok) {
         const raw = await res.json()
-        if (Array.isArray(raw) && raw.length > 0) {
+        if (Array.isArray(raw)) {
           const mapped = mapRawIssues(raw)
           setCachedIssues(mapped)
+          syncSupabaseIssuesWithLocalStorage(mapped)
           return mapped
         }
       }
@@ -172,13 +299,13 @@ export async function fetchIssuesFromSupabase(): Promise<IssueItem[] | null> {
     }
   }
 
-  // 3. Fallback to cached Supabase issues in localStorage
+  // 3. Fallback to cached Supabase issues in localStorage only if network failed
   const cached = getCachedIssues()
-  if (cached && cached.length > 0) {
+  if (cached) {
     return cached
   }
 
-  return null
+  return []
 }
 
 /**
@@ -696,5 +823,33 @@ export async function fetchProfileByEmailFromSupabase(email: string): Promise<Su
     return data as SupabaseProfile
   } catch {
     return null
+  }
+}
+
+/**
+ * Delete an issue from Supabase and clear local cache
+ */
+export async function deleteIssueFromSupabase(ticketOrId: string): Promise<boolean> {
+  try {
+    const cleanTicket = ticketOrId.replace(/^#/, '').trim()
+    // 1. Delete from Supabase issues table by ticket_number
+    const { error: ticketError } = await supabase.from('issues').delete().eq('ticket_number', cleanTicket)
+    if (!ticketError) {
+      removeIssueFromLocalStorage(cleanTicket)
+      return true
+    }
+
+    // 2. Fallback: delete by id (UUID)
+    const { error: idError } = await supabase.from('issues').delete().eq('id', ticketOrId)
+    if (!idError) {
+      removeIssueFromLocalStorage(cleanTicket)
+      return true
+    }
+
+    console.warn('deleteIssueFromSupabase errors:', ticketError?.message, idError?.message)
+    return false
+  } catch (err) {
+    console.warn('deleteIssueFromSupabase failed:', err)
+    return false
   }
 }

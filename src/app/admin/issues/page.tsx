@@ -51,6 +51,7 @@ import {
   updateIssueStatusInSupabase,
   createIssueInSupabase,
   fetchIssuesFromSupabase,
+  removeIssueFromLocalStorage,
 } from '@/lib/supabaseService'
 
 function IssuesUrlWatcher({
@@ -192,6 +193,29 @@ export default function StatusTrackingPage() {
     }
   }, [toastMessage])
 
+  const syncWithSupabase = useCallback(async () => {
+    try {
+      const remote = await fetchIssuesFromSupabase()
+      if (remote !== null && Array.isArray(remote)) {
+        setIssues(() => {
+          const map = new Map<string, IssueItem>()
+          // 1. Initial mock issues as baseline
+          for (const m of initialMockIssues) {
+            map.set(m.id.replace(/^#/, "").trim(), m)
+          }
+          // 2. Remote Supabase issues ALWAYS take precedence
+          for (const r of remote) {
+            const cleanId = r.id.replace(/^#/, "").trim()
+            map.set(cleanId, r)
+          }
+          return sortIssuesLatestFirst(Array.from(map.values()))
+        })
+      }
+    } catch (err) {
+      console.warn("Supabase issues sync error:", err)
+    }
+  }, [])
+
   // Load saved history & issues from localStorage and Supabase
   useEffect(() => {
     const loadData = () => {
@@ -274,17 +298,13 @@ export default function StatusTrackingPage() {
                 }
               })
 
-            setIssues((prev) => {
+            setIssues(() => {
               const map = new Map<string, IssueItem>()
               // 1. Initial mock issues
               for (const m of initialMockIssues) {
                 map.set(m.id.replace(/^#/, "").trim(), m)
               }
-              // 2. Previous items in state (preserving remote Supabase issues)
-              for (const p of prev) {
-                map.set(p.id.replace(/^#/, "").trim(), p)
-              }
-              // 3. Local mapped items
+              // 2. Local mapped items
               for (const l of mappedFromLocal) {
                 map.set(l.id.replace(/^#/, "").trim(), l)
               }
@@ -297,29 +317,6 @@ export default function StatusTrackingPage() {
       }
     }
 
-    const syncWithSupabase = async () => {
-      try {
-        const remote = await fetchIssuesFromSupabase()
-        if (remote && remote.length > 0) {
-          setIssues((prev) => {
-            const map = new Map<string, IssueItem>()
-            for (const item of prev) {
-              const cleanId = item.id.replace(/^#/, "").trim()
-              map.set(cleanId, item)
-            }
-            // Supabase remote issues take precedence
-            for (const r of remote) {
-              const cleanId = r.id.replace(/^#/, "").trim()
-              map.set(cleanId, r)
-            }
-            return sortIssuesLatestFirst(Array.from(map.values()))
-          })
-        }
-      } catch (err) {
-        console.warn("Supabase issues sync error:", err)
-      }
-    }
-
     const syncAll = async () => {
       loadData()
       await syncWithSupabase()
@@ -329,9 +326,28 @@ export default function StatusTrackingPage() {
 
     const channel = supabase
       .channel("unicare-issues-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "issues" }, () => {
-        syncAll()
-      })
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "issues" },
+        async (payload) => {
+          if (payload.eventType === "DELETE") {
+            const oldId = (payload.old as any)?.id
+            const oldTicket = (payload.old as any)?.ticket_number
+            if (oldId) removeIssueFromLocalStorage(oldId)
+            if (oldTicket) removeIssueFromLocalStorage(oldTicket)
+
+            setIssues((prev) => {
+              return prev.filter((item) => {
+                const cleanId = item.id.replace(/^#/, "").trim().toLowerCase()
+                if (oldTicket && cleanId === String(oldTicket).replace(/^#/, "").trim().toLowerCase()) return false
+                if (oldId && (item.supabaseId === oldId || item.rawId === oldId || cleanId === String(oldId).toLowerCase())) return false
+                return true
+              })
+            })
+          }
+          await syncWithSupabase()
+        }
+      )
       .subscribe()
 
     window.addEventListener("storage", syncAll)
@@ -348,27 +364,14 @@ export default function StatusTrackingPage() {
       window.removeEventListener("unicare-profile-updated", syncAll)
       window.removeEventListener("unicare-demo-users-updated", syncAll)
     }
-  }, [])
+  }, [syncWithSupabase])
 
   const [isSyncing, setIsSyncing] = useState<boolean>(false)
 
   const handleManualRefresh = async () => {
     setIsSyncing(true)
     try {
-      const savedReports = window.localStorage.getItem("unicare_demo_issue_reports")
-      if (savedReports) {
-        // trigger storage reload
-        window.dispatchEvent(new Event("storage"))
-      }
-      const remote = await fetchIssuesFromSupabase()
-      if (remote && remote.length > 0) {
-        setIssues((prev) => {
-          const map = new Map<string, IssueItem>()
-          for (const item of prev) map.set(item.id.replace(/^#/, "").trim(), item)
-          for (const r of remote) map.set(r.id.replace(/^#/, "").trim(), r)
-          return sortIssuesLatestFirst(Array.from(map.values()))
-        })
-      }
+      await syncWithSupabase()
       setToastMessage("ดึงข้อมูลล่าสุดจาก Supabase สำเร็จแล้ว")
     } catch {
       // Ignore
