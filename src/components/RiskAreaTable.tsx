@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, MapPin, RotateCcw, Search, Edit3, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, RotateCcw, Search, Edit3, Trash2, Info, X } from "lucide-react";
 
 export type RiskArea = {
     id: number | string;
@@ -34,6 +34,7 @@ export default function RiskAreaTable({
     const [search, setSearch] = useState("");
     const [currentPage, setCurrentPage] = useState<number>(1);
     const [pageInput, setPageInput] = useState<string>("");
+    const [viewAreaDetail, setViewAreaDetail] = useState<RiskArea | null>(null);
     const ITEMS_PER_PAGE = 5;
 
     const filteredAreas = useMemo(() => {
@@ -190,7 +191,6 @@ export default function RiskAreaTable({
                             <th>ลำดับ</th>
                             <th>สถานที่ / พิกัด</th>
                             <th>ปัญหา / สถานะ</th>
-                            <th>ระดับความเสี่ยง</th>
                             <th>จัดการ</th>
                         </tr>
                     </thead>
@@ -201,7 +201,7 @@ export default function RiskAreaTable({
 
                             <tr>
                                 <td
-                                    colSpan={5}
+                                    colSpan={4}
                                     style={{
                                         textAlign: "center",
                                         padding: "30px",
@@ -287,27 +287,19 @@ export default function RiskAreaTable({
                                         </td>
 
                                         <td>
-                                            {(!area.issueCount || area.issueCount === 0) ? (
-                                                <span
-                                                    className="risk-badge normal"
-                                                    style={{ background: "#e0f2fe", color: "#0369a1", borderColor: "#bae6fd" }}
-                                                >
-                                                    ปักหมุดแล้ว
-                                                </span>
-                                            ) : (
-                                                <span
-                                                    className={getLevelClass(
-                                                        area.level
-                                                    )}
-                                                >
-                                                    {area.level}
-                                                </span>
-                                            )}
-                                        </td>
-
-                                        <td>
 
                                             <div className="actions">
+
+                                                <button
+                                                    className="action-btn"
+                                                    title="ดูรายละเอียดจุดปักหมุด"
+                                                    onClick={() =>
+                                                        setViewAreaDetail(area)
+                                                    }
+                                                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#0284c7" }}
+                                                >
+                                                    <Info className="w-3.5 h-3.5" />
+                                                </button>
 
                                                 <button
                                                     className="action-btn edit"
@@ -428,6 +420,115 @@ export default function RiskAreaTable({
                     </form>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Pinned Location Detail Modal */}
+            {viewAreaDetail && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-xs"
+                onClick={() => setViewAreaDetail(null)}
+              >
+                <div
+                  role="dialog"
+                  aria-modal="true"
+                  className="w-full max-w-md overflow-hidden rounded-3xl border border-white/60 bg-white shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-700" />
+
+                  <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
+                        <MapPin className="h-4 w-4" />
+                      </span>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-800">
+                          รายละเอียดจุดปักหมุด
+                        </h3>
+                        <p className="text-[10px] text-slate-400">
+                          พิกัดและสถานะของสถานที่
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setViewAreaDetail(null)}
+                      className="rounded-full bg-slate-100 p-1.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="p-6 space-y-3.5 text-xs text-slate-700">
+                    <div>
+                      <span className="text-[11px] font-semibold text-slate-400">ชื่อสถานที่:</span>
+                      <p className="text-sm font-bold text-slate-800 mt-0.5">{viewAreaDetail.name}</p>
+                    </div>
+
+                    {viewAreaDetail.category && (
+                      <div>
+                        <span className="text-[11px] font-semibold text-slate-400">หมวดหมู่:</span>
+                        <p className="mt-0.5">
+                          <span className="inline-block bg-emerald-50 text-emerald-800 px-2.5 py-0.5 rounded-full font-medium border border-emerald-100">
+                            {viewAreaDetail.category}
+                          </span>
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                      <div>
+                        <span className="text-[10px] font-semibold text-slate-400">ละติจูด (Lat):</span>
+                        <p className="font-mono font-medium text-slate-800 mt-0.5">{viewAreaDetail.lat}</p>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-semibold text-slate-400">ลองจิจูด (Lng):</span>
+                        <p className="font-mono font-medium text-slate-800 mt-0.5">{viewAreaDetail.lng}</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] font-semibold text-slate-400">ปัญหา / สถานะในพื้นที่:</span>
+                      <p className="mt-1 p-3 bg-slate-50 rounded-xl border border-slate-100 leading-relaxed">
+                        {viewAreaDetail.issueCount && viewAreaDetail.issueCount > 0 ? (
+                          <>
+                            <span className="inline-block bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full font-bold mr-1.5 text-[11px]">
+                              {viewAreaDetail.issueCount} เรื่อง
+                            </span>
+                            {viewAreaDetail.problem}
+                          </>
+                        ) : (
+                          <span className="text-slate-500">
+                            จุดปักหมุดพร้อมใช้งาน (ยังไม่มีรายงานปัญหาในบริเวณนี้)
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 px-6 py-3 text-right border-t border-slate-100 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = viewAreaDetail;
+                        setViewAreaDetail(null);
+                        onEdit(target);
+                      }}
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 cursor-pointer"
+                    >
+                      แก้ไขพิกัด
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewAreaDetail(null)}
+                      className="rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 cursor-pointer"
+                    >
+                      ปิด
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 

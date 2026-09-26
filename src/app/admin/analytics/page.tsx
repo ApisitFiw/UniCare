@@ -60,7 +60,7 @@ interface HotspotDetail {
   area: string;
   mainIssue: string;
   cases: number;
-  severity: "High" | "Medium" | "Low";
+  severity: "เร่งด่วนมาก" | "เร่งด่วน" | "ปกติ" | "High" | "Medium" | "Low";
   avgTime: string;
   riskText: string;
   riskColor: string;
@@ -339,7 +339,7 @@ export default function AnalyticsDashboardPage() {
         area: item.name,
         mainIssue: item.primaryProblem || "มีปัญหาในพื้นที่",
         cases: item.issueCount,
-        severity: isHigh ? "High" : isMedium ? "Medium" : "Low",
+        severity: isHigh ? "เร่งด่วนมาก" : isMedium ? "เร่งด่วน" : "ปกติ",
         avgTime: isHigh ? "45 นาที" : isMedium ? "2 ชั่วโมง" : "4 ชั่วโมง",
         riskText: isHigh ? "สูงมาก" : isMedium ? "ปานกลาง" : "ปกติ",
         riskColor: isHigh ? "text-rose-600" : isMedium ? "text-amber-600" : "text-emerald-600",
@@ -349,9 +349,9 @@ export default function AnalyticsDashboardPage() {
     });
   }, [issues]);
 
-  const highRiskCount = hotspotList.filter((h) => h.severity === "High").length;
-  const mediumRiskCount = hotspotList.filter((h) => h.severity === "Medium").length;
-  const lowRiskCount = hotspotList.filter((h) => h.severity === "Low").length;
+  const highRiskCount = hotspotList.filter((h) => h.severity === "เร่งด่วนมาก" || h.severity === "High").length;
+  const mediumRiskCount = hotspotList.filter((h) => h.severity === "เร่งด่วน" || h.severity === "Medium").length;
+  const lowRiskCount = hotspotList.filter((h) => h.severity === "ปกติ" || h.severity === "Low").length;
 
   return (
     <div className="min-h-screen bg-[#f4f7f5] text-slate-800 antialiased font-['Prompt',sans-serif]">
@@ -714,7 +714,6 @@ export default function AnalyticsDashboardPage() {
                     <th className="py-2.5 px-3">จำนวนเคสสะสม</th>
                     <th className="py-2.5 px-3">ความเร่งด่วนเฉลี่ย</th>
                     <th className="py-2.5 px-3">เวลาเฉลี่ยแก้ไข</th>
-                    <th className="py-2.5 px-3">ระดับความเสี่ยง</th>
                     <th className="py-2.5 px-3 text-center">จัดการเคส</th>
                   </tr>
                 </thead>
@@ -734,9 +733,9 @@ export default function AnalyticsDashboardPage() {
                       <td className="py-3 px-3">
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                            item.severity === "High"
+                            item.severity === "เร่งด่วนมาก" || item.severity === "High"
                               ? "bg-rose-50 text-rose-700 border-rose-200"
-                              : item.severity === "Medium"
+                              : item.severity === "เร่งด่วน" || item.severity === "Medium"
                                 ? "bg-amber-50 text-amber-700 border-amber-200"
                                 : "bg-emerald-50 text-emerald-700 border-emerald-200"
                           }`}
@@ -745,18 +744,6 @@ export default function AnalyticsDashboardPage() {
                         </span>
                       </td>
                       <td className="py-3 px-3">{item.avgTime}</td>
-                      <td className="py-3 px-3">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
-                          item.severity === "High"
-                            ? "bg-rose-50 text-rose-700 border-rose-200"
-                            : item.severity === "Medium"
-                              ? "bg-amber-50 text-amber-700 border-amber-200"
-                              : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${item.severity === "High" ? "bg-rose-500" : item.severity === "Medium" ? "bg-amber-500" : "bg-emerald-500"}`}></span>
-                          <span>{item.riskText}</span>
-                        </span>
-                      </td>
                       <td className="py-3 px-3 text-center">
                         {item.topIssueId ? (
                           <Link
@@ -866,7 +853,6 @@ export default function AnalyticsDashboardPage() {
                         <th className="py-3 px-4 font-semibold text-slate-700">จำนวนเคส</th>
                         <th className="py-3 px-4 font-semibold text-slate-700">ความเร่งด่วน</th>
                         <th className="py-3 px-4 font-semibold text-slate-700">เวลาเฉลี่ย</th>
-                        <th className="py-3 px-4 font-semibold text-slate-700">ความเสี่ยง</th>
                         <th className="py-3 px-4 font-semibold text-slate-700 text-center">การดำเนินการ</th>
                       </tr>
                     </thead>
@@ -889,9 +875,9 @@ export default function AnalyticsDashboardPage() {
                           <td className="py-3 px-4">
                             <span
                               className={`px-2 py-1 rounded font-semibold ${
-                                row.severity === "High"
+                                row.severity === "เร่งด่วนมาก" || row.severity === "High"
                                   ? "bg-rose-100 text-rose-700"
-                                  : row.severity === "Medium"
+                                  : row.severity === "เร่งด่วน" || row.severity === "Medium"
                                     ? "bg-amber-100 text-amber-700"
                                     : "bg-emerald-100 text-emerald-700"
                               }`}
@@ -900,18 +886,6 @@ export default function AnalyticsDashboardPage() {
                             </span>
                           </td>
                           <td className="py-3 px-4 text-slate-500">{row.avgTime}</td>
-                          <td className="py-3 px-4">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
-                              row.severity === "High"
-                                ? "bg-rose-50 text-rose-700 border-rose-200"
-                                : row.severity === "Medium"
-                                  ? "bg-amber-50 text-amber-700 border-amber-200"
-                                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                            }`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${row.severity === "High" ? "bg-rose-500" : row.severity === "Medium" ? "bg-amber-500" : "bg-emerald-500"}`}></span>
-                              <span>{row.riskText}</span>
-                            </span>
-                          </td>
                           <td className="py-3 px-4 text-center">
                             {row.topIssueId ? (
                               <Link

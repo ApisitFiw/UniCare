@@ -33,6 +33,9 @@ interface UserReportItem {
   description: string;
   status: "pending" | "in_progress" | "resolved" | "rejected";
   statusLabel: string;
+  reporterName?: string;
+  reporterEmail?: string;
+  adminName?: string;
 }
 
 export default function MyReportsPage() {
@@ -93,6 +96,9 @@ export default function MyReportsPage() {
         description: item.description,
         status: statusKey,
         statusLabel,
+        reporterName: item.reporterName,
+        reporterEmail: item.reporterEmail,
+        adminName: item.adminName,
       };
     });
 
@@ -182,6 +188,19 @@ export default function MyReportsPage() {
       window.removeEventListener("unicare-feedbacks-updated", handleUpdate);
     };
   }, [loadReports, router]);
+
+  // Auto-open chat drawer if ?chat=... query param is present
+  useEffect(() => {
+    if (typeof window === "undefined" || reports.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const chatReportId = params.get("chat");
+    if (chatReportId) {
+      const found = reports.find((r) => String(r.id) === String(chatReportId));
+      if (found) {
+        setActiveChatReport(found);
+      }
+    }
+  }, [reports]);
 
   return (
     <div className="bg-[#f4f7f5] text-slate-800 antialiased min-h-screen flex font-['Prompt',sans-serif]">
@@ -364,7 +383,11 @@ export default function MyReportsPage() {
         reportTitle={activeChatReport ? `${activeChatReport.category} - ${activeChatReport.area}` : undefined}
         onClose={() => setActiveChatReport(null)}
         currentUserRole="user"
-        currentUserName={userName ? `${userName} (ผู้แจ้ง)` : "กิตติภูมิ (ผู้แจ้ง)"}
+        currentUserName={userName || getDemoSession()?.name || "ผู้แจ้ง"}
+        currentUserId={getDemoSession()?.email || getDemoSession()?.id || "user"}
+        reporterName={activeChatReport?.reporterName || userName}
+        reporterEmail={activeChatReport?.reporterEmail || getDemoSession()?.email}
+        assignedAdminName={activeChatReport?.adminName}
       />
     </div>
   );

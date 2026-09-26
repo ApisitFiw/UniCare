@@ -168,56 +168,64 @@ export default function UserDashboardPage() {
       typeof setTimeout
     > | null = null;
 
-    function scrollToCurrentHash() {
-      const hash =
-        window.location.hash;
+    function handleScrollToTarget(elementId: string) {
+      if (!elementId) return;
 
-      if (!hash) return;
-
-      const elementId =
-        decodeURIComponent(
-          hash.substring(1),
-        );
-
-      /*
-       * ยกเลิก Timer เดิม
-       * ป้องกันการเลื่อนซ้ำ
-       */
       if (scrollTimer) {
         clearTimeout(scrollTimer);
       }
 
-      /*
-       * รอ 250ms ให้หน้าและข้อมูล
-       * แสดงเรียบร้อยก่อนเริ่มเลื่อน
-       */
       scrollTimer = setTimeout(() => {
-        const target =
-          document.getElementById(
-            elementId,
-          );
-
-        if (!target) return;
+        let target = document.getElementById(elementId);
+        if (!target) {
+          setTimeout(() => {
+            target = document.getElementById(elementId);
+            if (target) {
+              target.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              });
+            }
+          }, 250);
+          return;
+        }
 
         target.scrollIntoView({
           behavior: "smooth",
           block: "start",
         });
-      }, 250);
+      }, 200);
     }
 
-    scrollToCurrentHash();
+    function scrollToCurrentHash() {
+      const hash = window.location.hash;
+      if (!hash) return;
 
-    window.addEventListener(
-      "hashchange",
-      scrollToCurrentHash,
-    );
+      const elementId = decodeURIComponent(hash.substring(1));
+      handleScrollToTarget(elementId);
+    }
+
+    const storedTarget = typeof window !== "undefined" ? sessionStorage.getItem("unicare-scroll-target") : null;
+    if (storedTarget) {
+      sessionStorage.removeItem("unicare-scroll-target");
+      handleScrollToTarget(storedTarget);
+    } else {
+      scrollToCurrentHash();
+    }
+
+    const handleCustomHighlight = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.target) {
+        handleScrollToTarget(detail.target);
+      }
+    };
+
+    window.addEventListener("hashchange", scrollToCurrentHash);
+    window.addEventListener("unicare-highlight-section", handleCustomHighlight);
 
     return () => {
-      window.removeEventListener(
-        "hashchange",
-        scrollToCurrentHash,
-      );
+      window.removeEventListener("hashchange", scrollToCurrentHash);
+      window.removeEventListener("unicare-highlight-section", handleCustomHighlight);
 
       if (scrollTimer) {
         clearTimeout(scrollTimer);
