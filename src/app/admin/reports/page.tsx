@@ -62,7 +62,7 @@ import Header from "@/components/Header";
 
 import { supabase } from "@/lib/supabaseClient";
 import { addNotification } from "@/lib/notifications";
-import { updateIssueStatusInSupabase, fetchIssuesFromSupabase, removeIssueFromLocalStorage } from "@/lib/supabaseService";
+import { updateIssueStatusInSupabase, fetchIssuesFromSupabase, removeIssueFromLocalStorage, addTimelineEntryToSupabase } from "@/lib/supabaseService";
 import { getIssueReport, findIssueReport, getAllIssueReports } from "@/lib/issueReports";
 
 import {
@@ -1223,12 +1223,26 @@ export default function AdminIssuesPage() {
     if (isAccept) {
       try {
         await updateIssueStatusInSupabase(displayId, "in_progress", adminName, fallbackData);
+        await addTimelineEntryToSupabase({
+          ticketNumberOrId: displayId,
+          statusText: "รับเรื่องและเปลี่ยนสถานะเป็น: กำลังดำเนินการ",
+          note: "เจ้าหน้าที่รับเรื่องเรียบร้อยและเริ่มดำเนินการตรวจสอบแก้ไข",
+          authorName: adminName,
+          changedStatus: "in_progress",
+        });
       } catch (err) {
         console.warn("Supabase issue update error:", err);
       }
     } else if (isRejection) {
       try {
         await updateIssueStatusInSupabase(displayId, "rejected", adminName, fallbackData);
+        await addTimelineEntryToSupabase({
+          ticketNumberOrId: displayId,
+          statusText: "ปฏิเสธเรื่องร้องเรียน",
+          note: report.rejection_reason || "เรื่องร้องเรียนไม่ตรงตามเงื่อนไขหรือไม่สามารถดำเนินการได้",
+          authorName: adminName,
+          changedStatus: "rejected",
+        });
       } catch (err) {
         console.warn("Supabase issue update error:", err);
       }

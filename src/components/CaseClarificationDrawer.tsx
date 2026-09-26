@@ -10,21 +10,34 @@ import {
   Loader2,
   WifiOff,
   MessageSquare,
+  Paperclip,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { addNotification } from '@/lib/notifications'
 import { getDemoSession } from '@/lib/authService'
 import { getUserAllIssues, getAllCurrentIssues } from '@/lib/issuesData'
 
-export interface TicketMessage {
+/**
+ * Interface representing an Issue Comment conforming to DataTable/issue_comments.txt
+ * (id, issue_id, sender_id, message, attachment_url, attachment_name, created_at)
+ */
+export interface IssueComment {
   id: string
-  report_id: string
-  sender_role: 'admin' | 'user'
-  sender_id?: string
-  sender_name?: string
+  issue_id: string
+  sender_id?: string | null
   message: string
+  attachment_url?: string | null
+  attachment_name?: string | null
   created_at: string
+  // Display helper metadata
+  sender_role?: 'admin' | 'user'
+  sender_name?: string
+  sender_avatar?: string | null
 }
+
+// Backward-compatible type alias
+export type TicketMessage = IssueComment
 
 export interface CaseClarificationDrawerProps {
   isOpen: boolean
@@ -43,14 +56,19 @@ export interface CaseClarificationDrawerProps {
 
 /**
  * Extracts sender metadata if stored inside message as <!--sender:{...}-->
- * and falls back to context defaults (reporterName or assignedAdminName)
+ * and falls back to profile join or context defaults
  */
-export function parseTicketMessage(
-  raw: TicketMessage,
-  defaults?: { reporterName?: string; assignedAdminName?: string }
-): TicketMessage {
+export function parseIssueComment(
+  raw: any,
+  defaults?: {
+    reporterName?: string
+    assignedAdminName?: string
+    senderProfile?: { id?: string; full_name?: string; role?: string; email?: string } | null
+  }
+): IssueComment {
   let cleanMessage = raw.message || ''
-  let senderName = raw.sender_name
+  let senderName = raw.sender?.full_name || defaults?.senderProfile?.full_name || raw.sender_name
+  let senderRole = raw.sender?.role || defaults?.senderProfile?.role || raw.sender_role
   let senderId = raw.sender_id
 
   if (cleanMessage.startsWith('<!--sender:')) {
@@ -59,8 +77,9 @@ export function parseTicketMessage(
       try {
         const jsonStr = cleanMessage.substring('<!--sender:'.length, endIdx)
         const meta = JSON.parse(jsonStr)
-        if (meta.name) senderName = meta.name
-        if (meta.id) senderId = meta.id
+        if (meta.name && !senderName) senderName = meta.name
+        if (meta.id && !senderId) senderId = meta.id
+        if (meta.role && !senderRole) senderRole = meta.role
         cleanMessage = cleanMessage.substring(endIdx + 3)
       } catch {
         // ignore parse error
@@ -68,9 +87,13 @@ export function parseTicketMessage(
     }
   }
 
+  // Normalize sender role
+  const normalizedSenderRole: 'admin' | 'user' =
+    String(senderRole || '').toLowerCase() === 'admin' ? 'admin' : 'user'
+
   // Fallbacks if senderName is still not set
   if (!senderName) {
-    if (raw.sender_role === 'admin') {
+    if (normalizedSenderRole === 'admin') {
       senderName = defaults?.assignedAdminName || 'เจ้าหน้าที่ / Admin'
     } else {
       senderName = defaults?.reporterName || 'ผู้แจ้งเรื่อง (User)'
@@ -78,12 +101,21 @@ export function parseTicketMessage(
   }
 
   return {
-    ...raw,
+    id: raw.id,
+    issue_id: raw.issue_id,
+    sender_id: senderId || null,
     message: cleanMessage,
+    attachment_url: raw.attachment_url || null,
+    attachment_name: raw.attachment_name || null,
+    created_at: raw.created_at || new Date().toISOString(),
     sender_name: senderName,
-    sender_id: senderId,
+    sender_role: normalizedSenderRole,
+    sender_avatar: raw.sender?.avatar_url || null,
   }
 }
+
+// Backward-compatible alias
+export const parseTicketMessage = parseIssueComment
 
 export default function CaseClarificationDrawer({
   isOpen,
@@ -105,8 +137,10 @@ export default function CaseClarificationDrawer({
   const activeReportId = reportId || issueId || null
   const activeTitle = reportTitle || issueTitle || ''
 
-  const [messages, setMessages] = useState<TicketMessage[]>([])
+  const [messages, setMessages] = useState<IssueComment[]>([])
   const [newMessageText, setNewMessageText] = useState('')
+  const [attachment, setAttachment] = useState<{ name: string; url: string; type: string } | null>(null)
+  const [resolvedIssueUuid, setResolvedIssueUuid] = useState<string | null>(null)
   const [loading, setLoading] = useState<boolean>(false)
   const [isSending, setIsSending] = useState<boolean>(false)
   const [isUnauthorized, setIsUnauthorized] = useState<boolean>(false)
@@ -114,12 +148,15 @@ export default function CaseClarificationDrawer({
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // 1. Fetch existing messages and subscribe to Realtime updates
+  // 1. Fetch existing messages from issue_comments and subscribe to Realtime updates
   useEffect(() => {
     if (!isOpen || !activeReportId) {
       setMessages([])
+      setResolvedIssueUuid(null)
       setIsUnauthorized(false)
+      setAttachment(null)
       return
     }
 
@@ -160,69 +197,138 @@ export default function CaseClarificationDrawer({
     }
     setIsUnauthorized(false)
 
-    async function fetchMessages() {
+    // Resolve issue UUID from issues table
+    async function loadComments() {
       setLoading(true)
       try {
+        const cleanId = currentId.replace(/^#/, '').trim()
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId)
+
+        let targetUuid: string | null = isUuid ? cleanId : null
+        if (!targetUuid) {
+          const formattedTicket = !cleanId.startsWith('ISS-') && /^\d+$/.test(cleanId)
+            ? `ISS-2026-${cleanId.padStart(3, '0')}`
+            : cleanId
+
+          const { data: issueRows } = await supabase
+            .from('issues')
+            .select('id, ticket_number')
+            .or(`ticket_number.eq.${cleanId},ticket_number.eq.${formattedTicket}`)
+            .limit(1)
+
+          targetUuid = issueRows?.[0]?.id || null
+        }
+
+        if (isMounted) {
+          setResolvedIssueUuid(targetUuid)
+        }
+
+        if (!targetUuid) {
+          // If no remote issue UUID found yet
+          setLoading(false)
+          return
+        }
+
+        // Fetch comments conforming to issue_comments table
         const { data, error } = await supabase
-          .from('ticket_messages')
-          .select('*')
-          .eq('report_id', currentId)
+          .from('issue_comments')
+          .select('*, sender:profiles!sender_id(id, full_name, email, role, avatar_url)')
+          .eq('issue_id', targetUuid)
           .order('created_at', { ascending: true })
 
         if (!error && data && isMounted) {
-          const parsed = (data as TicketMessage[]).map((m) =>
-            parseTicketMessage(m, { reporterName, assignedAdminName })
+          const parsed = data.map((m: any) =>
+            parseIssueComment(m, { reporterName, assignedAdminName })
           )
           setMessages(parsed)
+        } else if (error) {
+          console.warn('issue_comments query error:', error.message)
         }
       } catch (err) {
-        console.error('Error fetching ticket messages:', err)
+        console.error('Error fetching issue comments:', err)
       } finally {
         if (isMounted) setLoading(false)
       }
     }
 
-    fetchMessages()
+    loadComments()
 
-    // Setup Supabase Realtime Channel
+    // Setup Supabase Realtime Channel on issue_comments
     setRealtimeStatus('connecting')
-    const channelName = `ticket_messages_channel_${currentId}_${Date.now()}`
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'ticket_messages',
-          filter: `report_id=eq.${currentId}`,
-        },
-        (payload) => {
-          if (!isMounted) return
-          const newRow = parseTicketMessage(payload.new as TicketMessage, {
-            reporterName,
-            assignedAdminName,
-          })
+    let channel: any = null
 
-          setMessages((prev) => {
-            // Deduplicate if already present (e.g. from optimistic UI)
-            if (prev.some((m) => m.id === newRow.id)) return prev
-            return [...prev, newRow]
-          })
-        }
-      )
-      .subscribe((status) => {
-        if (!isMounted) return
-        if (status === 'SUBSCRIBED') {
-          setRealtimeStatus('connected')
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          setRealtimeStatus('disconnected')
-        }
-      })
+    // We set up the realtime channel once the UUID is known or by currentId
+    const setupRealtime = async () => {
+      const cleanId = currentId.replace(/^#/, '').trim()
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId)
+      let targetUuid: string | null = isUuid ? cleanId : null
+
+      if (!targetUuid) {
+        const formattedTicket = !cleanId.startsWith('ISS-') && /^\d+$/.test(cleanId)
+          ? `ISS-2026-${cleanId.padStart(3, '0')}`
+          : cleanId
+        const { data } = await supabase
+          .from('issues')
+          .select('id')
+          .or(`ticket_number.eq.${cleanId},ticket_number.eq.${formattedTicket}`)
+          .limit(1)
+        targetUuid = data?.[0]?.id || null
+      }
+
+      if (!isMounted || !targetUuid) return
+
+      const channelName = `issue_comments_channel_${targetUuid}_${Date.now()}`
+      channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'issue_comments',
+            filter: `issue_id=eq.${targetUuid}`,
+          },
+          async (payload) => {
+            if (!isMounted) return
+            let senderProfile = null
+            if (payload.new.sender_id) {
+              const { data: p } = await supabase
+                .from('profiles')
+                .select('id, full_name, email, role, avatar_url')
+                .eq('id', payload.new.sender_id)
+                .maybeSingle()
+              senderProfile = p
+            }
+
+            const newRow = parseIssueComment(payload.new, {
+              reporterName,
+              assignedAdminName,
+              senderProfile,
+            })
+
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newRow.id)) return prev
+              return [...prev, newRow]
+            })
+          }
+        )
+        .subscribe((status) => {
+          if (!isMounted) return
+          if (status === 'SUBSCRIBED') {
+            setRealtimeStatus('connected')
+          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+            setRealtimeStatus('disconnected')
+          }
+        })
+    }
+
+    setupRealtime()
 
     return () => {
       isMounted = false
-      supabase.removeChannel(channel)
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
     }
   }, [isOpen, activeReportId, reporterName, assignedAdminName])
 
@@ -253,20 +359,44 @@ export default function CaseClarificationDrawer({
     try {
       const d = new Date(dateStr)
       if (isNaN(d.getTime())) return 'เมื่อสักครู่'
-      return d.toLocaleTimeString('th-TH', {
-        hour: '2-digit',
-        minute: '2-digit',
-      }) + ' น.'
+      return (
+        d.toLocaleTimeString('th-TH', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }) + ' น.'
+      )
     } catch {
       return 'เมื่อสักครู่'
     }
   }
 
-  // 2. Send new message to Supabase
+  // Handle Attachment Selection
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Limit to 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      alert('ขนาดไฟล์ต้องไม่เกิน 5 MB')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      setAttachment({
+        name: file.name,
+        url: reader.result as string,
+        type: file.type,
+      })
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // 2. Send new comment to issue_comments table in Supabase
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     const trimmed = newMessageText.trim()
-    if (!trimmed || isSending) return
+    if ((!trimmed && !attachment) || isSending) return
 
     const currentId = String(activeReportId)
     const tempId = `temp-${Date.now()}`
@@ -275,26 +405,72 @@ export default function CaseClarificationDrawer({
       currentUserName ||
       (normalizedRole === 'admin' ? 'เจ้าหน้าที่ (Admin)' : 'ผู้แจ้งเรื่อง (User)')
 
-    // Optimistic message to display instantly
-    const optimisticMsg: TicketMessage = {
+    // Optimistic comment to display instantly
+    const optimisticMsg: IssueComment = {
       id: tempId,
-      report_id: currentId,
+      issue_id: resolvedIssueUuid || currentId,
       sender_role: normalizedRole,
-      sender_id: currentUserId,
+      sender_id: currentUserId || null,
       sender_name: senderDisplayName,
       message: trimmed,
+      attachment_url: attachment?.url || null,
+      attachment_name: attachment?.name || null,
       created_at: tempCreatedAt,
     }
 
     setMessages((prev) => [...prev, optimisticMsg])
+    const sentAttachment = attachment
     setNewMessageText('')
+    setAttachment(null)
     setIsSending(true)
 
     // Trigger immediate scroll on send
     setTimeout(() => scrollToBottom('smooth'), 10)
 
     try {
-      // Embed metadata into message string so all clients get real sender info
+      // 1. Resolve issue UUID if not yet resolved
+      let targetIssueUuid = resolvedIssueUuid
+      if (!targetIssueUuid) {
+        const cleanId = currentId.replace(/^#/, '').trim()
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanId)
+        if (isUuid) {
+          targetIssueUuid = cleanId
+        } else {
+          const formattedTicket = !cleanId.startsWith('ISS-') && /^\d+$/.test(cleanId)
+            ? `ISS-2026-${cleanId.padStart(3, '0')}`
+            : cleanId
+          const { data: issueRows } = await supabase
+            .from('issues')
+            .select('id')
+            .or(`ticket_number.eq.${cleanId},ticket_number.eq.${formattedTicket}`)
+            .limit(1)
+          targetIssueUuid = issueRows?.[0]?.id || null
+        }
+      }
+
+      if (!targetIssueUuid) {
+        console.warn('Cannot send comment: Issue UUID not resolved')
+        setIsSending(false)
+        return
+      }
+
+      // 2. Resolve sender UUID (from profiles table)
+      let resolvedSenderUuid: string | null = null
+      if (currentUserId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentUserId)) {
+        resolvedSenderUuid = currentUserId
+      } else {
+        const searchKey = currentUserId || currentUserName
+        if (searchKey) {
+          const { data: profs } = await supabase
+            .from('profiles')
+            .select('id')
+            .or(`email.eq.${searchKey},full_name.ilike.%${searchKey}%`)
+            .limit(1)
+          resolvedSenderUuid = profs?.[0]?.id || null
+        }
+      }
+
+      // 3. Embed metadata into message string so all clients get real sender info
       const meta = JSON.stringify({
         name: senderDisplayName,
         id: currentUserId || '',
@@ -302,21 +478,23 @@ export default function CaseClarificationDrawer({
       })
       const encodedMessage = `<!--sender:${meta}-->${trimmed}`
 
+      // 4. Conforming payload according to DataTable/issue_comments.txt
       const payload: Record<string, unknown> = {
-        report_id: currentId,
-        sender_role: normalizedRole,
+        issue_id: targetIssueUuid,
+        sender_id: resolvedSenderUuid,
         message: encodedMessage,
+        attachment_url: sentAttachment?.url || null,
+        attachment_name: sentAttachment?.name || null,
       }
 
       const { data, error } = await supabase
-        .from('ticket_messages')
+        .from('issue_comments')
         .insert([payload])
-        .select()
+        .select('*, sender:profiles!sender_id(id, full_name, email, role, avatar_url)')
         .single()
 
       if (!error && data) {
-        // Replace temporary optimistic message with parsed real saved message
-        const parsed = parseTicketMessage(data as TicketMessage, {
+        const parsed = parseIssueComment(data, {
           reporterName,
           assignedAdminName,
         })
@@ -324,10 +502,10 @@ export default function CaseClarificationDrawer({
           prev.map((m) => (m.id === tempId ? parsed : m))
         )
       } else if (error) {
-        console.warn('Could not insert to ticket_messages table:', error.message)
+        console.warn('Could not insert to issue_comments table:', error.message)
       }
 
-      // If Admin is sending, trigger notification for User
+      // 5. If Admin is sending, trigger notification for User
       if (normalizedRole === 'admin') {
         let finalReporterName = reporterName
         let finalReporterEmail = reporterEmail
@@ -348,7 +526,7 @@ export default function CaseClarificationDrawer({
 
         const notifTitle = 'เจ้าหน้าที่ตอบกลับข้อความแล้ว'
         const shortMsg = trimmed.length > 60 ? `${trimmed.slice(0, 60)}...` : trimmed
-        const notifDesc = `เคส #${currentId}${activeTitle ? ` "${activeTitle}"` : ''}: ${shortMsg}`
+        const notifDesc = `เคส #${currentId}${activeTitle ? ` "${activeTitle}"` : ''}: ${shortMsg || 'แนบไฟล์หรือรูปภาพ'}`
 
         // Save locally and trigger window events for instant UI update
         addNotification({
@@ -380,9 +558,24 @@ export default function CaseClarificationDrawer({
               console.warn('Could not record notification in Supabase:', notifErr.message)
             }
           })
+      } else {
+        // User is sending to Admin
+        const notifTitle = 'ผู้แจ้งส่งข้อความเพิ่มเติม'
+        const shortMsg = trimmed.length > 60 ? `${trimmed.slice(0, 60)}...` : trimmed
+        const notifDesc = `เคส #${currentId}${activeTitle ? ` "${activeTitle}"` : ''}: ${shortMsg || 'แนบไฟล์หรือรูปภาพ'}`
+
+        addNotification({
+          title: notifTitle,
+          description: notifDesc,
+          type: 'status',
+          link: `/admin/issues`,
+          targetRole: 'admin',
+          issueId: currentId,
+          isRead: false,
+        })
       }
     } catch (err) {
-      console.error('Error inserting ticket message:', err)
+      console.error('Error inserting issue comment:', err)
     } finally {
       setIsSending(false)
     }
@@ -426,7 +619,7 @@ export default function CaseClarificationDrawer({
               </div>
               <div className="flex items-center gap-2 mt-0.5">
                 <p className="text-[10px] text-slate-400 font-medium">
-                  (Supabase Realtime)
+                  (issue_comments Realtime)
                 </p>
                 {realtimeStatus === 'connected' ? (
                   <span className="inline-flex items-center gap-1 text-[9px] text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.2 rounded">
@@ -500,29 +693,29 @@ export default function CaseClarificationDrawer({
             </div>
           ) : (
             messages.map((msg) => {
-              // Perspective-based alignment:
-              // ข้อความที่ส่งโดยผู้ใช้งานปัจจุบัน (ตัวเอง): จัดชิดขวาเสมอ (Right-aligned)
-              // ข้อความที่ส่งโดยอีกฝ่าย (คู่สนทนา): จัดชิดซ้ายเสมอ (Left-aligned)
-              const isSenderAdmin = msg.sender_role === 'admin'
+              const isSenderAdmin =
+                msg.sender_role === 'admin' ||
+                Boolean(msg.sender_name && /admin|เจ้าหน้าที่/i.test(msg.sender_name))
+
               const isSelf = (() => {
                 if (currentUserId && msg.sender_id) {
                   return msg.sender_id === currentUserId
                 }
                 if (currentUserName && msg.sender_name) {
-                  return msg.sender_name === currentUserName
+                  return msg.sender_name.toLowerCase() === currentUserName.toLowerCase()
                 }
                 return msg.sender_role === normalizedRole
               })()
 
               const displaySenderName = isSenderAdmin
-                ? msg.sender_name || assignedAdminName || 'เจ้าหน้าที่ / Admin'
+                ? msg.sender_name || assignedAdminName || 'เจ้าหน้าที่ (Admin)'
                 : msg.sender_name || reporterName || 'ผู้แจ้งเรื่อง (User)'
 
               return (
                 <div
                   key={msg.id}
                   className={`flex items-start space-x-2.5 ${
-                    isSelf ? 'flex-row-reverse space-x-reverse' : 'flex-row'
+                    isSenderAdmin ? 'flex-row-reverse space-x-reverse' : 'flex-row'
                   }`}
                 >
                   {/* Avatar */}
@@ -530,66 +723,50 @@ export default function CaseClarificationDrawer({
                     className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[11px] font-bold shadow-xs ${
                       isSenderAdmin
                         ? 'bg-[#1b5e4a] text-white ring-2 ring-emerald-600/20'
-                        : isSelf
-                        ? 'bg-emerald-700 text-white'
-                        : 'bg-emerald-100 text-emerald-800'
+                        : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                     }`}
                   >
                     {isSenderAdmin ? (
                       <Shield className="w-3.5 h-3.5 text-emerald-200" />
                     ) : (
-                      <User className="w-3.5 h-3.5" />
+                      <User className="w-3.5 h-3.5 text-emerald-700" />
                     )}
                   </div>
 
                   <div
                     className={`flex-1 max-w-[85%] sm:max-w-[80%] space-y-1 flex flex-col ${
-                      isSelf ? 'items-end' : 'items-start'
+                      isSenderAdmin ? 'items-end' : 'items-start'
                     }`}
                   >
                     {/* Header line above message bubble */}
                     <div
                       className={`flex items-center space-x-2 text-[10px] ${
-                        isSelf ? 'justify-end' : 'justify-start'
+                        isSenderAdmin ? 'justify-end' : 'justify-start'
                       }`}
                     >
-                      {isSelf ? (
-                        /* ข้อความของตัวเอง (จัดชิดขวาเสมอ) */
+                      {isSenderAdmin ? (
                         <>
                           <span className="text-slate-400">
                             {formatTime(msg.created_at)}
                           </span>
                           <span className="font-bold flex items-center gap-1">
-                            {normalizedRole === 'admin' ? (
-                              <span className="px-2 py-0.5 text-[10px] font-bold bg-[#1b5e4a] text-white rounded-md shadow-2xs">
-                                {currentUserName || 'คุณ (Admin)'}
+                            <span className="px-2 py-0.5 text-[10px] font-bold bg-[#1b5e4a] text-white rounded-md shadow-2xs flex items-center gap-1">
+                              <Shield className="w-2.5 h-2.5 text-emerald-300" />
+                              <span className="notranslate" data-user-content="true">
+                                {displaySenderName} {isSelf && '(คุณ)'}
                               </span>
-                            ) : (
-                              <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-600 text-white rounded-md shadow-2xs">
-                                {currentUserName || 'คุณ (ผู้แจ้ง)'}
-                              </span>
-                            )}
+                            </span>
                           </span>
                         </>
                       ) : (
-                        /* ข้อความของอีกฝ่าย (จัดชิดซ้ายเสมอ พร้อมแสดงชื่อเฉพาะของแต่ละคน) */
                         <>
                           <span className="font-bold flex items-center gap-1">
-                            {isSenderAdmin ? (
-                              <span className="px-2 py-0.5 text-[10px] font-bold bg-[#1b5e4a] text-white rounded-md shadow-2xs flex items-center gap-1">
-                                <Shield className="w-2.5 h-2.5 text-emerald-300" />
-                                <span className="notranslate" data-user-content="true">
-                                  {displaySenderName}
-                                </span>
+                            <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-md border border-emerald-200 flex items-center gap-1">
+                              <User className="w-2.5 h-2.5 text-emerald-700" />
+                              <span className="notranslate" data-user-content="true">
+                                {displaySenderName} {isSelf && '(คุณ)'}
                               </span>
-                            ) : (
-                              <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-md border border-emerald-200 flex items-center gap-1">
-                                <User className="w-2.5 h-2.5 text-emerald-700" />
-                                <span className="notranslate" data-user-content="true">
-                                  {displaySenderName}
-                                </span>
-                              </span>
-                            )}
+                            </span>
                           </span>
                           <span className="text-slate-400">
                             {formatTime(msg.created_at)}
@@ -598,15 +775,59 @@ export default function CaseClarificationDrawer({
                       )}
                     </div>
 
-                    {/* Chat Bubble */}
+                    {/* Chat Bubble: Admin on right (Dark Emerald), User on left (Clean White) */}
                     <div
                       className={`p-3 rounded-2xl border shadow-xs leading-relaxed text-xs break-words max-w-full ${
-                        isSelf
+                        isSenderAdmin
                           ? 'bg-[#1b5e4a] text-white rounded-tr-none border-[#144737] shadow-sm'
                           : 'bg-white text-slate-800 rounded-tl-none border-slate-200 shadow-2xs'
                       }`}
                     >
-                      <p className="whitespace-pre-wrap notranslate" data-user-content="true">{msg.message}</p>
+                      {msg.message && (
+                        <p className="whitespace-pre-wrap notranslate" data-user-content="true">
+                          {msg.message}
+                        </p>
+                      )}
+
+                      {/* Attachment Rendering */}
+                      {msg.attachment_url && (
+                        <div className={`mt-2 pt-2 border-t ${isSenderAdmin ? 'border-white/20' : 'border-slate-100'}`}>
+                          {msg.attachment_url.startsWith('data:image/') ||
+                          msg.attachment_url.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
+                            <div className="space-y-1">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={msg.attachment_url}
+                                alt={msg.attachment_name || 'รูปภาพหลักฐาน'}
+                                className="max-h-48 max-w-full rounded-xl object-contain cursor-pointer hover:opacity-95 transition bg-black/10"
+                                onClick={() => window.open(msg.attachment_url!, '_blank')}
+                              />
+                              {msg.attachment_name && (
+                                <p className={`text-[10px] truncate ${isSenderAdmin ? 'opacity-80' : 'text-slate-500'}`}>
+                                  {msg.attachment_name}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <a
+                              href={msg.attachment_url}
+                              download={msg.attachment_name || 'attachment'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-medium transition ${
+                                isSenderAdmin
+                                  ? 'bg-white/20 hover:bg-white/30 text-white'
+                                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                              }`}
+                            >
+                              <Paperclip className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate max-w-[180px]">
+                                {msg.attachment_name || 'ดาวน์โหลดไฟล์แนบ'}
+                              </span>
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -616,6 +837,28 @@ export default function CaseClarificationDrawer({
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Selected Attachment Preview in Input Bar */}
+        {attachment && (
+          <div className="px-4 py-2 bg-emerald-50 border-t border-emerald-100 flex items-center justify-between text-xs text-emerald-800">
+            <div className="flex items-center gap-2 truncate">
+              {attachment.type.startsWith('image/') ? (
+                <ImageIcon className="w-4 h-4 text-emerald-600 shrink-0" />
+              ) : (
+                <Paperclip className="w-4 h-4 text-emerald-600 shrink-0" />
+              )}
+              <span className="truncate max-w-xs font-medium">{attachment.name}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAttachment(null)}
+              className="text-slate-400 hover:text-rose-500 transition p-1"
+              title="ลบไฟล์แนบ"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Input Form */}
         {!isUnauthorized && (
           <form
@@ -623,6 +866,24 @@ export default function CaseClarificationDrawer({
             className="p-3.5 border-t border-slate-200 bg-white sticky bottom-0"
           >
             <div className="flex items-center gap-2">
+              {/* Paperclip Button for Attachments */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept="image/*,.pdf,.doc,.docx,.txt"
+                onChange={handleFileChange}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isSending}
+                className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:text-[#1b5e4a] hover:bg-emerald-50 flex items-center justify-center transition cursor-pointer shrink-0 disabled:opacity-40"
+                title="แนบรูปภาพหรือไฟล์หลักฐาน"
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
+
               <input
                 type="text"
                 value={newMessageText}
@@ -635,9 +896,10 @@ export default function CaseClarificationDrawer({
                 className="flex-1 border border-slate-200 bg-[#f8faf9] px-3.5 py-2.5 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 text-slate-700"
                 disabled={isSending}
               />
+
               <button
                 type="submit"
-                disabled={!newMessageText.trim() || isSending}
+                disabled={(!newMessageText.trim() && !attachment) || isSending}
                 className="w-9 h-9 rounded-xl bg-[#1b5e4a] hover:bg-[#154c3c] disabled:opacity-40 disabled:cursor-not-allowed text-white flex items-center justify-center transition cursor-pointer shadow-xs shrink-0"
                 title="ส่งข้อความ"
               >

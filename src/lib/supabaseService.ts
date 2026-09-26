@@ -1,5 +1,5 @@
 import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/supabaseClient'
-import type { IssueItem, UrgencyLevel } from '@/lib/issuesData'
+import type { IssueItem, UrgencyLevel, TimelineEntry } from '@/lib/issuesData'
 import type { FeedbackItem } from '@/lib/feedbackData'
 
 /**
@@ -578,6 +578,7 @@ export async function fetchFeedbacksFromSupabase(): Promise<FeedbackItem[] | nul
 
     const mapped: FeedbackItem[] = data.map((item: any) => {
       const ticketNum = item.issues?.ticket_number || item.issue_id
+      const jsonScores = (typeof item.criteria_scores === 'object' && item.criteria_scores) || {}
       return {
         id: item.id,
         issueId: ticketNum,
@@ -592,16 +593,16 @@ export async function fetchFeedbacksFromSupabase(): Promise<FeedbackItem[] | nul
         reinspected: false,
         createdAt: item.created_at || new Date().toISOString(),
         criteriaScores: {
-          1: item.speed_rating || item.overall_rating || 5,
-          2: item.speed_rating || item.overall_rating || 5,
-          3: item.communication_rating || item.overall_rating || 5,
-          4: item.communication_rating || item.overall_rating || 5,
-          5: 5,
-          6: 5,
-          7: 5,
-          8: 5,
-          9: 5,
-          10: item.overall_rating || 5,
+          1: item.speed_rating ?? jsonScores['1'] ?? jsonScores[1] ?? item.overall_rating ?? 5,
+          2: item.timeliness_rating ?? jsonScores['2'] ?? jsonScores[2] ?? item.overall_rating ?? 5,
+          3: item.communication_rating ?? jsonScores['3'] ?? jsonScores[3] ?? item.overall_rating ?? 5,
+          4: item.professionalism_rating ?? jsonScores['4'] ?? jsonScores[4] ?? item.overall_rating ?? 5,
+          5: item.update_status_rating ?? jsonScores['5'] ?? jsonScores[5] ?? item.overall_rating ?? 5,
+          6: item.clarity_rating ?? jsonScores['6'] ?? jsonScores[6] ?? item.overall_rating ?? 5,
+          7: item.cleanliness_rating ?? jsonScores['7'] ?? jsonScores[7] ?? item.overall_rating ?? 5,
+          8: item.resolution_rating ?? jsonScores['8'] ?? jsonScores[8] ?? item.overall_rating ?? 5,
+          9: item.prevention_rating ?? jsonScores['9'] ?? jsonScores[9] ?? item.overall_rating ?? 5,
+          10: item.system_satisfaction_rating ?? jsonScores['10'] ?? jsonScores[10] ?? item.overall_rating ?? 5,
         },
       }
     })
@@ -614,7 +615,7 @@ export async function fetchFeedbacksFromSupabase(): Promise<FeedbackItem[] | nul
 }
 
 /**
- * Insert new feedback to Supabase
+ * Insert new feedback to Supabase supporting all 10 criteria dimensions
  */
 export async function createFeedbackInSupabase(fb: FeedbackItem): Promise<boolean> {
   try {
@@ -647,18 +648,46 @@ export async function createFeedbackInSupabase(fb: FeedbackItem): Promise<boolea
       userId = matched ? matched.id : profs.find((p) => p.role === 'user')?.id || profs[0].id
     }
 
-    const payload = {
+    const scores = fb.criteriaScores || {}
+    const payload: Record<string, any> = {
       issue_id: targetIssueId,
       user_id: userId,
       overall_rating: fb.rating,
-      speed_rating: fb.criteriaScores?.[1] || fb.rating,
-      communication_rating: fb.criteriaScores?.[3] || fb.rating,
+      speed_rating: scores[1] ?? fb.rating,
+      timeliness_rating: scores[2] ?? fb.rating,
+      communication_rating: scores[3] ?? fb.rating,
+      professionalism_rating: scores[4] ?? fb.rating,
+      update_status_rating: scores[5] ?? fb.rating,
+      clarity_rating: scores[6] ?? fb.rating,
+      cleanliness_rating: scores[7] ?? fb.rating,
+      resolution_rating: scores[8] ?? fb.rating,
+      prevention_rating: scores[9] ?? fb.rating,
+      system_satisfaction_rating: scores[10] ?? fb.rating,
+      criteria_scores: scores,
       is_resolved_confirmed: fb.isSolved,
       comment: fb.comment,
     }
 
     const { error } = await supabase.from('feedbacks').insert(payload)
     if (error) {
+      // If error is due to missing columns in an older table schema, fallback to inserting core columns
+      if (error.message?.includes('column') || error.code === '42703' || error.code === 'PGRST204') {
+        const fallbackPayload = {
+          issue_id: targetIssueId,
+          user_id: userId,
+          overall_rating: fb.rating,
+          speed_rating: scores[1] ?? fb.rating,
+          communication_rating: scores[3] ?? fb.rating,
+          is_resolved_confirmed: fb.isSolved,
+          comment: fb.comment,
+        }
+        const { error: fallbackErr } = await supabase.from('feedbacks').insert(fallbackPayload)
+        if (fallbackErr) {
+          console.warn('createFeedbackInSupabase fallback error:', fallbackErr.message)
+          return false
+        }
+        return true
+      }
       console.warn('createFeedbackInSupabase error:', error.message)
       return false
     }
@@ -821,31 +850,69 @@ export async function deleteRiskAreaFromSupabase(idOrName: string): Promise<bool
 // -------------------------------------------------------------
 
 /**
+ * Interface representing a Supabase Issue Timeline entry conforming to DataTable/issue_timelines.txt
+ */
+export interface SupabaseIssueTimeline {
+  id: string
+  issue_id: string
+  status_text: string
+  note?: string | null
+  changed_status?: string | null
+  changed_by?: string | null
+  created_at: string
+}
+
+/**
+ * Interface representing a Supabase Issue Comment conforming to DataTable/issue_comments.txt
+ */
+export interface SupabaseIssueComment {
+  id: string
+  issue_id: string
+  sender_id?: string | null
+  message: string
+  attachment_url?: string | null
+  attachment_name?: string | null
+  created_at: string
+}
+
+/**
  * Insert a new timeline entry into the issue_timelines table in Supabase.
- * Falls back gracefully if the table does not exist yet.
+ * Conforms strictly to DataTable/issue_timelines.txt schema:
+ * (id, issue_id, status_text, note, changed_status, changed_by, created_at)
  */
 export async function addTimelineEntryToSupabase(entry: {
   ticketNumberOrId: string
   statusText: string
   note?: string
   authorName?: string
+  authorId?: string
   changedStatus?: string
   evidenceFileName?: string
+  evidenceFileUrl?: string
+  fallbackIssueData?: {
+    title?: string
+    description?: string
+    category?: string
+    area?: string
+    locationDetail?: string
+    urgency?: string
+    reporterName?: string
+    reporterEmail?: string
+  }
 }): Promise<boolean> {
   try {
     const cleanTicket = entry.ticketNumberOrId.replace(/^#/, '').trim()
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanTicket)
+    const formattedTicket = !cleanTicket.startsWith('ISS-') && /^\d+$/.test(cleanTicket)
+      ? `ISS-2026-${cleanTicket.padStart(3, '0')}`
+      : cleanTicket
 
     // 1. Resolve the issue UUID
     let issueId: string | null = null
-    let query = supabase.from('issues').select('id, ticket_number')
     if (isUuid) {
-      const { data } = await query.or(`ticket_number.eq.${cleanTicket},id.eq.${cleanTicket}`).limit(1)
-      issueId = data?.[0]?.id || null
+      const { data } = await supabase.from('issues').select('id, ticket_number').or(`ticket_number.eq.${cleanTicket},id.eq.${cleanTicket}`).limit(1)
+      issueId = data?.[0]?.id || cleanTicket
     } else {
-      const formattedTicket = !cleanTicket.startsWith('ISS-') && /^\d+$/.test(cleanTicket)
-        ? `ISS-2026-${cleanTicket.padStart(3, '0')}`
-        : cleanTicket
       const { data } = await supabase
         .from('issues')
         .select('id, ticket_number')
@@ -854,14 +921,44 @@ export async function addTimelineEntryToSupabase(entry: {
       issueId = data?.[0]?.id || null
     }
 
+    // 1.1 If not found, and fallbackIssueData is provided, auto-create the issue in Supabase!
+    if (!issueId && entry.fallbackIssueData) {
+      try {
+        const created = await createIssueInSupabase({
+          ticketNumber: formattedTicket,
+          title: entry.fallbackIssueData.title || 'เรื่องร้องเรียน',
+          description: entry.fallbackIssueData.description || 'รายละเอียดเรื่องร้องเรียน',
+          category: entry.fallbackIssueData.category,
+          areaName: entry.fallbackIssueData.area,
+          locationDetail: entry.fallbackIssueData.locationDetail || entry.fallbackIssueData.area,
+          urgency: entry.fallbackIssueData.urgency as any,
+          reporterName: entry.fallbackIssueData.reporterName,
+          reporterEmail: entry.fallbackIssueData.reporterEmail,
+          status: (entry.changedStatus as any) || 'pending',
+        })
+        if (created) {
+          const { data: newIssue } = await supabase
+            .from('issues')
+            .select('id')
+            .eq('ticket_number', formattedTicket)
+            .maybeSingle()
+          issueId = newIssue?.id || null
+        }
+      } catch (createErr) {
+        console.warn('addTimelineEntryToSupabase auto-create issue error:', createErr)
+      }
+    }
+
     if (!issueId) {
       console.warn('addTimelineEntryToSupabase: issue not found for', cleanTicket)
       return false
     }
 
-    // 2. Resolve author profile id (optional)
+    // 2. Resolve author profile id (UUID referencing profiles(id))
     let changedById: string | null = null
-    if (entry.authorName) {
+    if (entry.authorId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(entry.authorId)) {
+      changedById = entry.authorId
+    } else if (entry.authorName) {
       const cleanName = entry.authorName.replace(/\(Admin\)/i, '').trim().toLowerCase()
       const { data: profs } = await supabase
         .from('profiles')
@@ -871,13 +968,26 @@ export async function addTimelineEntryToSupabase(entry: {
       changedById = profs?.[0]?.id || null
     }
 
-    // 3. Build note text (combine note + evidence file name)
-    const noteText = [
-      entry.note?.trim(),
-      entry.evidenceFileName ? `[แนบไฟล์: ${entry.evidenceFileName}]` : '',
-    ]
-      .filter(Boolean)
-      .join(' ')
+    // Verify changedById actually exists in profiles to satisfy FK constraint
+    if (changedById) {
+      const { data: profExists } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', changedById)
+        .maybeSingle()
+      if (!profExists) {
+        changedById = null
+      }
+    }
+
+    // 3. Build note text (combining Action Log Details with Evidence File / Photo information)
+    let noteText = entry.note?.trim() || ''
+    if (entry.evidenceFileName) {
+      const evidenceTag = entry.evidenceFileUrl && entry.evidenceFileUrl.startsWith('data:image/')
+        ? `[แนบไฟล์: ${entry.evidenceFileName}|${entry.evidenceFileUrl}]`
+        : `[แนบไฟล์: ${entry.evidenceFileName}]`
+      noteText = noteText ? `${noteText}\n${evidenceTag}` : evidenceTag
+    }
 
     const payload: Record<string, any> = {
       issue_id: issueId,
@@ -890,14 +1000,155 @@ export async function addTimelineEntryToSupabase(entry: {
 
     const { error } = await supabase.from('issue_timelines').insert(payload)
     if (error) {
-      // Warn but don't crash — table may not exist on some deployments
-      console.warn('addTimelineEntryToSupabase insert error:', error.message)
+      console.error('Supabase issue_timelines insert error:', error.message, 'code:', error.code)
+      if (error.code === '42501' || error.message?.includes('violates row-level security')) {
+        console.error('⚠️ Supabase RLS Error: กรุณารันคำสั่งในไฟล์ DataTable/setup_timelines_and_comments.sql ที่ Supabase SQL Editor เพื่อเปิดสิทธิ์ RLS สำหรับ issue_timelines')
+      }
       return false
     }
     return true
   } catch (err) {
-    console.warn('addTimelineEntryToSupabase failed:', err)
+    console.error('addTimelineEntryToSupabase failed:', err)
     return false
+  }
+}
+
+/**
+ * Fetch all timeline entries for a specific issue from Supabase issue_timelines.
+ * Automatically resolves ticketNumber or UUID and returns structured TimelineEntry[].
+ */
+export async function fetchTimelineEntriesFromSupabase(
+  ticketNumberOrId: string
+): Promise<TimelineEntry[]> {
+  try {
+    if (!ticketNumberOrId) return []
+    const cleanTicket = ticketNumberOrId.replace(/^#/, '').trim()
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanTicket)
+
+    // 1. Resolve issue UUID
+    let issueId: string | null = null
+    if (isUuid) {
+      const { data } = await supabase.from('issues').select('id').eq('id', cleanTicket).maybeSingle()
+      issueId = data?.id || cleanTicket
+    } else {
+      const formattedTicket = !cleanTicket.startsWith('ISS-') && /^\d+$/.test(cleanTicket)
+        ? `ISS-2026-${cleanTicket.padStart(3, '0')}`
+        : cleanTicket
+      const { data } = await supabase
+        .from('issues')
+        .select('id')
+        .or(`ticket_number.eq.${cleanTicket},ticket_number.eq.${formattedTicket}`)
+        .limit(1)
+      issueId = data?.[0]?.id || null
+    }
+
+    if (!issueId) return []
+
+    // 2. Query issue_timelines joined with profiles for author details
+    const { data, error } = await supabase
+      .from('issue_timelines')
+      .select('*, changed_by_profile:profiles!changed_by(id, full_name, role, email)')
+      .eq('issue_id', issueId)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      if (!error.message?.includes('does not exist')) {
+        console.warn('fetchTimelineEntriesFromSupabase error:', error.message)
+      }
+      return []
+    }
+
+    if (!data || !Array.isArray(data)) return []
+
+    return data.map((row: any) => {
+      const dateObj = row.created_at ? new Date(row.created_at) : new Date()
+      const formattedTime = dateObj.toLocaleDateString('th-TH', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }) + ' น.'
+
+      let entryColor = 'bg-blue-600'
+      const st = `${row.changed_status || ''} ${row.status_text || ''}`.toLowerCase()
+      if (st.includes('resolved') || st.includes('แก้ไข') || st.includes('สำเร็จ')) {
+        entryColor = 'bg-emerald-600'
+      } else if (st.includes('pending') || st.includes('รอ')) {
+        entryColor = 'bg-amber-500'
+      } else if (st.includes('reject') || st.includes('ยกเลิก') || st.includes('ปฏิเสธ')) {
+        entryColor = 'bg-rose-600'
+      }
+
+      let cleanNote = row.note || ''
+      let evidenceFileName: string | undefined
+      let evidenceFileUrl: string | undefined
+      const match = cleanNote.match(/\[แนบไฟล์:\s*([^\]|]+)(?:\|([^\]]+))?\]/)
+      if (match) {
+        evidenceFileName = match[1]?.trim()
+        evidenceFileUrl = match[2]?.trim()
+        cleanNote = cleanNote.replace(match[0], '').trim()
+      }
+
+      return {
+        id: row.id,
+        statusText: row.status_text || 'อัปเดตสถานะ',
+        time: formattedTime,
+        note: cleanNote || row.note || '',
+        author: row.changed_by_profile?.full_name || 'เจ้าหน้าที่ / Admin',
+        color: entryColor,
+        changedStatus: row.changed_status || undefined,
+        evidenceFile: evidenceFileName,
+        evidenceUrl: evidenceFileUrl,
+        createdAt: row.created_at,
+      }
+    })
+  } catch (err) {
+    console.warn('fetchTimelineEntriesFromSupabase failed:', err)
+    return []
+  }
+}
+
+/**
+ * Fetch issue comments for a specific issue from Supabase issue_comments.
+ * Conforming to DataTable/issue_comments.txt schema
+ */
+export async function fetchIssueCommentsFromSupabase(ticketNumberOrId: string) {
+  try {
+    const cleanTicket = ticketNumberOrId.replace(/^#/, '').trim()
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cleanTicket)
+
+    let issueId: string | null = null
+    if (isUuid) {
+      issueId = cleanTicket
+    } else {
+      const formattedTicket = !cleanTicket.startsWith('ISS-') && /^\d+$/.test(cleanTicket)
+        ? `ISS-2026-${cleanTicket.padStart(3, '0')}`
+        : cleanTicket
+      const { data } = await supabase
+        .from('issues')
+        .select('id')
+        .or(`ticket_number.eq.${cleanTicket},ticket_number.eq.${formattedTicket}`)
+        .limit(1)
+      issueId = data?.[0]?.id || null
+    }
+
+    if (!issueId) return []
+
+    const { data, error } = await supabase
+      .from('issue_comments')
+      .select('*, sender:profiles!sender_id(id, full_name, email, role, avatar_url)')
+      .eq('issue_id', issueId)
+      .order('created_at', { ascending: true })
+
+    if (error) {
+      console.warn('fetchIssueCommentsFromSupabase error:', error.message)
+      return []
+    }
+    return data || []
+  } catch (err) {
+    console.warn('fetchIssueCommentsFromSupabase failed:', err)
+    return []
   }
 }
 

@@ -11,6 +11,7 @@ import {
   updateFeedbackReinspected,
   calculateDimensionsFromFeedbacks,
   syncFeedbacksWithSupabase,
+  DIMENSION_TITLES,
   type FeedbackItem,
   type DimensionStat,
 } from "@/lib/feedbackData";
@@ -797,6 +798,45 @@ export default function AdminEvaluationPage() {
                       </span>
                     )}
                   </span>
+                </div>
+              </div>
+
+              {/* รายละเอียดคะแนน 10 มิติ */}
+              <div>
+                <span className="font-bold text-slate-700 block mb-1.5">
+                  ผลการประเมินรายข้อ (10 มิติ):
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-[#f8faf9] p-3 rounded-xl border border-slate-200 text-xs">
+                  {DIMENSION_TITLES.map((dim) => {
+                    const score = selectedCase.criteriaScores?.[dim.id] ?? selectedCase.rating ?? 5;
+                    return (
+                      <div
+                        key={dim.id}
+                        className="flex justify-between items-center py-1 border-b border-slate-100 last:border-none"
+                      >
+                        <span
+                          className="text-slate-600 truncate max-w-[190px]"
+                          title={dim.title}
+                        >
+                          {dim.title}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0 font-bold">
+                          <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                          <span
+                            className={
+                              score >= 4.5
+                                ? "text-emerald-700"
+                                : score >= 3.5
+                                  ? "text-amber-600"
+                                  : "text-rose-600"
+                            }
+                          >
+                            {score}.0
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

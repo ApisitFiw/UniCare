@@ -1,0 +1,64 @@
+create table public.feedbacks (
+  id uuid not null default gen_random_uuid (),
+  issue_id uuid not null,
+  user_id uuid null,
+  overall_rating integer not null,
+  
+  -- 10 คำถามประเมินความพึงพอใจของผู้ใช้งาน (เกณฑ์ 1 - 5 ดาว)
+  speed_rating integer null,                 -- ข้อ 1: ความรวดเร็วในการเข้าตรวจสอบและระงับเหตุ
+  timeliness_rating integer null,            -- ข้อ 2: การแก้ไขปัญหาเสร็จสิ้นได้ทันเวลาที่นัดหมาย
+  communication_rating integer null,         -- ข้อ 3: ความสุภาพและการพูดจาประสานงานของเจ้าหน้าที่
+  professionalism_rating integer null,       -- ข้อ 4: ความเป็นมืออาชีพและความพร้อมของอุปกรณ์ในการแก้ปัญหา
+  update_status_rating integer null,         -- ข้อ 5: การอัปเดตสถานะและขั้นตอนการทำงานอย่างต่อเนื่อง
+  clarity_rating integer null,               -- ข้อ 6: คำชี้แจงและบันทึกผลการปฏิบัติงานมีความชัดเจน
+  cleanliness_rating integer null,           -- ข้อ 7: การรักษาความสะอาดและความเรียบร้อยหลังทำงานเสร็จ
+  resolution_rating integer null,            -- ข้อ 8: ปัญหาสิ่งแวดล้อม/เสียงรบกวนได้รับการแก้ไขอย่างตรงจุด
+  prevention_rating integer null,            -- ข้อ 9: ความมั่นใจในมาตรการป้องกันไม่ให้เกิดปัญหาซ้ำ
+  system_satisfaction_rating integer null,   -- ข้อ 10: ความสะดวกและความพึงพอใจต่อระบบแจ้งเหตุ UniCare
+  
+  -- บันทึกแบบ JSONB ของคะแนนทั้ง 10 มิติ (เช่น {"1":5, "2":5, ...})
+  criteria_scores jsonb null,
+
+  is_resolved_confirmed boolean not null default true,
+  comment text null,
+  created_at timestamp with time zone not null default timezone ('utc'::text, now()),
+  
+  constraint feedbacks_pkey primary key (id),
+  constraint feedbacks_issue_id_key unique (issue_id),
+  constraint feedbacks_user_id_fkey foreign key (user_id) references profiles (id) on delete set null,
+  constraint feedbacks_issue_id_fkey foreign key (issue_id) references issues (id) on delete cascade,
+  
+  constraint feedbacks_overall_rating_check check (
+    (overall_rating >= 1) and (overall_rating <= 5)
+  ),
+  constraint feedbacks_speed_rating_check check (
+    speed_rating is null or ((speed_rating >= 1) and (speed_rating <= 5))
+  ),
+  constraint feedbacks_timeliness_rating_check check (
+    timeliness_rating is null or ((timeliness_rating >= 1) and (timeliness_rating <= 5))
+  ),
+  constraint feedbacks_communication_rating_check check (
+    communication_rating is null or ((communication_rating >= 1) and (communication_rating <= 5))
+  ),
+  constraint feedbacks_professionalism_rating_check check (
+    professionalism_rating is null or ((professionalism_rating >= 1) and (professionalism_rating <= 5))
+  ),
+  constraint feedbacks_update_status_rating_check check (
+    update_status_rating is null or ((update_status_rating >= 1) and (update_status_rating <= 5))
+  ),
+  constraint feedbacks_clarity_rating_check check (
+    clarity_rating is null or ((clarity_rating >= 1) and (clarity_rating <= 5))
+  ),
+  constraint feedbacks_cleanliness_rating_check check (
+    cleanliness_rating is null or ((cleanliness_rating >= 1) and (cleanliness_rating <= 5))
+  ),
+  constraint feedbacks_resolution_rating_check check (
+    resolution_rating is null or ((resolution_rating >= 1) and (resolution_rating <= 5))
+  ),
+  constraint feedbacks_prevention_rating_check check (
+    prevention_rating is null or ((prevention_rating >= 1) and (prevention_rating <= 5))
+  ),
+  constraint feedbacks_system_satisfaction_rating_check check (
+    system_satisfaction_rating is null or ((system_satisfaction_rating >= 1) and (system_satisfaction_rating <= 5))
+  )
+) tablespace pg_default;

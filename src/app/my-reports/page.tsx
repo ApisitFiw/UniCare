@@ -8,8 +8,12 @@ import { getDemoSession } from "@/lib/authService";
 import Header from "@/components/Header";
 import CaseClarificationDrawer from "@/components/CaseClarificationDrawer";
 import UserSidebar from "@/components/UserSidebar";
-import { getAllCurrentIssues, getUserAllIssues } from "@/lib/issuesData";
-import { fetchIssuesFromSupabase, removeIssueFromLocalStorage } from "@/lib/supabaseService";
+import { getAllCurrentIssues, getUserAllIssues, type TimelineEntry } from "@/lib/issuesData";
+import {
+  fetchIssuesFromSupabase,
+  removeIssueFromLocalStorage,
+  fetchTimelineEntriesFromSupabase,
+} from "@/lib/supabaseService";
 import {
   MapPin,
   Clock,
@@ -22,11 +26,15 @@ import {
   X,
   ClipboardList,
   Star,
+  History,
+  Loader2,
+  Paperclip,
 } from "lucide-react";
 import { isIssueEvaluated, getFeedbackByIssueId } from "@/lib/feedbackData";
 
 interface UserReportItem {
   id: string;
+  supabaseId?: string;
   date: string;
   category: string;
   area: string;
@@ -42,6 +50,9 @@ export default function MyReportsPage() {
   const router = useRouter();
   const [userName, setUserName] = useState<string>("สมชาย ใจดี");
   const [activeChatReport, setActiveChatReport] = useState<UserReportItem | null>(null);
+  const [activeTimelineReport, setActiveTimelineReport] = useState<UserReportItem | null>(null);
+  const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[]>([]);
+  const [isLoadingTimeline, setIsLoadingTimeline] = useState<boolean>(false);
   const [reports, setReports] = useState<UserReportItem[]>([]);
 
   const loadReports = useCallback(() => {
@@ -56,9 +67,11 @@ export default function MyReportsPage() {
       let statusKey: "pending" | "in_progress" | "resolved" | "rejected" = "pending";
       if (item.status === "in_progress") statusKey = "in_progress";
       else if (item.status === "resolved") statusKey = "resolved";
+      else if ((item.status as string) === "rejected") statusKey = "rejected";
 
       return {
         id: item.id,
+        supabaseId: item.supabaseId || item.rawId || item.id,
         date: item.date,
         category: item.category,
         area: item.area,
@@ -100,42 +113,20 @@ export default function MyReportsPage() {
       handleUpdate();
     });
 
-    const channel = supabase
-      .channel("unicare-user-issues-live")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "issues" },
-        async (payload) => {
-          if (payload.eventType === "DELETE") {
-            const oldId = (payload.old as any)?.id;
-            const oldTicket = (payload.old as any)?.ticket_number;
-            if (oldId) removeIssueFromLocalStorage(oldId);
-            if (oldTicket) removeIssueFromLocalStorage(oldTicket);
-          }
-          await fetchIssuesFromSupabase();
-          handleUpdate();
-        }
-      )
-      .subscribe();
-
-    // 4. Listen to real-time updates from admin actions and user reports
     window.addEventListener("storage", handleUpdate);
     window.addEventListener("unicare-demo-reports-updated", handleUpdate);
-    window.addEventListener("unicare-issues-sync", handleUpdate);
     window.addEventListener("unicare-profile-updated", handleUpdate);
-    window.addEventListener("unicare-feedbacks-updated", handleUpdate);
+    window.addEventListener("unicare-issues-sync", handleUpdate);
 
     return () => {
-      supabase.removeChannel(channel);
       window.removeEventListener("storage", handleUpdate);
       window.removeEventListener("unicare-demo-reports-updated", handleUpdate);
-      window.removeEventListener("unicare-issues-sync", handleUpdate);
       window.removeEventListener("unicare-profile-updated", handleUpdate);
-      window.removeEventListener("unicare-feedbacks-updated", handleUpdate);
+      window.removeEventListener("unicare-issues-sync", handleUpdate);
     };
-  }, [loadReports, router]);
+  }, [router, loadReports]);
 
-  // Auto-open chat drawer if ?chat=... query param is present
+  // Handle URL query param for automatically opening chat (e.g. ?chat=ISS-2026-001)
   useEffect(() => {
     if (typeof window === "undefined" || reports.length === 0) return;
     const params = new URLSearchParams(window.location.search);
@@ -147,7 +138,8 @@ export default function MyReportsPage() {
 
       const found = reports.find((r) => {
         const cleanId = String(r.id).replace(/^#/, "").trim().toLowerCase();
-        if (cleanId === cleanTarget) return true;
+        const cleanSub = String(r.supabaseId || "").trim().toLowerCase();
+        if (cleanId === cleanTarget || cleanSub === cleanTarget) return true;
         if (targetNum !== null) {
           const m = cleanId.match(/\d+$/);
           if (m && parseInt(m[0], 10) === targetNum) return true;
@@ -166,8 +158,37 @@ export default function MyReportsPage() {
     }
   }, [reports]);
 
+  // Open Timeline Modal and fetch history from Supabase issue_timelines
+  const handleOpenTimeline = async (report: UserReportItem) => {
+    setActiveTimelineReport(report);
+    setIsLoadingTimeline(true);
+    setTimelineEntries([]);
+
+    try {
+      // 1. Fetch from Supabase issue_timelines
+      const targetId = report.supabaseId || report.id;
+      const remote = await fetchTimelineEntriesFromSupabase(targetId);
+
+      if (remote && remote.length > 0) {
+        setTimelineEntries(remote);
+      } else {
+        // Fallback to localStorage
+        const rawHistory = window.localStorage.getItem("unicare_demo_timeline_history");
+        if (rawHistory) {
+          const parsed = JSON.parse(rawHistory);
+          const entries = parsed[report.id] || parsed[targetId] || [];
+          setTimelineEntries(entries);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to load timeline entries:", err);
+    } finally {
+      setIsLoadingTimeline(false);
+    }
+  };
+
   return (
-    <div className="bg-[#f4f7f5] text-slate-800 antialiased min-h-screen flex font-['Prompt',sans-serif]">
+    <div className="flex h-screen bg-[#f8faf9] text-slate-800 font-sans overflow-hidden">
       {/* ==================== Sidebar (User Perspective) ==================== */}
       <Suspense fallback={<div className="w-64 flex-shrink-0 hidden md:block" />}>
         <UserSidebar />
@@ -228,15 +249,15 @@ export default function MyReportsPage() {
                 <div>
                   <Link
                     href="/user/report"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#1b5e4a] text-white rounded-xl text-xs font-bold hover:bg-[#144737] transition shadow-xs"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>แจ้งปัญหาใหม่</span>
+                    <span>แจ้งปัญหาแรกของคุณ</span>
                   </Link>
                 </div>
               </div>
             ) : (
-              <div className="grid gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 {reports.map((report) => (
                   <div
                     key={report.id}
@@ -322,13 +343,27 @@ export default function MyReportsPage() {
                             </Link>
                           );
                         })()}
+
+                        {/* View Timeline Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenTimeline(report)}
+                          className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 rounded-xl font-medium transition text-xs shadow-2xs border border-slate-200 cursor-pointer"
+                          title="ดูประวัติและไทม์ไลน์การปฏิบัติงานของเจ้าหน้าที่"
+                        >
+                          <History className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>ดูประวัติไทม์ไลน์</span>
+                        </button>
+
+                        {/* Chat / Clarification Button */}
                         <button
                           type="button"
                           onClick={() => setActiveChatReport(report)}
                           className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[#1b5e4a] hover:bg-[#144737] text-white rounded-xl font-medium transition text-xs shadow-xs cursor-pointer"
+                          title="สนทนาและส่งข้อมูลเพิ่มเติมกับเจ้าหน้าที่"
                         >
                           <MessageCircle className="w-4 h-4" />
-                          <span>สนทนากับเจ้าหน้าที่ / ส่งข้อมูลเพิ่ม</span>
+                          <span>สนทนากับเจ้าหน้าที่</span>
                         </button>
                       </div>
                     </div>
@@ -340,10 +375,135 @@ export default function MyReportsPage() {
         </main>
       </div>
 
+      {/* ================= TIMELINE MODAL (User Perspective) ================= */}
+      {activeTimelineReport && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 animate-in">
+          <div className="bg-white rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl">
+            {/* Header */}
+            <div className="hero-gradient px-6 py-4 flex items-center justify-between text-white">
+              <div className="flex items-center space-x-2">
+                <History className="w-4 h-4" />
+                <h3 className="font-bold text-sm">
+                  ประวัติไทม์ไลน์ความคืบหน้า #{activeTimelineReport.id}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTimelineReport(null)}
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
+              {/* Report Header Card */}
+              <div className="bg-[#f8faf9] p-3.5 rounded-xl border border-slate-200 flex justify-between items-center gap-3">
+                <div className="min-w-0">
+                  <div className="font-bold text-slate-800 text-xs">
+                    {activeTimelineReport.category} — {activeTimelineReport.area}
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-1 notranslate" data-user-content="true">
+                    {activeTimelineReport.description}
+                  </p>
+                </div>
+                <span className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 shrink-0">
+                  {activeTimelineReport.statusLabel}
+                </span>
+              </div>
+
+              {/* Timeline Entries List */}
+              <div className="space-y-3 pt-2">
+                <h4 className="font-bold text-slate-700 flex items-center justify-between">
+                  <span>ขั้นตอนการปฏิบัติงาน (issue_timelines)</span>
+                  {isLoadingTimeline && (
+                    <span className="text-[10px] text-emerald-600 flex items-center gap-1 font-medium">
+                      <Loader2 className="w-3 h-3 animate-spin" /> โหลดข้อมูลล่าสุด...
+                    </span>
+                  )}
+                </h4>
+
+                {isLoadingTimeline && timelineEntries.length === 0 ? (
+                  <div className="p-6 text-center text-slate-400 bg-[#f8faf9] rounded-xl border border-dashed border-slate-200 flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                    <span>กำลังดึงข้อมูลประวัติไทม์ไลน์...</span>
+                  </div>
+                ) : timelineEntries.length === 0 ? (
+                  <div className="p-6 text-center text-slate-400 bg-[#f8faf9] rounded-xl border border-dashed border-slate-200 text-xs">
+                    ยังไม่มีรายการบันทึกไทม์ไลน์สำหรับเคสนี้
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {timelineEntries.map((t, idx) => (
+                      <div
+                        key={t.id || idx}
+                        className="flex items-start space-x-3 p-3.5 bg-[#f8faf9] rounded-xl border border-slate-100"
+                      >
+                        <div className={`w-2.5 h-2.5 mt-1.5 rounded-full ${t.color || "bg-emerald-600"} shrink-0 ring-4 ring-slate-100`} />
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex justify-between font-semibold text-slate-700">
+                            <span className="truncate">{t.statusText}</span>
+                            <span className="text-slate-400 font-normal shrink-0 text-[10px] ml-2">{t.time}</span>
+                          </div>
+                          {t.note && (
+                            <p className="text-slate-600 text-[11px] leading-relaxed whitespace-pre-wrap notranslate" data-user-content="true">
+                              {t.note}
+                            </p>
+                          )}
+                          {(t.evidenceFile || t.evidenceUrl) && (
+                            <div className="pt-1">
+                              {t.evidenceUrl && (t.evidenceUrl.startsWith("data:image/") || t.evidenceUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i)) ? (
+                                <div className="mt-1">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={t.evidenceUrl}
+                                    alt={t.evidenceFile || "หลักฐานการปฏิบัติงาน"}
+                                    className="max-h-28 rounded-lg border border-slate-200 object-cover cursor-pointer hover:opacity-90 transition bg-white"
+                                    onClick={() => window.open(t.evidenceUrl!, "_blank")}
+                                  />
+                                  {t.evidenceFile && (
+                                    <span className="text-[10px] text-slate-500 mt-0.5 block">{t.evidenceFile}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-[10px] font-medium">
+                                  <Paperclip className="w-3 h-3 text-emerald-600" />
+                                  <span className="truncate max-w-xs">{t.evidenceFile || "ไฟล์แนบหลักฐาน"}</span>
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <div className="text-[10px] text-[#1b5e4a] pt-0.5 font-medium">
+                            - ดำเนินการโดย: <span className="notranslate font-semibold" data-user-content="true">{t.author}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setActiveTimelineReport(null)}
+                className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl font-medium hover:bg-slate-100 transition cursor-pointer text-xs"
+              >
+                ปิด
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ================= CLARIFICATION CHAT DRAWER (User Perspective) ================= */}
       <CaseClarificationDrawer
         isOpen={Boolean(activeChatReport)}
         reportId={activeChatReport ? activeChatReport.id : null}
+        issueId={activeChatReport ? (activeChatReport.supabaseId || activeChatReport.id) : null}
         reportTitle={activeChatReport ? `${activeChatReport.category} - ${activeChatReport.area}` : undefined}
         onClose={() => setActiveChatReport(null)}
         currentUserRole="user"

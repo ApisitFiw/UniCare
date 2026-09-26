@@ -2,6 +2,7 @@ import {
   createFeedbackInSupabase,
   fetchFeedbacksFromSupabase,
   updateIssueStatusInSupabase,
+  addTimelineEntryToSupabase,
 } from "@/lib/supabaseService";
 
 export interface FeedbackItem {
@@ -262,6 +263,14 @@ export function updateFeedbackReinspected(feedbackId: string, note?: string): vo
           "unicare_demo_timeline_history",
           JSON.stringify(timelineHistory)
         );
+
+        addTimelineEntryToSupabase({
+          ticketNumberOrId: issueIdStr,
+          statusText: "สั่งตรวจซ้ำ (Reinspection)",
+          note: note || "ผู้ใช้แจ้งว่ายังพบปัญหาเดิม ต้องการให้เข้าดำเนินการซ้ำอย่างเร่งด่วน",
+          changedStatus: "in_progress",
+          authorName: "ผู้ดูแลระบบ",
+        }).catch(console.warn);
       } catch {
         // Ignore timeline error
       }

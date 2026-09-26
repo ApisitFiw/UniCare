@@ -18,11 +18,16 @@ export type IssueItem = {
 }
 
 export type TimelineEntry = {
+  id?: string
   statusText: string
   time: string
   note: string
   author: string
   color: string
+  changedStatus?: string
+  evidenceFile?: string
+  evidenceUrl?: string
+  createdAt?: string
 }
 
 export const STANDARD_CATEGORIES = [
