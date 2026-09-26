@@ -65,6 +65,26 @@ export default function LoginPage() {
       setEmail(savedEmail);
       setRememberMe(true);
     }
+
+    // Clean up any stale Supabase auth tokens that cause 401 PGRST301 errors
+    try {
+      for (let i = window.localStorage.length - 1; i >= 0; i--) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith("sb-") && key.endsWith("-auth-token")) {
+          const raw = window.localStorage.getItem(key);
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw);
+              if (parsed?.expires_at && parsed.expires_at * 1000 < Date.now()) {
+                window.localStorage.removeItem(key);
+              }
+            } catch {
+              window.localStorage.removeItem(key);
+            }
+          }
+        }
+      }
+    } catch {}
   }, []);
 
   async function handleSubmit(
@@ -110,9 +130,11 @@ export default function LoginPage() {
           ? "/admin/dashboard"
           : "/user/dashboard",
       );
-    } catch {
+    } catch (err: any) {
+      console.error("Login submission error:", err);
       setError(
-        "เกิดข้อผิดพลาดในการตรวจสอบข้อมูลกับ Supabase",
+        err?.message ||
+          "เกิดข้อผิดพลาดในการตรวจสอบข้อมูลกับ Supabase กรุณาลองใหม่อีกครั้ง",
       );
     } finally {
       setIsSubmitting(false);

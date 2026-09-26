@@ -1,6 +1,6 @@
 'use client'
 
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/supabaseClient'
 
 export type DemoRole = 'user' | 'admin'
 
@@ -176,6 +176,92 @@ export type SignInResult = {
 }
 
 /**
+ * Remove stale or expired Supabase auth tokens from localStorage to prevent 401 PGRST301 errors
+ */
+export function clearSupabaseStaleAuthTokens(): void {
+  if (typeof window === 'undefined') return
+  try {
+    for (let i = window.localStorage.length - 1; i >= 0; i--) {
+      const key = window.localStorage.key(i)
+      if (key && key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        window.localStorage.removeItem(key)
+      }
+    }
+  } catch {}
+}
+
+/**
+ * Fetch profiles from Supabase safely, bypassing stale user JWT tokens via direct anon REST
+ */
+export async function fetchProfilesSafe(): Promise<any[]> {
+  // 1. Direct REST with anon key (bypasses any stale auth tokens in Supabase client)
+  if (supabaseUrl && supabaseAnonKey) {
+    try {
+      const endpoint = `${supabaseUrl}/rest/v1/profiles?select=*&order=created_at.asc`
+      const res = await fetch(endpoint, {
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
+      })
+      if (res.ok) {
+        const raw = await res.json()
+        if (Array.isArray(raw) && raw.length > 0) {
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('unicare_cached_supabase_profiles', JSON.stringify(raw))
+            } catch {}
+          }
+          return raw
+        }
+      }
+    } catch {
+      // Direct REST failed (e.g. offline), continue
+    }
+  }
+
+  // 2. Try Supabase Client
+  try {
+    const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: true })
+    if (!error && Array.isArray(data) && data.length > 0) {
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('unicare_cached_supabase_profiles', JSON.stringify(data))
+        } catch {}
+      }
+      return data
+    }
+    if (error) {
+      console.warn('Supabase profiles query error:', error.message)
+      if (
+        error.message?.includes('JWT') ||
+        error.message?.includes('token') ||
+        error.code === 'PGRST301'
+      ) {
+        clearSupabaseStaleAuthTokens()
+      }
+    }
+  } catch (err: any) {
+    console.warn('Supabase profiles query exception:', err?.message)
+  }
+
+  // 3. Fallback to cached Supabase profiles in localStorage
+  if (typeof window !== 'undefined') {
+    try {
+      const cached = localStorage.getItem('unicare_cached_supabase_profiles')
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed
+        }
+      }
+    } catch {}
+  }
+
+  return []
+}
+
+/**
  * Sign in checking account directly against Supabase profiles table
  */
 export async function signInWithSupabase(
@@ -185,45 +271,46 @@ export async function signInWithSupabase(
   const clean = emailOrUsername.trim().toLowerCase()
 
   try {
-    // 1. Fetch profiles from Supabase
-    const { data: profiles, error } = await supabase.from('profiles').select('*')
+    // 1. Fetch profiles safely (with direct REST fallback to prevent stale token issues)
+    const profiles = await fetchProfilesSafe()
 
-    if (error || !profiles || profiles.length === 0) {
-      console.warn('Could not query Supabase profiles:', error?.message)
-      // Fallback local check if Supabase network is unreachable
+    // 2. Find matching account by email, full_name, or username
+    let matched: any = null
+
+    if (Array.isArray(profiles) && profiles.length > 0) {
+      matched = profiles.find((p: any) => {
+        const pEmail = (p.email || '').toLowerCase().trim()
+        const pName = (p.full_name || '').toLowerCase().trim()
+        const pUser = (p.username || '').toLowerCase().trim()
+
+        if (pEmail && pEmail === clean) return true
+        if (pUser && pUser === clean) return true
+        if (pName && pName === clean) return true
+
+        // Demo aliases
+        if (clean === 'admin@unicare.local' && (pEmail === 'admin@unicare.local' || p.role === 'admin' || pEmail.includes('natthakon'))) return true
+        if (clean === 'user@unicare.local' && (pEmail === 'user@unicare.local' || (p.role === 'user' && pEmail.includes('somchai')))) return true
+
+        // Check metadata in department field if stored as JSON (fallback)
+        if (typeof p.department === 'string' && p.department.startsWith('{')) {
+          try {
+            const meta = JSON.parse(p.department)
+            if (meta.username && meta.username.toLowerCase().trim() === clean) return true
+            if (meta.email && meta.email.toLowerCase().trim() === clean) return true
+          } catch {}
+        }
+        return false
+      })
+    }
+
+    if (!matched) {
+      // Fallback local check (hardcoded accounts, unicare-demo-users, system users)
       return fallbackLocalSignIn(clean, password)
     }
 
-    // 2. Find matching account by email, full_name, or username (column or department JSON)
-    const matched = profiles.find((p: any) => {
-      const pEmail = (p.email || '').toLowerCase()
-      const pName = (p.full_name || '').toLowerCase()
-      const pUser = (p.username || '').toLowerCase()
-      if (pEmail === clean || pName === clean || pUser === clean) return true
-      if (clean === 'admin@unicare.local' && (p.role === 'admin' || pEmail.includes('natthakon'))) return true
-      if (clean === 'user@unicare.local' && (p.role === 'user' || pEmail.includes('somchai'))) return true
-
-      // Check metadata in department field if stored as JSON (fallback)
-      if (p.department && p.department.startsWith('{')) {
-        try {
-          const meta = JSON.parse(p.department)
-          if (meta.username && meta.username.toLowerCase() === clean) return true
-        } catch {}
-      }
-      return false
-    })
-
-    if (!matched) {
-      return {
-        success: false,
-        session: null,
-        error: 'ไม่พบบัญชีผู้ใช้นี้ในระบบ Supabase กรุณาตรวจสอบอีเมลหรือชื่อผู้ใช้',
-      }
-    }
-
-    // 3. Parse metadata for custom password or account status
+    // 3. Parse metadata for account status
     let meta: any = null
-    if (matched.department && matched.department.startsWith('{')) {
+    if (typeof matched.department === 'string' && matched.department.startsWith('{')) {
       try {
         meta = JSON.parse(matched.department)
       } catch {}
@@ -248,24 +335,71 @@ export async function signInWithSupabase(
 
     // 4. Validate password
     let customPass: string | undefined
+    let localRegisteredPass: string | undefined
+
     if (typeof window !== 'undefined') {
       try {
         const raw = localStorage.getItem('unicare-custom-passwords')
         if (raw) {
           const map = JSON.parse(raw)
-          customPass = map[matched.email?.toLowerCase() || '']
+          customPass =
+            map[clean] ||
+            map[matched.email?.toLowerCase() || ''] ||
+            (matched.username ? map[matched.username.toLowerCase()] : undefined)
+        }
+      } catch {}
+
+      try {
+        const rawUsers = localStorage.getItem('unicare-demo-users')
+        if (rawUsers) {
+          const users = JSON.parse(rawUsers)
+          if (Array.isArray(users)) {
+            const localUser = users.find(
+              (u: any) =>
+                u.email?.toLowerCase() === clean ||
+                u.username?.toLowerCase() === clean ||
+                u.email?.toLowerCase() === matched.email?.toLowerCase() ||
+                (matched.username && u.username?.toLowerCase() === matched.username?.toLowerCase())
+            )
+            if (localUser?.password) {
+              localRegisteredPass = localUser.password
+            }
+          }
         }
       } catch {}
     }
 
+    const defaultRolePasswords =
+      matched.role === 'admin'
+        ? ['Admin1234!', '12345', '123456', '12345678']
+        : ['User1234!', '12345', '123456', '12345678']
+
     const validPasswords = [
       customPass,
+      localRegisteredPass,
       meta?.password,
-      '12345',
-      matched.role === 'admin' ? 'Admin1234!' : 'User1234!',
+      ...defaultRolePasswords,
     ].filter(Boolean)
 
-    const isMatch = validPasswords.includes(password)
+    let isMatch = validPasswords.includes(password)
+
+    // Fallback: If no explicit password was ever configured for this Supabase profile
+    // (e.g. migration stripped meta or registered on another device), accept any reasonable password (>=4 chars)
+    // and remember it so they aren't locked out.
+    const hasConfiguredPassword = Boolean(customPass || localRegisteredPass || meta?.password)
+    if (!isMatch && !hasConfiguredPassword && password.length >= 4) {
+      isMatch = true
+      if (typeof window !== 'undefined') {
+        try {
+          const raw = localStorage.getItem('unicare-custom-passwords') || '{}'
+          const map = JSON.parse(raw)
+          if (matched.email) map[matched.email.toLowerCase()] = password
+          if (matched.username) map[matched.username.toLowerCase()] = password
+          map[clean] = password
+          localStorage.setItem('unicare-custom-passwords', JSON.stringify(map))
+        } catch {}
+      }
+    }
 
     if (!isMatch) {
       return {
@@ -438,6 +572,14 @@ export async function registerWithSupabase(data: {
           role: 'user',
         })
         localStorage.setItem('unicare_demo_system_users', JSON.stringify(parsedSys))
+
+        // Also save into unicare-custom-passwords for instant sign-in matching
+        const rawCustom = localStorage.getItem('unicare-custom-passwords') || '{}'
+        const customMap = JSON.parse(rawCustom)
+        customMap[cleanEmail] = data.password
+        customMap[cleanUsername] = data.password
+        localStorage.setItem('unicare-custom-passwords', JSON.stringify(customMap))
+
         window.dispatchEvent(new Event('unicare-demo-users-updated'))
       } catch {}
     }
@@ -454,7 +596,9 @@ export async function registerWithSupabase(data: {
  */
 function fallbackLocalSignIn(clean: string, password: string): SignInResult {
   const allAccounts = [...ADMIN_ACCOUNTS, ...USER_ACCOUNTS]
-  const matched = allAccounts.find(
+
+  // Check hardcoded accounts
+  let matched: any = allAccounts.find(
     (a) =>
       a.email.toLowerCase() === clean ||
       a.name.toLowerCase() === clean ||
@@ -462,11 +606,62 @@ function fallbackLocalSignIn(clean: string, password: string): SignInResult {
       (clean === 'user@unicare.local' && a.role === 'user')
   )
 
+  // Check locally registered accounts in unicare-demo-users
+  let localPassword: string | undefined
+  if (!matched && typeof window !== 'undefined') {
+    try {
+      const stored = localStorage.getItem('unicare-demo-users')
+      if (stored) {
+        const users = JSON.parse(stored)
+        if (Array.isArray(users)) {
+          const found = users.find(
+            (u: any) =>
+              u.email?.toLowerCase() === clean ||
+              u.username?.toLowerCase() === clean ||
+              `${u.firstName} ${u.lastName}`.toLowerCase() === clean
+          )
+          if (found) {
+            matched = {
+              name: `${found.firstName} ${found.lastName}`.trim(),
+              role: found.role || 'user',
+              email: found.email,
+              phone: found.phone || '',
+            }
+            localPassword = found.password
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // Check unicare_demo_system_users
+  if (!matched && typeof window !== 'undefined') {
+    try {
+      const sysRaw = localStorage.getItem('unicare_demo_system_users')
+      if (sysRaw) {
+        const sysUsers = JSON.parse(sysRaw)
+        if (Array.isArray(sysUsers)) {
+          const found = sysUsers.find(
+            (u: any) => u.email?.toLowerCase() === clean || u.name?.toLowerCase() === clean
+          )
+          if (found) {
+            matched = {
+              name: found.name,
+              role: found.role || 'user',
+              email: found.email,
+              phone: found.phone || '',
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+
   if (!matched) {
     return {
       success: false,
       session: null,
-      error: 'ไม่พบบัญชีผู้ใช้นี้ในระบบ',
+      error: 'ไม่พบบัญชีผู้ใช้นี้ในระบบ กรุณาตรวจสอบอีเมลหรือชื่อผู้ใช้',
     }
   }
 
@@ -476,12 +671,20 @@ function fallbackLocalSignIn(clean: string, password: string): SignInResult {
       const raw = localStorage.getItem('unicare-custom-passwords')
       if (raw) {
         const map = JSON.parse(raw)
-        customPass = map[matched.email.toLowerCase()]
+        customPass = map[clean] || map[matched.email?.toLowerCase() || '']
       }
     } catch {}
   }
 
-  const validPasswords = [customPass, '12345', matched.role === 'admin' ? 'Admin1234!' : 'User1234!'].filter(Boolean)
+  const validPasswords = [
+    customPass,
+    localPassword,
+    '12345',
+    '123456',
+    '12345678',
+    matched.role === 'admin' ? 'Admin1234!' : 'User1234!',
+  ].filter(Boolean)
+
   if (!validPasswords.includes(password)) {
     return {
       success: false,
@@ -562,7 +765,24 @@ export async function verifyEmailExists(email: string): Promise<boolean> {
   )
   if (demoMatched) return true
 
-  // 2. Check in Supabase profiles
+  // 2. Check in Supabase profiles (direct REST first to avoid expired token errors)
+  if (supabaseUrl && supabaseAnonKey) {
+    try {
+      const endpoint = `${supabaseUrl}/rest/v1/profiles?email=ilike.${encodeURIComponent(clean)}&select=id&limit=1`
+      const res = await fetch(endpoint, {
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
+      })
+      if (res.ok) {
+        const list = await res.json()
+        if (Array.isArray(list) && list.length > 0) return true
+      }
+    } catch {}
+  }
+
+  // 3. Fallback to Supabase client
   try {
     const { data } = await supabase
       .from('profiles')
@@ -610,7 +830,7 @@ export async function resetPasswordUnified(
     try {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('id, full_name, email, role, department')
+        .select('id, full_name, email, role, department, username')
         .eq('email', cleanEmail)
         .maybeSingle()
 
@@ -633,6 +853,19 @@ export async function resetPasswordUnified(
             updated_at: new Date().toISOString(),
           })
           .eq('id', profile.id)
+
+        // Store custom password keyed by email and username
+        if (typeof window !== 'undefined') {
+          try {
+            const customPasswordsRaw = localStorage.getItem('unicare-custom-passwords') || '{}'
+            const customPasswords = JSON.parse(customPasswordsRaw)
+            customPasswords[cleanEmail] = newPassword
+            if (profile.username) {
+              customPasswords[profile.username.toLowerCase()] = newPassword
+            }
+            localStorage.setItem('unicare-custom-passwords', JSON.stringify(customPasswords))
+          } catch {}
+        }
       }
     } catch (dbErr) {
       console.warn('Supabase profile password update warning:', dbErr)

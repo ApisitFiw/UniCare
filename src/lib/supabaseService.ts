@@ -964,6 +964,26 @@ export async function updateIssueEvidenceInSupabase(
  * Fetch all profiles from Supabase
  */
 export async function fetchProfilesFromSupabase(): Promise<SupabaseProfile[] | null> {
+  // 1. Direct REST fetch with anon key (bypasses expired JWT tokens)
+  if (supabaseUrl && supabaseAnonKey) {
+    try {
+      const endpoint = `${supabaseUrl}/rest/v1/profiles?select=*&order=created_at.asc`
+      const res = await fetch(endpoint, {
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (Array.isArray(data)) {
+          return data as SupabaseProfile[]
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Fallback to Supabase client
   try {
     const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: true })
     if (error || !data) return null
@@ -1069,10 +1089,32 @@ export async function upsertProfileInSupabase(profile: {
 export async function fetchProfileByEmailFromSupabase(email: string): Promise<SupabaseProfile | null> {
   try {
     if (!email) return null
+    const cleanEmail = email.trim().toLowerCase()
+
+    // 1. Direct REST fetch (bypasses expired JWT tokens)
+    if (supabaseUrl && supabaseAnonKey) {
+      try {
+        const endpoint = `${supabaseUrl}/rest/v1/profiles?email=ilike.${encodeURIComponent(cleanEmail)}&limit=1`
+        const res = await fetch(endpoint, {
+          headers: {
+            apikey: supabaseAnonKey,
+            Authorization: `Bearer ${supabaseAnonKey}`,
+          },
+        })
+        if (res.ok) {
+          const list = await res.json()
+          if (Array.isArray(list) && list.length > 0) {
+            return list[0] as SupabaseProfile
+          }
+        }
+      } catch {}
+    }
+
+    // 2. Fallback to Supabase client
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .ilike('email', email.trim())
+      .ilike('email', cleanEmail)
       .limit(1)
       .maybeSingle()
 
