@@ -364,7 +364,7 @@ export default function AnalyticsDashboardPage() {
           role="ADMIN"
         />
 
-        <main className="p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
+        <main className="p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
           {/* 1. Hero Banner */}
           <section
             className="rounded-2xl p-6 text-white space-y-3 shadow-xs"

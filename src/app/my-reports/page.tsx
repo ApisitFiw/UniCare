@@ -188,7 +188,7 @@ export default function MyReportsPage() {
   };
 
   return (
-    <div className="flex h-screen bg-[#f8faf9] text-slate-800 font-sans overflow-hidden">
+    <div className="flex min-h-screen bg-[#f8faf9] text-slate-800 font-sans">
       {/* ==================== Sidebar (User Perspective) ==================== */}
       <Suspense fallback={<div className="w-64 flex-shrink-0 hidden md:block" />}>
         <UserSidebar />
@@ -204,7 +204,7 @@ export default function MyReportsPage() {
           backHref="/user/dashboard"
         />
 
-        <main className="p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto overflow-y-auto">
+        <main className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto overflow-y-auto">
           {/* Hero Banner */}
           <section className="relative rounded-2xl overflow-hidden shadow-md bg-gradient-to-r from-[#064e3b] via-[#047857] to-[#065f46] text-white p-6 sm:p-7 flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="space-y-1.5 max-w-xl">

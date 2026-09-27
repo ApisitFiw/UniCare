@@ -453,7 +453,7 @@ export default function CategoriesPage() {
             />
 
             {/* MAIN */}
-            <main className="p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
+            <main className="p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
 
                 {/* PAGE TITLE */}
                 <div className="page-title space-y-1">

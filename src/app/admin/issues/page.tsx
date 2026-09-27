@@ -988,7 +988,7 @@ export default function StatusTrackingPage() {
           role="ADMIN"
         />
 
-        <main className="p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
+        <main className="p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
           {/* 1. Hero Banner */}
           <section className="relative rounded-2xl overflow-hidden hero-gradient text-white p-7 sm:p-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
             <div className="relative z-10 space-y-1.5 max-w-xl">

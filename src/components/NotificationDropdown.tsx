@@ -369,7 +369,7 @@ export default function NotificationDropdown({
 
       {/* เมนู Dropdown ที่เด้งลงมา */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-slate-200/90 z-50 overflow-hidden font-['Prompt',sans-serif]">
+        <div className="absolute -right-12 sm:right-0 mt-2 w-[calc(100vw-2rem)] max-w-sm sm:w-96 bg-white rounded-2xl shadow-xl border border-slate-200/90 z-50 overflow-hidden font-['Prompt',sans-serif]">
           {/* ส่วนหัว Dropdown */}
           <div className="px-4 py-3 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
             <div className="flex items-center space-x-2">

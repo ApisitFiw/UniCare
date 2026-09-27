@@ -351,9 +351,9 @@ export default function UserDashboardPage() {
   return (
     <div className="min-h-screen bg-[#f3f8f5] text-slate-800">
       {/* แถบด้านบน */}
-      <header className="bg-white border-b border-slate-200/80 px-6 lg:px-8 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-xs">
+      <header className="bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-xs">
         <Link href="/user/dashboard" className="flex items-center gap-2.5 text-base font-extrabold text-emerald-900">
-          <UniCareLogo className="w-8 h-8" />
+          <UniCareLogo className="w-8 h-8 shrink-0" />
           <span>UniCare</span>
 
           <span className="ml-1 hidden text-xs font-normal text-slate-400 sm:inline-block">
@@ -368,7 +368,7 @@ export default function UserDashboardPage() {
       </header>
 
       {/* เนื้อหา Dashboard */}
-      <main className="mx-auto max-w-7xl space-y-6 px-5 py-8">
+      <main className="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* Banner ร่วมกันดูแลมหาวิทยาลัย */}
         <section className="rounded-2xl bg-gradient-to-r from-[#15453b] via-[#1c5e52] to-[#2b8273] p-7 text-white shadow-md">
           <h2 className="text-xl sm:text-2xl font-bold">

@@ -258,7 +258,7 @@ export default function AdminDashboardPage() {
         userName={session.name}
       />
 
-      <main className="mx-auto max-w-7xl space-y-6 px-5 py-6 lg:px-8 lg:py-8">
+      <main className="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* แถบต้อนรับ */}
         <section className="rounded-2xl bg-gradient-to-r from-[#174b3d] to-[#1d624b] px-6 py-7 text-white shadow-sm lg:px-8">
           <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">

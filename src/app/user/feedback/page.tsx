@@ -448,7 +448,7 @@ function FeedbackContent() {
       />
 
       {/* ส่วนเนื้อหาหลัก (Main Content) */}
-      <main className="p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
 
         {/* Empty State: ไม่มีเคสที่แก้ไขเสร็จแล้ว */}
         {allResolvedIssues.length === 0 && (

@@ -50,11 +50,11 @@ export default function Header({
             <ArrowLeft className="w-5 h-5" />
           </Link>
         )}
-        <div>
-          <h1 className="text-sm lg:text-base font-bold text-slate-800 leading-tight">
+        <div className="min-w-0">
+          <h1 className="text-xs sm:text-sm lg:text-base font-bold text-slate-800 leading-tight truncate max-w-[150px] sm:max-w-xs md:max-w-none">
             {displayTitle}
           </h1>
-          <p className="text-[11px] lg:text-xs text-slate-400">
+          <p className="text-[10px] sm:text-[11px] lg:text-xs text-slate-400 truncate max-w-[150px] sm:max-w-xs md:max-w-none">
             {displaySubtitle}
           </p>
         </div>

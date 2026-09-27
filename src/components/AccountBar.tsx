@@ -273,7 +273,7 @@ export default function AccountBar({
     (currentRole === "ADMIN" ? "A" : "U");
 
   return (
-    <div className="flex shrink-0 items-center gap-3">
+    <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
       <LanguageSwitcher />
 
       <NotificationDropdown

@@ -322,7 +322,7 @@ export default function AdminEvaluationPage() {
       />
 
       {/* Main Content */}
-      <main className="p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
+      <main className="p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto max-w-7xl w-full mx-auto">
         {/* Banner */}
         <section className="rounded-2xl bg-gradient-to-r from-[#0e4435] via-[#145946] to-[#1b6852] text-white p-6 sm:p-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
           <div className="space-y-1 max-w-xl">
