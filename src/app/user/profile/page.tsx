@@ -826,7 +826,7 @@ export default function UserProfilePage() {
 
       setAlert({
 
-        type: "warning",
+        type: "error",
 
         title: "ไฟล์ไม่ถูกต้อง",
 
@@ -1094,7 +1094,7 @@ export default function UserProfilePage() {
 
       setAlert({
 
-        type: "warning",
+        type: "error",
 
         title: "วันเกิดไม่ถูกต้อง",
 
@@ -2096,9 +2096,9 @@ export default function UserProfilePage() {
 
                       type="date"
 
-                      max={maxBirthDate || undefined}
+                      onChange={() => undefined}
 
-                      onChange={(value) => {
+                      onInput={(value) => {
 
                         const maximumDate =
 
@@ -2108,7 +2108,7 @@ export default function UserProfilePage() {
 
                           setAlert({
 
-                            type: "warning",
+                            type: "error",
 
                             title: "ไม่สามารถเลือกวันเกิดนี้ได้",
 
@@ -2934,7 +2934,19 @@ export default function UserProfilePage() {
 
               }
 
-              className="mt-6 w-full rounded-lg bg-emerald-700 p-3 font-bold text-white"
+              className={`mt-6 w-full rounded-lg p-3 font-bold text-white transition ${
+
+                alert.type === "error"
+
+                  ? "bg-rose-600 hover:bg-rose-700"
+
+                  : alert.type === "warning"
+
+                    ? "bg-amber-500 hover:bg-amber-600"
+
+                    : "bg-emerald-700 hover:bg-emerald-800"
+
+              }`}
 
             >
 
@@ -3718,6 +3730,8 @@ function ProfileField({
 
   onChange,
 
+  onInput,
+
   helper,
 
   type = "text",
@@ -3739,6 +3753,12 @@ function ProfileField({
   disabled: boolean;
 
   onChange: (
+
+    value: string,
+
+  ) => void;
+
+  onInput?: (
 
     value: string,
 
@@ -3806,15 +3826,25 @@ function ProfileField({
 
         max={max}
 
-        onChange={(event) =>
+        onInput={(event) => {
 
-          onChange(
+          if (onInput) {
 
-            event.target.value,
+            onInput(event.currentTarget.value);
 
-          )
+          }
 
-        }
+        }}
+
+        onChange={(event) => {
+
+          if (!onInput) {
+
+            onChange(event.target.value);
+
+          }
+
+        }}
 
         className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition placeholder:text-slate-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 disabled:bg-slate-50 disabled:text-slate-500"
 
