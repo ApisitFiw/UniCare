@@ -366,7 +366,7 @@ const PLACE_CONFIG: Record<string, PlaceConfig> = {
 
       {
 
-        name: "อาคารปฏิบัติการสถาปัตยกรรมและการออกแบบ (AD)",
+        name: "อาคารสถาปัตยกรรม (AD)",
 
         floors: ["ชั้น 1", "ชั้น 2", "ชั้น 3"],
 
