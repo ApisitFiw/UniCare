@@ -42,6 +42,7 @@ import {
   Layers,
   Sparkles,
   X,
+  Menu,
 } from "lucide-react";
 
 const categories = [
@@ -352,14 +353,25 @@ export default function UserDashboardPage() {
     <div className="min-h-screen bg-[#f3f8f5] text-slate-800">
       {/* แถบด้านบน */}
       <header className="bg-white border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between sticky top-0 z-20 shadow-xs">
-        <Link href="/user/dashboard" className="flex items-center gap-2.5 text-base font-extrabold text-emerald-900">
-          <UniCareLogo className="w-8 h-8 shrink-0" />
-          <span>UniCare</span>
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new Event("unicare-toggle-sidebar"))}
+            className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 transition lg:hidden cursor-pointer shrink-0"
+            title="เปิดเมนูด้านข้าง"
+            aria-label="Menu"
+          >
+            <Menu className="w-5 h-5 text-slate-700" />
+          </button>
+          <Link href="/user/dashboard" className="flex items-center gap-2.5 text-base font-extrabold text-emerald-900">
+            <UniCareLogo className="w-8 h-8 shrink-0" />
+            <span>UniCare</span>
 
-          <span className="ml-1 hidden text-xs font-normal text-slate-400 sm:inline-block">
-            · มหาวิทยาลัยวลัยลักษณ์
-          </span>
-        </Link>
+            <span className="ml-1 hidden text-xs font-normal text-slate-400 sm:inline-block">
+              · มหาวิทยาลัยวลัยลักษณ์
+            </span>
+          </Link>
+        </div>
 
         <AccountBar
           role="USER"

@@ -1083,15 +1083,15 @@ export default function StatusTrackingPage() {
                 </p>
               </div>
 
-              <div className="flex items-center space-x-3">
-                <div className="relative">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <div className="relative min-w-0 flex-1 sm:w-64 sm:flex-initial">
                   <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="ค้นหารหัสเคส, พื้นที่, ผู้รับผิดชอบ..."
-                    className="pl-9 pr-4 py-2 border border-slate-200 bg-[#f8faf9] rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-600 w-64 text-slate-700"
+                    className="pl-9 pr-4 py-2 border border-slate-200 bg-[#f8faf9] rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-emerald-600 w-full text-slate-700"
                   />
                 </div>
                 {/* Category Filter */}

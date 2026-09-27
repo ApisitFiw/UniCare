@@ -591,10 +591,10 @@ export default function CaseClarificationDrawer({
       />
 
       {/* Drawer */}
-      <aside className="fixed top-0 right-0 h-full w-full max-w-sm sm:max-w-md bg-white z-50 shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-300">
+      <aside className="fixed top-0 right-0 h-full w-full max-w-full sm:max-w-md bg-white z-50 shadow-2xl border-l border-slate-200 flex flex-col animate-in slide-in-from-right duration-300">
         {/* Header */}
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
-          <div className="flex items-center space-x-3">
+        <div className="p-3.5 sm:p-4 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+          <div className="flex items-center space-x-2.5 sm:space-x-3">
             <button
               onClick={onClose}
               className="w-8 h-8 rounded-full hover:bg-slate-100 text-slate-500 flex items-center justify-center transition cursor-pointer"
@@ -879,7 +879,7 @@ export default function CaseClarificationDrawer({
         {!isUnauthorized && (
           <form
             onSubmit={handleSendMessage}
-            className="p-3.5 border-t border-slate-200 bg-white sticky bottom-0"
+            className="p-3 sm:p-3.5 pb-[max(0.875rem,env(safe-area-inset-bottom))] border-t border-slate-200 bg-white sticky bottom-0"
           >
             <div className="flex items-center gap-2">
               {/* Paperclip Button for Attachments */}

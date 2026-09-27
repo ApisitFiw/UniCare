@@ -34,7 +34,7 @@ export default function Header({
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event("unicare-toggle-sidebar"))}
-          className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 transition md:hidden cursor-pointer shrink-0"
+          className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-600 transition lg:hidden cursor-pointer shrink-0"
           title={t("เปิดเมนูด้านข้าง")}
           aria-label="Menu"
         >
@@ -51,10 +51,10 @@ export default function Header({
           </Link>
         )}
         <div className="min-w-0">
-          <h1 className="text-xs sm:text-sm lg:text-base font-bold text-slate-800 leading-tight truncate max-w-[150px] sm:max-w-xs md:max-w-none">
+          <h1 className="text-xs sm:text-sm lg:text-base font-bold text-slate-800 leading-tight truncate max-w-[120px] xs:max-w-[170px] sm:max-w-xs md:max-w-md lg:max-w-none">
             {displayTitle}
           </h1>
-          <p className="text-[10px] sm:text-[11px] lg:text-xs text-slate-400 truncate max-w-[150px] sm:max-w-xs md:max-w-none">
+          <p className="text-[10px] sm:text-[11px] lg:text-xs text-slate-400 truncate max-w-[120px] xs:max-w-[170px] sm:max-w-xs md:max-w-md lg:max-w-none">
             {displaySubtitle}
           </p>
         </div>

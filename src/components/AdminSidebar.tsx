@@ -95,25 +95,38 @@ export default function DashboardSidebar() {
     }
   }
 
-  const renderNavContent = () => (
+  const renderNavContent = (isMobile: boolean = false) => (
     <>
       <div className="space-y-6">
-        <Link
-          href="/admin/dashboard"
-          onClick={(e) => handleNavClick(e, "/admin/dashboard")}
-          className="group flex items-center space-x-3 border-b border-white/15 pb-4 cursor-pointer"
-        >
-          <UniCareLogo variant="dark" className="w-10 h-10 transition-transform group-hover:scale-105" />
+        <div className="flex items-center justify-between border-b border-white/15 pb-4">
+          <Link
+            href="/admin/dashboard"
+            onClick={(e) => handleNavClick(e, "/admin/dashboard")}
+            className="group flex items-center space-x-3 cursor-pointer"
+          >
+            <UniCareLogo variant="dark" className="w-10 h-10 transition-transform group-hover:scale-105 shrink-0" />
 
-          <div>
-            <h1 className="text-xl font-extrabold uppercase leading-none tracking-wider text-white">
-              UniCare
-            </h1>
-            <p className="mt-1 text-[10px] font-medium text-emerald-100">
-              {t("มหาวิทยาลัยวลัยลักษณ์")}
-            </p>
-          </div>
-        </Link>
+            <div>
+              <h1 className="text-xl font-extrabold uppercase leading-none tracking-wider text-white">
+                UniCare
+              </h1>
+              <p className="mt-1 text-[10px] font-medium text-emerald-100">
+                {t("มหาวิทยาลัยวลัยลักษณ์")}
+              </p>
+            </div>
+          </Link>
+
+          {isMobile && (
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              className="rounded-full bg-white/10 p-1.5 text-white/80 hover:bg-white/20 transition cursor-pointer"
+              aria-label="ปิดเมนู"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+        </div>
 
         <nav className="space-y-1.5 text-xs font-medium">
           {adminNavItems.map((item) => {
@@ -150,11 +163,13 @@ export default function DashboardSidebar() {
         </nav>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-black/15 p-3.5 text-center mt-6">
-        <p className="flex items-center justify-center gap-1.5 text-xs font-medium leading-relaxed text-emerald-100">
-          <span>{t("ร่วมสร้างมหาวิทยาลัยน่าอยู่ไปด้วยกัน")}</span>
-          <Leaf className="h-3.5 w-3.5 text-emerald-300" />
-        </p>
+      <div className="mt-auto pt-6">
+        <div className="rounded-2xl border border-white/10 bg-black/15 p-3.5 text-center">
+          <p className="flex items-center justify-center gap-1.5 text-xs font-medium leading-relaxed text-emerald-100">
+            <span>{t("ร่วมสร้างมหาวิทยาลัยน่าอยู่ไปด้วยกัน")}</span>
+            <Leaf className="h-3.5 w-3.5 text-emerald-300" />
+          </p>
+        </div>
       </div>
     </>
   );
@@ -163,40 +178,30 @@ export default function DashboardSidebar() {
     <>
       {/* Desktop Sidebar */}
       <aside
-        className="sticky top-0 z-30 hidden h-screen w-64 flex-shrink-0 flex-col justify-between overflow-y-auto border-r border-[#103e31] p-5 text-white shadow-lg md:flex"
+        className="sticky top-0 z-30 hidden h-screen w-64 flex-shrink-0 flex-col overflow-y-auto border-r border-[#103e31] p-5 text-white shadow-lg lg:flex"
         style={{
           background:
             "linear-gradient(180deg, #2b8273 0%, #1c5e52 40%, #15453b 70%, #0f3028 100%)",
         }}
       >
-        {renderNavContent()}
+        {renderNavContent(false)}
       </aside>
 
       {/* Mobile Slide Bar Drawer */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs md:hidden"
+          className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs lg:hidden"
           onClick={() => setMobileOpen(false)}
         >
           <aside
-            className="fixed inset-y-0 left-0 z-50 flex h-full w-72 flex-col justify-between overflow-y-auto p-5 text-white shadow-2xl transition-transform duration-300"
+            className="fixed inset-y-0 left-0 z-50 flex h-full w-[280px] sm:w-[320px] max-w-[85vw] flex-col overflow-y-auto p-5 text-white shadow-2xl transition-transform duration-300"
             style={{
               background:
                 "linear-gradient(180deg, #2b8273 0%, #1c5e52 40%, #15453b 70%, #0f3028 100%)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex justify-end pb-2">
-              <button
-                type="button"
-                onClick={() => setMobileOpen(false)}
-                className="rounded-full bg-white/10 p-1.5 text-white/80 hover:bg-white/20 transition"
-                aria-label="ปิดเมนู"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            {renderNavContent()}
+            {renderNavContent(true)}
           </aside>
         </div>
       )}

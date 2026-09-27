@@ -558,7 +558,7 @@ export default function AnalyticsDashboardPage() {
             </div>
 
             {/* Tab Navigation */}
-            <div className="flex border-b border-slate-200 space-x-1">
+            <div className="flex border-b border-slate-200 space-x-1 overflow-x-auto flex-nowrap scrollbar-none pb-0.5">
               <button
                 type="button"
                 onClick={() => setActiveTab("reported")}

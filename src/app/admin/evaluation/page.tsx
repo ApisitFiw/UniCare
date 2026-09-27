@@ -349,7 +349,7 @@ export default function AdminEvaluationPage() {
         </section>
 
         {/* 1. KPI 4 ช่อง */}
-        <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs flex items-center justify-between">
             <div>
               <p className="text-[11px] text-slate-500 font-semibold">
@@ -596,7 +596,7 @@ export default function AdminEvaluationPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[680px] text-left text-xs">
               <thead className="bg-[#f8faf9] text-slate-500 font-semibold border-b border-slate-200/80">
                 <tr>
                   <th className="py-3 px-3">รหัสเคส / ผู้ประเมิน</th>

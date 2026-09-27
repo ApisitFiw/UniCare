@@ -593,7 +593,7 @@ export default function CategoriesPage() {
                     }}
                 >
 
-                    <div className="modal-content" style={{ maxWidth: "560px" }}>
+                    <div className="modal-content max-h-[90vh] overflow-y-auto" style={{ maxWidth: "560px" }}>
 
                         {/* MODAL HEADER */}
 

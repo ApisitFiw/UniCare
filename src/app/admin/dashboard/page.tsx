@@ -260,8 +260,8 @@ export default function AdminDashboardPage() {
 
       <main className="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
         {/* แถบต้อนรับ */}
-        <section className="rounded-2xl bg-gradient-to-r from-[#174b3d] to-[#1d624b] px-6 py-7 text-white shadow-sm lg:px-8">
-          <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
+        <section className="rounded-2xl bg-gradient-to-r from-[#174b3d] to-[#1d624b] px-4 sm:px-6 py-6 sm:py-7 text-white shadow-sm lg:px-8">
+          <div className="flex flex-col justify-between gap-4 sm:gap-6 lg:flex-row lg:items-center">
             <div>
               <span className="inline-flex rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold text-emerald-50">
                 Admin Workspace
@@ -276,10 +276,10 @@ export default function AdminDashboardPage() {
               </p>
             </div>
 
-            <div className="flex shrink-0 flex-wrap gap-2">
+            <div className="flex shrink-0 flex-col sm:flex-row flex-wrap gap-2">
               <Link
                 href="/admin/issues"
-                className="rounded-xl bg-white px-4 py-3 text-xs font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 flex items-center gap-1.5"
+                className="rounded-xl bg-white px-4 py-3 text-xs font-bold text-emerald-900 shadow-sm transition hover:bg-emerald-50 flex items-center justify-center sm:justify-start gap-1.5"
               >
                 <ClipboardList className="w-3.5 h-3.5 text-emerald-900 shrink-0" />
                 <span>ไปที่ระบบติดตามและจัดการสถานะ</span>
@@ -288,7 +288,7 @@ export default function AdminDashboardPage() {
 
               <Link
                 href="/admin/analytics"
-                className="rounded-xl border border-white/20 px-4 py-3 text-xs font-semibold text-white transition hover:bg-white/10 flex items-center gap-1.5"
+                className="rounded-xl border border-white/20 px-4 py-3 text-xs font-semibold text-white transition hover:bg-white/10 flex items-center justify-center sm:justify-start gap-1.5"
               >
                 <BarChart3 className="w-3.5 h-3.5 text-white shrink-0" />
                 <span>ดูสถิติรายงานภาพรวม</span>
@@ -354,7 +354,7 @@ export default function AdminDashboardPage() {
             {/* ค้นหา & แท็บตัวกรอง */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               {/* Filter Tabs */}
-              <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-medium">
+              <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-medium overflow-x-auto max-w-full scrollbar-none whitespace-nowrap">
                 <button
                   type="button"
                   onClick={() => setStatusFilter("all")}

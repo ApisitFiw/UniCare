@@ -1664,7 +1664,7 @@ export default function AdminIssuesPage() {
 
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-          <div className="flex flex-col gap-4 border-b border-slate-100 px-8 py-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-4 border-b border-slate-100 px-4 sm:px-6 lg:px-8 py-4 sm:py-5 lg:flex-row lg:items-center lg:justify-between">
 
             <div>
 
@@ -1686,7 +1686,7 @@ export default function AdminIssuesPage() {
 
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
 
               <select
 
@@ -1702,7 +1702,7 @@ export default function AdminIssuesPage() {
 
                 }
 
-                className="min-w-[210px] rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs outline-none focus:border-emerald-500"
+                className="w-full sm:w-auto min-w-0 sm:min-w-[190px] rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs outline-none focus:border-emerald-500"
 
               >
 
@@ -1752,7 +1752,7 @@ export default function AdminIssuesPage() {
 
                 }
 
-                className="min-w-[200px] rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs outline-none focus:border-emerald-500"
+                className="w-full sm:w-auto min-w-0 sm:min-w-[170px] rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs outline-none focus:border-emerald-500"
 
               >
 
@@ -2138,7 +2138,7 @@ export default function AdminIssuesPage() {
 
         >
 
-          <div className="w-full max-w-md rounded-3xl bg-white p-7 shadow-2xl">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-3xl bg-white p-5 sm:p-7 shadow-2xl">
 
             <div className="flex justify-between">
 
@@ -2266,7 +2266,7 @@ export default function AdminIssuesPage() {
 
         >
 
-          <div className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-2xl">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl sm:rounded-3xl bg-white p-6 sm:p-8 text-center shadow-2xl">
 
             <span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
 
@@ -2442,7 +2442,7 @@ function ReportDetailModal({
       onClick={onClose}
     >
       <div
-        className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
+        className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl sm:rounded-3xl bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="sticky top-0 z-20 flex justify-between border-b bg-white px-6 py-5">
@@ -2843,7 +2843,7 @@ function EvidenceModal({
       onClick={onClose}
     >
       <div
-        className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-white shadow-2xl"
+        className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl sm:rounded-3xl bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex justify-between border-b px-6 py-5">
@@ -3113,7 +3113,7 @@ function ActionBackdrop({
 
     <div
 
-      className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm overflow-y-auto"
 
       onClick={onClose}
 

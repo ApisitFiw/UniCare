@@ -708,12 +708,12 @@ function FeedbackContent() {
                   <span className="font-medium text-slate-700">
                     {item.text}
                   </span>
-                  <div className="flex items-center space-x-3 text-slate-600 shrink-0">
+                  <div className="flex items-center justify-between sm:justify-start space-x-2.5 sm:space-x-4 text-slate-600 shrink-0 bg-slate-50/80 sm:bg-transparent p-2 sm:p-0 rounded-lg sm:rounded-none">
                     {[1, 2, 3, 4, 5].map((val) => (
                       <label
                         key={val}
-                        className={`flex items-center space-x-1 ${
-                          isEvaluated ? "cursor-default opacity-85" : "cursor-pointer hover:text-emerald-800"
+                        className={`flex items-center space-x-1.5 px-2 py-1 rounded-md transition ${
+                          isEvaluated ? "cursor-default opacity-85" : "cursor-pointer hover:bg-emerald-50/60 hover:text-emerald-800"
                         }`}
                       >
                         <input
@@ -725,7 +725,7 @@ function FeedbackContent() {
                           onChange={() => handleCriteriaChange(item.id, val)}
                           className="text-[#1b5e4a] focus:ring-0 cursor-pointer disabled:cursor-default"
                         />
-                        <span className="text-xs">{val}</span>
+                        <span className="text-xs font-semibold">{val}</span>
                       </label>
                     ))}
                   </div>

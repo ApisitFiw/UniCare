@@ -286,7 +286,7 @@ export default function AccountBar({
         /* ฝั่ง Admin: แสดงข้อมูลผู้ดูแลระบบเท่านั้น ไม่เป็นลิงก์ ไม่สามารถกดคลิกเพื่อดูหน้าเพจได้ */
         <div
           title={`ผู้ดูแลระบบ (${currentName})`}
-          className="flex items-center gap-2.5 rounded-full border border-slate-200/80 bg-slate-50 px-3 py-1.5 text-xs shadow-xs select-none cursor-default"
+          className="flex items-center gap-1.5 sm:gap-2.5 rounded-full border border-slate-200/80 bg-slate-50 px-2 sm:px-3 py-1 sm:py-1.5 text-xs shadow-xs select-none cursor-default"
         >
           <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-emerald-200/80 bg-emerald-100 text-[10px] font-bold text-emerald-800">
             {currentAvatar ? (
@@ -318,7 +318,7 @@ export default function AccountBar({
         <Link
           href="/user/profile"
           title={`ไปยังหน้าบัญชีของฉัน (${currentName})`}
-          className="group flex items-center gap-2.5 rounded-full border border-slate-200/80 bg-slate-50 px-3 py-1.5 text-xs shadow-xs transition hover:border-emerald-500 hover:bg-slate-100 cursor-pointer"
+          className="group flex items-center gap-1.5 sm:gap-2.5 rounded-full border border-slate-200/80 bg-slate-50 px-2 sm:px-3 py-1 sm:py-1.5 text-xs shadow-xs transition hover:border-emerald-500 hover:bg-slate-100 cursor-pointer"
         >
           <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full border border-emerald-200/80 bg-emerald-100 text-[10px] font-bold text-emerald-800 transition-transform group-hover:scale-105">
             {currentAvatar ? (

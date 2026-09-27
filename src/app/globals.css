@@ -662,12 +662,15 @@ tbody tr:last-child td {
   padding: 20px;
 
   z-index: 2000;
+
+  overflow-y: auto;
 }
 
 .modal-content {
   width: 100%;
 
   max-width: 500px;
+  max-height: 90vh;
 
   background: #ffffff;
 
@@ -676,7 +679,7 @@ tbody tr:last-child td {
   box-shadow:
     0 15px 40px rgba(0, 0, 0, 0.2);
 
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 .modal-header {

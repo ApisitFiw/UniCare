@@ -7,8 +7,8 @@ export default function UserLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-[#f4f7f5] md:flex">
-      <Suspense fallback={<div className="w-64" />}>
+    <div className="min-h-screen bg-[#f4f7f5] lg:flex">
+      <Suspense fallback={<div className="hidden lg:block w-64" />}>
         <UserSidebar />
       </Suspense>
       <div className="min-w-0 flex-1">{children}</div>

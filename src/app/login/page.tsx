@@ -632,7 +632,7 @@ export default function LoginPage() {
                     {isModalResetting ? t("กำลังตรวจสอบบัญชี...") : t("ส่งคำขอรีเซ็ตรหัสผ่าน")}
                   </button>
 
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                  <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-slate-500">
                     <Link
                       href={`/reset-password${modalEmail.trim() ? `?email=${encodeURIComponent(modalEmail.trim())}` : ""}`}
                       onClick={() => setShowForgotModal(false)}

@@ -190,7 +190,7 @@ export default function MyReportsPage() {
   return (
     <div className="flex min-h-screen bg-[#f8faf9] text-slate-800 font-sans">
       {/* ==================== Sidebar (User Perspective) ==================== */}
-      <Suspense fallback={<div className="w-64 flex-shrink-0 hidden md:block" />}>
+      <Suspense fallback={<div className="w-64 flex-shrink-0 hidden lg:block" />}>
         <UserSidebar />
       </Suspense>
 

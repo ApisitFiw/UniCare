@@ -73,36 +73,36 @@ export default function HomePage() {
   return (
     <div className="min-h-screen flex flex-col bg-[#f3f8f5] text-[#0f3028]">
       {/* ========================= NAVBAR (Public / Guest) ========================= */}
-      <header className="h-[76px] bg-white flex items-center justify-between px-[6%] border-b border-[#d4e6dc] sticky top-0 z-50">
+      <header className="h-[76px] bg-white flex items-center justify-between px-4 sm:px-[6%] border-b border-[#d4e6dc] sticky top-0 z-50">
         {/* โลโก้ UniCare */}
-        <Link href="/" className="flex items-center gap-2.5 min-w-[190px]">
-          <UniCareLogo className="w-[42px] h-[42px]" />
+        <Link href="/" className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          <UniCareLogo className="w-9 h-9 sm:w-[42px] sm:h-[42px] shrink-0" />
           <div>
-            <h2 className="text-xl font-bold text-[#15453b] leading-none">
+            <h2 className="text-lg sm:text-xl font-bold text-[#15453b] leading-none">
               UniCare
             </h2>
-            <p className="text-[10px] text-[#2b8273] font-semibold mt-1">
+            <p className="text-[9px] sm:text-[10px] text-[#2b8273] font-semibold mt-1 hidden sm:block">
               {t("มหาวิทยาลัยสีเขียว น่าอยู่ อย่างยั่งยืน")}
             </p>
           </div>
         </Link>
 
         {/* ปุ่มเปลี่ยนภาษา TH/EN และปุ่มเข้าสู่ระบบ / สมัครสมาชิก */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3">
           <LanguageSwitcher />
 
           <button
             type="button"
             onClick={() => handleAuthAction("login")}
-            className="flex items-center gap-2 px-4 py-2 border-[1.5px] border-[#217972] rounded-xl text-[13px] text-[#0f3028] bg-white font-semibold transition hover:bg-[#eef8f2] hover:border-[#15453b]"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 border-[1.5px] border-[#217972] rounded-xl text-xs sm:text-[13px] text-[#0f3028] bg-white font-semibold transition hover:bg-[#eef8f2] hover:border-[#15453b] cursor-pointer"
           >
-            <User className="w-4 h-4 text-emerald-800" />
+            <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-800" />
             <span>{t("เข้าสู่ระบบ")}</span>
           </button>
           <button
             type="button"
             onClick={() => handleAuthAction("register")}
-            className="px-4 py-2 rounded-xl text-[13px] text-white bg-gradient-to-br from-[#15453b] to-[#0f3028] font-semibold transition hover:from-[#217972] hover:to-[#15453b] shadow-xs"
+            className="hidden sm:inline-flex px-4 py-2 rounded-xl text-[13px] text-white bg-gradient-to-br from-[#15453b] to-[#0f3028] font-semibold transition hover:from-[#217972] hover:to-[#15453b] shadow-xs cursor-pointer"
           >
             {t("สมัครสมาชิก")}
           </button>
@@ -143,23 +143,23 @@ export default function HomePage() {
               )}
             </p>
 
-            <div className="flex flex-wrap items-center gap-3.5 pt-1">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-3.5 pt-1">
               <button
                 type="button"
                 onClick={() => handleAuthAction("report")}
-                className="inline-flex items-center gap-2.5 bg-gradient-to-br from-[#15453b] to-[#0f3028] text-white border border-[#0f3028] px-7 py-3.5 rounded-xl text-[15px] font-bold shadow-[0_8px_20px_rgba(15,48,40,0.22)] hover:from-[#217972] hover:to-[#15453b] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(15,48,40,0.3)] transition-all"
+                className="inline-flex items-center justify-center gap-2.5 bg-gradient-to-br from-[#15453b] to-[#0f3028] text-white border border-[#0f3028] px-6 sm:px-7 py-3.5 rounded-xl text-sm sm:text-[15px] font-bold shadow-[0_8px_20px_rgba(15,48,40,0.22)] hover:from-[#217972] hover:to-[#15453b] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(15,48,40,0.3)] transition-all cursor-pointer"
               >
-                <Megaphone className="w-4 h-4 text-white" />
+                <Megaphone className="w-4 h-4 text-white shrink-0" />
                 <span>{t("เข้าสู่ระบบเพื่อแจ้งปัญหา")}</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleAuthAction("register")}
-                className="inline-flex items-center gap-2 bg-white/90 hover:bg-white text-[#15453b] border border-[#217972]/30 px-6 py-3.5 rounded-xl text-[14px] font-bold shadow-xs hover:-translate-y-0.5 transition-all backdrop-blur-xs"
+                className="inline-flex items-center justify-center gap-2 bg-white/90 hover:bg-white text-[#15453b] border border-[#217972]/30 px-5 sm:px-6 py-3.5 rounded-xl text-xs sm:text-[14px] font-bold shadow-xs hover:-translate-y-0.5 transition-all backdrop-blur-xs cursor-pointer"
               >
                 <span>{t("สมัครสมาชิก")}</span>
-                <ArrowRight className="w-4 h-4 text-[#217972]" />
+                <ArrowRight className="w-4 h-4 text-[#217972] shrink-0" />
               </button>
             </div>
 
@@ -270,7 +270,7 @@ export default function HomePage() {
           <div
             role="dialog"
             aria-modal="true"
-            className="w-full max-w-lg overflow-hidden rounded-3xl border border-white/60 bg-white shadow-2xl"
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-white/60 bg-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="h-1.5 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-700" />

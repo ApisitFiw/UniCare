@@ -2445,42 +2445,24 @@ export default function UserReportPage() {
 
           </header>
 
-        <ol className="grid grid-cols-4 gap-2 rounded-2xl border border-emerald-100 bg-[#eef8f2] p-4 shadow-sm">
-
+        <ol className="grid grid-cols-4 gap-1.5 sm:gap-2 rounded-2xl border border-emerald-100 bg-[#eef8f2] p-2.5 sm:p-4 shadow-sm">
           {STEPS.map((label, index) => (
-
             <li
-
               key={label}
-
               aria-current={step === index + 1 ? "step" : undefined}
-
               className="text-center"
-
             >
-
               <span
-
-                className={`mx-auto flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold ${
-
+                className={`mx-auto flex h-7 w-7 sm:h-9 sm:w-9 items-center justify-center rounded-full text-xs sm:text-sm font-bold ${
                   step >= index + 1
-
                     ? "bg-emerald-700 text-white"
-
                     : "bg-slate-100 text-slate-500"
-
                 }`}
-
               >
-
                 {index + 1}
-
               </span>
-
-              <p className="mt-2 text-xs sm:text-sm">{label}</p>
-
+              <p className="mt-1.5 sm:mt-2 text-[10px] sm:text-xs md:text-sm leading-tight line-clamp-2">{label}</p>
             </li>
-
           ))}
 
         </ol>
