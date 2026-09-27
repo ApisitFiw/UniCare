@@ -518,10 +518,38 @@ export async function createIssueInSupabase(issue: {
     // 2. Resolve risk_area_id
     let riskAreaId: string | null = null
     if (area) {
+      const cleanArea = area.trim()
       const { data: areas } = await supabase.from('risk_areas').select('id, name')
-      const matched = areas?.find((a) => a.name.toLowerCase().includes(area.toLowerCase()) || area.toLowerCase().includes(a.name.toLowerCase()))
-      if (matched) riskAreaId = matched.id
-      else if (areas && areas.length > 0) riskAreaId = areas[0].id
+      // Exact match first
+      let matched = areas?.find((a) => a.name.trim().toLowerCase() === cleanArea.toLowerCase())
+      // Substring match if not exact
+      if (!matched) {
+        matched = areas?.find((a) => {
+          const an = a.name.trim().toLowerCase()
+          const cn = cleanArea.toLowerCase()
+          return an.includes(cn) || cn.includes(an)
+        })
+      }
+      if (matched) {
+        riskAreaId = matched.id
+      } else {
+        // If not found in existing risk_areas, dynamically create the risk area
+        try {
+          const { data: newArea } = await supabase.from('risk_areas').insert({
+            name: cleanArea,
+            latitude: 8.6445,
+            longitude: 99.8975,
+            risk_level: 'medium',
+            color: '#ee9b28',
+            frequent_issues: '',
+          }).select('id').single()
+          if (newArea?.id) {
+            riskAreaId = newArea.id
+          }
+        } catch {
+          // Never fallback to areas[0] - leave null so location_detail is used!
+        }
+      }
     }
 
     // 3. Resolve reporter_id
@@ -596,7 +624,9 @@ export async function createIssueInSupabase(issue: {
         description: issue.description,
         category_id: categoryId,
         risk_area_id: riskAreaId,
-        location_detail: issue.locationDetail || area || '',
+        location_detail: !riskAreaId && area && issue.locationDetail && !issue.locationDetail.includes(area)
+          ? `${area} - ${issue.locationDetail}`
+          : (issue.locationDetail || area || ''),
         status: safeStatus,
         priority,
         reporter_id: reporterId,
@@ -798,7 +828,7 @@ export async function updateIssueStatusInSupabase(
  */
 export async function fetchFeedbacksFromSupabase(): Promise<FeedbackItem[] | null> {
   try {
-    const query = '*, issues(id, ticket_number, title, categories(name), risk_areas(name)), profiles(id, full_name, email)'
+    const query = '*, issues(id, ticket_number, title, location_detail, categories(name), risk_areas(name)), profiles(id, full_name, email)'
     const { data, error } = await supabase.from('feedbacks').select(query).order('created_at', { ascending: false })
 
     if (error || !data) {
@@ -818,7 +848,7 @@ export async function fetchFeedbacksFromSupabase(): Promise<FeedbackItem[] | nul
         userName: item.profiles?.full_name || 'ผู้ใช้งาน',
         category: item.issues?.categories?.name || 'ทั่วไป',
         categoryIcon: '',
-        location: item.issues?.risk_areas?.name || 'มหาวิทยาลัยวลัยลักษณ์',
+        location: item.issues?.risk_areas?.name || item.issues?.location_detail || 'มหาวิทยาลัยวลัยลักษณ์',
         rating: item.overall_rating || 5,
         isSolved: item.is_resolved_confirmed ?? true,
         comment: item.comment || '',

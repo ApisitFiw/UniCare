@@ -416,14 +416,11 @@ const PLACE_CONFIG: Record<string, PlaceConfig> = {
 
       { name: "หอพักลักษณานิเวศ 18" },
 
-      { name: "หอพักลักษณานิเวศ 3" },
+      { name: "WU Residence A" },
 
-      { name: " WU Residence A" },
+      { name: "WU Residence B" },
 
-      { name: " WU Residence B" },
-
-      { name: " WU Residence C" },
-
+      { name: "WU Residence C" },
     ],
 
     areas: [
