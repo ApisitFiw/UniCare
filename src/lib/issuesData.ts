@@ -345,12 +345,16 @@ export function getAllCurrentIssues(): IssueItem[] {
               urgency = 'ปกติ'
             }
 
-            const dateStr = item.date_created
-              ? new Date(item.date_created).toLocaleDateString('th-TH', {
+            const createdDate = item.date_created || item.created_at ? new Date(item.date_created || item.created_at) : null
+            const hasValidDate = Boolean(createdDate && !isNaN(createdDate.getTime()))
+            const hours = hasValidDate && createdDate ? String(createdDate.getHours()).padStart(2, '0') : ''
+            const minutes = hasValidDate && createdDate ? String(createdDate.getMinutes()).padStart(2, '0') : ''
+            const dateStr = hasValidDate && createdDate
+              ? `${createdDate.toLocaleDateString('th-TH', {
                   day: '2-digit',
                   month: 'short',
                   year: 'numeric',
-                })
+                })} - ${hours}:${minutes} น.`
               : originalMock?.date || 'วันนี้'
 
             const itemAdminName = item.adminName || item.admin_name || originalMock?.adminName
@@ -361,6 +365,7 @@ export function getAllCurrentIssues(): IssueItem[] {
             return {
               id: displayId,
               date: dateStr,
+              createdAt: item.date_created || item.created_at || (hasValidDate && createdDate ? createdDate.toISOString() : undefined),
               category: normalizeCategoryName(item.category || item.issue_categories?.category_name || item.title || originalMock?.category),
               area: item.issue_areas?.area_name || item.location || originalMock?.area || 'มหาวิทยาลัยวลัยลักษณ์',
               description: item.description || item.title || originalMock?.description || 'รายละเอียดเรื่องร้องเรียน',
@@ -424,6 +429,11 @@ export function getAllCurrentIssues(): IssueItem[] {
       map.set(r.id.replace(/^#/, '').trim(), r)
     }
     // If Supabase cache not yet loaded, use mappedFromLocal
+    for (const l of mappedFromLocal) {
+      map.set(l.id.replace(/^#/, '').trim(), l)
+    }
+  } else {
+    // When cachedSupabase is null, populate local reports directly
     for (const l of mappedFromLocal) {
       map.set(l.id.replace(/^#/, '').trim(), l)
     }
@@ -536,15 +546,22 @@ export function getUserAllIssues(session?: { email?: string | null; name?: strin
             ? String(rawId)
             : `ISS-2026-${String(rawId).padStart(3, '0')}`
 
+          const createdDate = item.date_created || item.created_at ? new Date(item.date_created || item.created_at) : null
+          const hasValidDate = Boolean(createdDate && !isNaN(createdDate.getTime()))
+          const hours = hasValidDate && createdDate ? String(createdDate.getHours()).padStart(2, '0') : ''
+          const minutes = hasValidDate && createdDate ? String(createdDate.getMinutes()).padStart(2, '0') : ''
+          const dateStr = hasValidDate && createdDate
+            ? `${createdDate.toLocaleDateString('th-TH', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+              })} - ${hours}:${minutes} น.`
+            : 'วันนี้'
+
           map.set(displayId.replace(/^#/, '').trim(), {
             id: displayId,
-            date: item.date_created
-              ? new Date(item.date_created).toLocaleDateString('th-TH', {
-                  day: '2-digit',
-                  month: 'short',
-                  year: 'numeric',
-                })
-              : 'วันนี้',
+            date: dateStr,
+            createdAt: item.date_created || item.created_at || (hasValidDate && createdDate ? createdDate.toISOString() : undefined),
             category: normalizeCategoryName(item.category || item.issue_categories?.category_name || item.title || 'อื่น ๆ'),
             area: item.issue_areas?.area_name || item.location || 'มหาวิทยาลัยวลัยลักษณ์',
             description: item.description || item.title || 'รายละเอียดเรื่องร้องเรียน',

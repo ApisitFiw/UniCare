@@ -116,6 +116,7 @@ export default function DashboardSidebar() {
   }, [pathname]);
 
   function handleLogout() {
+    setMobileOpen(false);
     setShowLogoutModal(true);
   }
 
@@ -125,15 +126,16 @@ export default function DashboardSidebar() {
     }
   }
 
-  function confirmLogout() {
+  async function confirmLogout() {
+    if (isLoggingOut) return;
     setIsLoggingOut(true);
 
     try {
-      signOutDemo();
-      router.replace("/login");
+      await signOutDemo();
+    } catch (err) {
+      console.error("Logout error:", err);
     } finally {
-      setIsLoggingOut(false);
-      setShowLogoutModal(false);
+      window.location.href = "/login";
     }
   }
 

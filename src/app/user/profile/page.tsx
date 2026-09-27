@@ -861,7 +861,7 @@ export default function UserProfilePage() {
       ),
     );
 
-    router.replace("/login");
+    window.location.href = "/login";
   }
 
   if (isLoading) {

@@ -12,6 +12,7 @@ import {
   getAllCurrentIssues,
   type IssueItem,
 } from "@/lib/issuesData";
+import { fetchIssuesFromSupabase } from "@/lib/supabaseService";
 import {
   Search,
   MapPin,
@@ -44,46 +45,64 @@ function getCategoryIcon(category: string): ReactNode {
   return <Tag className="h-3.5 w-3.5 text-emerald-600 shrink-0" />;
 }
 
-function parseIssueDateTime(rawDate: string): { date: string; time: string } {
-  if (!rawDate) return { date: "-", time: "-" };
+function parseIssueDateTime(rawDate?: string, rawCreatedAt?: string): { date: string; time: string } {
+  if (!rawDate && !rawCreatedAt) return { date: "-", time: "-" };
 
-  // 1. ISO string with T (e.g. 2026-09-25T14:20:00.000Z)
-  if (rawDate.includes("T")) {
-    const parsed = new Date(rawDate);
+  // 1. Priority: ISO string with T (e.g. 2026-09-25T14:20:00.000Z from rawCreatedAt or rawDate)
+  const isoCandidate = (rawCreatedAt && rawCreatedAt.includes("T"))
+    ? rawCreatedAt
+    : (rawDate && rawDate.includes("T") ? rawDate : null);
+
+  if (isoCandidate) {
+    const parsed = new Date(isoCandidate);
     if (!isNaN(parsed.getTime())) {
       const d = parsed.toLocaleDateString("th-TH", {
         day: "2-digit",
         month: "short",
         year: "numeric",
       });
-      const t =
-        parsed.toLocaleTimeString("th-TH", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }) + " น.";
-      return { date: d, time: t };
+      const hours = String(parsed.getHours()).padStart(2, "0");
+      const minutes = String(parsed.getMinutes()).padStart(2, "0");
+      return { date: d, time: `${hours}:${minutes} น.` };
     }
   }
 
-  // 2. Text containing time pattern HH:mm or HH:mm น.
-  const timeMatch = rawDate.match(/(\d{1,2}:\d{2}(?:\s*น\.)?)/);
-  if (timeMatch) {
-    const matchedTime = timeMatch[1].trim();
-    const formattedTime = matchedTime.endsWith("น.")
-      ? matchedTime
-      : `${matchedTime} น.`;
-    const datePart = rawDate
-      .replace(timeMatch[0], "")
-      .replace(/[\-–,]/g, "")
-      .replace(/เวลา/g, "")
-      .trim();
-    return {
-      date: datePart || "วันนี้",
-      time: formattedTime,
-    };
+  // 2. Text containing time pattern HH:mm or HH.mm (with or without น.)
+  if (rawDate) {
+    const timeMatch = rawDate.match(/(\d{1,2}[:.]\d{2}(?:\s*น\.)?)/);
+    if (timeMatch) {
+      const matchedTime = timeMatch[1].replace(".", ":").trim();
+      const formattedTime = matchedTime.endsWith("น.")
+        ? matchedTime
+        : `${matchedTime} น.`;
+      const datePart = rawDate
+        .replace(timeMatch[0], "")
+        .replace(/[\-–,]/g, "")
+        .replace(/เวลา/g, "")
+        .trim();
+      return {
+        date: datePart || "วันนี้",
+        time: formattedTime,
+      };
+    }
   }
 
-  return { date: rawDate, time: "-" };
+  // 3. Fallback: Parse rawCreatedAt even without "T"
+  if (rawCreatedAt) {
+    const parsed = new Date(rawCreatedAt);
+    if (!isNaN(parsed.getTime())) {
+      const d = parsed.toLocaleDateString("th-TH", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      const hours = String(parsed.getHours()).padStart(2, "0");
+      const minutes = String(parsed.getMinutes()).padStart(2, "0");
+      return { date: d, time: `${hours}:${minutes} น.` };
+    }
+  }
+
+  return { date: rawDate || "-", time: "-" };
 }
 
 export default function AdminDashboardPage() {
@@ -143,6 +162,13 @@ export default function AdminDashboardPage() {
     };
 
     loadIssues();
+
+    // Sync fresh issues from Supabase
+    fetchIssuesFromSupabase().then((remote) => {
+      if (remote && Array.isArray(remote)) {
+        loadIssues();
+      }
+    });
 
     window.addEventListener("storage", loadIssues);
     window.addEventListener("unicare-demo-reports-updated", loadIssues);
@@ -407,7 +433,7 @@ export default function AdminDashboardPage() {
 
               <tbody className="divide-y divide-slate-100">
                 {displayedIssues.map((report) => {
-                  const { date, time } = parseIssueDateTime(report.date);
+                  const { date, time } = parseIssueDateTime(report.date, report.createdAt);
 
                   return (
                     <tr

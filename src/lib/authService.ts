@@ -30,107 +30,9 @@ export type UserAccountConfig = {
   status: 'active' | 'suspended' | 'deleted'
 }
 
-export const ADMIN_ACCOUNTS: AdminAccountConfig[] = [
-  {
-    id: 101,
-    name: 'นัฐกรณ์',
-    email: 'Natthakon030948@gmail.com',
-    phone: '089-876-5432',
-    role: 'admin',
-    status: 'active',
-  },
-  {
-    id: 102,
-    name: 'Chanokporn',
-    email: 'Chanokporn0953inbluesky@gmail.com',
-    phone: '081-111-2233',
-    role: 'admin',
-    status: 'active',
-  },
-  {
-    id: 103,
-    name: 'Apisit',
-    email: 'a0611862595@gmail.com',
-    phone: '082-222-3344',
-    role: 'admin',
-    status: 'active',
-  },
-  {
-    id: 104,
-    name: 'กฤตภาส',
-    email: 'niceseeza90@gmail.com',
-    phone: '083-333-4455',
-    role: 'admin',
-    status: 'active',
-  },
-  {
-    id: 105,
-    name: 'Natthaphum',
-    email: 'sriviboon7710@gmail.com',
-    phone: '084-444-5566',
-    role: 'admin',
-    status: 'active',
-  },
-  {
-    id: 106,
-    name: 'Kittipoom',
-    email: 'chimon.ny.w@gmail.com',
-    phone: '085-555-6677',
-    role: 'admin',
-    status: 'active',
-  },
-  {
-    id: 107,
-    name: 'Achiraya',
-    email: 'jiranyanov1980@gmail.com',
-    phone: '086-666-7788',
-    role: 'admin',
-    status: 'active',
-  },
-]
-
-export const USER_ACCOUNTS: UserAccountConfig[] = [
-  {
-    id: 2,
-    name: 'สมชาย ใจดี',
-    email: 'somchai@example.com',
-    phone: '082-345-6789',
-    role: 'user',
-    status: 'active',
-  },
-  {
-    id: 3,
-    name: 'นภัสสร แสงทอง',
-    email: 'napatsorn@example.com',
-    phone: '083-456-7890',
-    role: 'user',
-    status: 'active',
-  },
-  {
-    id: 4,
-    name: 'ธนกร รักเรียน',
-    email: 'thanakorn@example.com',
-    phone: '084-567-8901',
-    role: 'user',
-    status: 'suspended',
-  },
-  {
-    id: 5,
-    name: 'กิตติพงษ์ ศรีสุข',
-    email: 'kittipong@example.com',
-    phone: '085-678-9012',
-    role: 'user',
-    status: 'active',
-  },
-  {
-    id: 6,
-    name: 'พิมพ์ชนก วัฒนะ',
-    email: 'pimchanok@example.com',
-    phone: '086-789-0123',
-    role: 'user',
-    status: 'active',
-  },
-]
+// User and admin accounts are loaded directly from the Supabase `profiles` table.
+export const ADMIN_ACCOUNTS: AdminAccountConfig[] = []
+export const USER_ACCOUNTS: UserAccountConfig[] = []
 
 export function getActiveUserAccounts(): UserAccountConfig[] {
   if (typeof window === 'undefined') return USER_ACCOUNTS
@@ -288,8 +190,8 @@ export async function signInWithSupabase(
         if (pName && pName === clean) return true
 
         // Demo aliases
-        if (clean === 'admin@unicare.local' && (pEmail === 'admin@unicare.local' || p.role === 'admin' || pEmail.includes('natthakon'))) return true
-        if (clean === 'user@unicare.local' && (pEmail === 'user@unicare.local' || (p.role === 'user' && pEmail.includes('somchai')))) return true
+        if (clean === 'admin@unicare.local' && (pEmail === 'admin@unicare.local' || p.role === 'admin')) return true
+        if (clean === 'user@unicare.local' && (pEmail === 'user@unicare.local' || p.role === 'user')) return true
 
         // Check metadata in department field if stored as JSON (fallback)
         if (typeof p.department === 'string' && p.department.startsWith('{')) {
@@ -745,12 +647,39 @@ export function updateDemoSession(updates: Partial<DemoSession>): void {
   window.dispatchEvent(new Event('storage'))
 }
 
-export function signOutDemo(): void {
+export async function signOutDemo(): Promise<void> {
   if (typeof window !== 'undefined') {
-    sessionStorage.removeItem(sessionKey)
-    localStorage.removeItem(sessionKey)
+    try {
+      sessionStorage.removeItem(sessionKey)
+      localStorage.removeItem(sessionKey)
+      localStorage.removeItem('unicare-account-bar')
+      localStorage.removeItem('unicare_demo_admin_profile')
+      localStorage.removeItem('unicare_demo_user_profile')
+
+      // Clean up Supabase auth tokens
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i)
+        if (key && (key.startsWith('sb-') || key.includes('supabase.auth'))) {
+          localStorage.removeItem(key)
+        }
+      }
+    } catch {}
+
+    try {
+      // Safe Supabase signout with timeout safeguard so it never blocks or hangs
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise((resolve) => setTimeout(resolve, 500)),
+      ])
+    } catch {}
+
+    try {
+      window.dispatchEvent(new Event('unicare-profile-updated'))
+      window.dispatchEvent(new Event('storage'))
+    } catch {}
   }
 }
+
 
 /**
  * Check if an email exists across Supabase profiles, demo accounts, or localStorage
