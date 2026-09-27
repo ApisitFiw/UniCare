@@ -697,15 +697,11 @@ export default function CaseClarificationDrawer({
                 msg.sender_role === 'admin' ||
                 Boolean(msg.sender_name && /admin|เจ้าหน้าที่/i.test(msg.sender_name))
 
-              const isSelf = (() => {
-                if (currentUserId && msg.sender_id) {
-                  return msg.sender_id === currentUserId
-                }
-                if (currentUserName && msg.sender_name) {
-                  return msg.sender_name.toLowerCase() === currentUserName.toLowerCase()
-                }
-                return msg.sender_role === normalizedRole
-              })()
+              // User requirement:
+              // - In user chat (normalizedRole === 'user'): user is on RIGHT, admin is on LEFT
+              // - In admin chat (normalizedRole === 'admin'): admin is on RIGHT, user is on LEFT
+              const alignRight = normalizedRole === 'admin' ? isSenderAdmin : !isSenderAdmin
+              const isSelf = alignRight
 
               const displaySenderName = isSenderAdmin
                 ? msg.sender_name || assignedAdminName || 'เจ้าหน้าที่ (Admin)'
@@ -715,10 +711,10 @@ export default function CaseClarificationDrawer({
                 <div
                   key={msg.id}
                   className={`flex items-start space-x-2.5 ${
-                    isSenderAdmin ? 'flex-row-reverse space-x-reverse' : 'flex-row'
+                    alignRight ? 'flex-row-reverse space-x-reverse' : 'flex-row'
                   }`}
                 >
-                  {/* Avatar */}
+                  {/* Avatar Circle */}
                   <div
                     className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[11px] font-bold shadow-xs ${
                       isSenderAdmin
@@ -735,38 +731,56 @@ export default function CaseClarificationDrawer({
 
                   <div
                     className={`flex-1 max-w-[85%] sm:max-w-[80%] space-y-1 flex flex-col ${
-                      isSenderAdmin ? 'items-end' : 'items-start'
+                      alignRight ? 'items-end' : 'items-start'
                     }`}
                   >
                     {/* Header line above message bubble */}
                     <div
                       className={`flex items-center space-x-2 text-[10px] ${
-                        isSenderAdmin ? 'justify-end' : 'justify-start'
+                        alignRight ? 'justify-end' : 'justify-start'
                       }`}
                     >
-                      {isSenderAdmin ? (
+                      {alignRight ? (
                         <>
                           <span className="text-slate-400">
                             {formatTime(msg.created_at)}
                           </span>
                           <span className="font-bold flex items-center gap-1">
-                            <span className="px-2 py-0.5 text-[10px] font-bold bg-[#1b5e4a] text-white rounded-md shadow-2xs flex items-center gap-1">
-                              <Shield className="w-2.5 h-2.5 text-emerald-300" />
-                              <span className="notranslate" data-user-content="true">
-                                {displaySenderName} {isSelf && '(คุณ)'}
+                            {isSenderAdmin ? (
+                              <span className="px-2 py-0.5 text-[10px] font-bold bg-[#1b5e4a] text-white rounded-md shadow-2xs flex items-center gap-1">
+                                <Shield className="w-2.5 h-2.5 text-emerald-300" />
+                                <span className="notranslate" data-user-content="true">
+                                  {displaySenderName} (คุณ)
+                                </span>
                               </span>
-                            </span>
+                            ) : (
+                              <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-600 text-white rounded-md shadow-2xs flex items-center gap-1">
+                                <User className="w-2.5 h-2.5 text-emerald-100" />
+                                <span className="notranslate" data-user-content="true">
+                                  {displaySenderName} (คุณ)
+                                </span>
+                              </span>
+                            )}
                           </span>
                         </>
                       ) : (
                         <>
                           <span className="font-bold flex items-center gap-1">
-                            <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-md border border-emerald-200 flex items-center gap-1">
-                              <User className="w-2.5 h-2.5 text-emerald-700" />
-                              <span className="notranslate" data-user-content="true">
-                                {displaySenderName} {isSelf && '(คุณ)'}
+                            {isSenderAdmin ? (
+                              <span className="px-2 py-0.5 text-[10px] font-bold bg-[#1b5e4a] text-white rounded-md shadow-2xs flex items-center gap-1">
+                                <Shield className="w-2.5 h-2.5 text-emerald-300" />
+                                <span className="notranslate" data-user-content="true">
+                                  {displaySenderName}
+                                </span>
                               </span>
-                            </span>
+                            ) : (
+                              <span className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 rounded-md border border-emerald-200 flex items-center gap-1">
+                                <User className="w-2.5 h-2.5 text-emerald-700" />
+                                <span className="notranslate" data-user-content="true">
+                                  {displaySenderName}
+                                </span>
+                              </span>
+                            )}
                           </span>
                           <span className="text-slate-400">
                             {formatTime(msg.created_at)}
@@ -775,11 +789,13 @@ export default function CaseClarificationDrawer({
                       )}
                     </div>
 
-                    {/* Chat Bubble: Admin on right (Dark Emerald), User on left (Clean White) */}
+                    {/* Chat Bubble */}
                     <div
                       className={`p-3 rounded-2xl border shadow-xs leading-relaxed text-xs break-words max-w-full ${
-                        isSenderAdmin
-                          ? 'bg-[#1b5e4a] text-white rounded-tr-none border-[#144737] shadow-sm'
+                        alignRight
+                          ? isSenderAdmin
+                            ? 'bg-[#1b5e4a] text-white rounded-tr-none border-[#144737] shadow-sm'
+                            : 'bg-emerald-600 text-white rounded-tr-none border-emerald-700 shadow-sm'
                           : 'bg-white text-slate-800 rounded-tl-none border-slate-200 shadow-2xs'
                       }`}
                     >
@@ -791,7 +807,7 @@ export default function CaseClarificationDrawer({
 
                       {/* Attachment Rendering */}
                       {msg.attachment_url && (
-                        <div className={`mt-2 pt-2 border-t ${isSenderAdmin ? 'border-white/20' : 'border-slate-100'}`}>
+                        <div className={`mt-2 pt-2 border-t ${alignRight ? 'border-white/20' : 'border-slate-100'}`}>
                           {msg.attachment_url.startsWith('data:image/') ||
                           msg.attachment_url.match(/\.(jpg|jpeg|png|webp|gif)$/i) ? (
                             <div className="space-y-1">
@@ -803,7 +819,7 @@ export default function CaseClarificationDrawer({
                                 onClick={() => window.open(msg.attachment_url!, '_blank')}
                               />
                               {msg.attachment_name && (
-                                <p className={`text-[10px] truncate ${isSenderAdmin ? 'opacity-80' : 'text-slate-500'}`}>
+                                <p className={`text-[10px] truncate ${alignRight ? 'opacity-80' : 'text-slate-500'}`}>
                                   {msg.attachment_name}
                                 </p>
                               )}
@@ -815,7 +831,7 @@ export default function CaseClarificationDrawer({
                               target="_blank"
                               rel="noopener noreferrer"
                               className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-medium transition ${
-                                isSenderAdmin
+                                alignRight
                                   ? 'bg-white/20 hover:bg-white/30 text-white'
                                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                               }`}
